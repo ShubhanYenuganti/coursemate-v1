@@ -12,18 +12,48 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleLogin = async (provider: string) => {
-    setIsLoading(true)
+    setIsLoading(true);
 
-    // In a real application, this would authenticate with the selected provider
-    console.log(`Logging in with ${provider}`)
+    if (provider === "email") {
+      // Get the email and password values from the form inputs
+      const email = (document.getElementById("email") as HTMLInputElement).value;
+      const password = (document.getElementById("password") as HTMLInputElement).value;
 
-    // Simulate authentication delay
-    setTimeout(() => {
-      setIsLoading(false)
-      // Redirect to dashboard after successful login
-      router.push("/dashboard")
-    }, 1000)
-  }
+      try {
+        const response = await fetch('http://localhost:5173/api/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error("Login error:", data.error);
+          alert(data.error || "Login failed");
+          setIsLoading(false);
+          return;
+        }
+
+        // Store the token in localStorage or a more secure storage method
+        localStorage.setItem("token", data.token);
+
+        // Redirect to dashboard after successful login
+        router.push("/dashboard");
+      } catch (error) {
+        console.error("Login error:", error);
+        alert("Login failed. Please try again.");
+        setIsLoading(false);
+      }
+    } else {
+      // Handle OAuth providers (Google, Apple, etc.)
+      console.log(`OAuth login with ${provider} - Not implemented yet`);
+      // This would typically involve redirecting to the OAuth provider
+      setIsLoading(false);
+    }
+  };
 
   return (
     <Card className="p-6">

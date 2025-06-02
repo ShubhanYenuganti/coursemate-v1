@@ -29,20 +29,40 @@ export function OnboardingForm() {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
 
-    // In a real application, this would save the user's profile information
-    console.log("Saving profile information:", formData)
+    try {
+      const token = localStorage.getItem("token");
 
-    // Simulate saving delay
-    setTimeout(() => {
-      setIsLoading(false)
+      const response = await fetch('http://localhost:5173/api/users/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Profile update error:", data.error);
+        alert(data.error || "Failed to update profile");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("Profile updated successfully:", data.message);
       // Redirect to dashboard after successful profile completion
-      router.push("/dashboard")
-    }, 1000)
-  }
+      router.push("/dashboard");
+    } catch (error) {
+      console.error("Profile update error:", error);
+      alert("Failed to update profile. Please try again.");
+      setIsLoading(false);
+    }
+  };
 
   return (
     <Card className="p-6">
