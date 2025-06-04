@@ -36,9 +36,26 @@ export function SignUpForm() {
           return;
         }
 
-        console.log("Sending request to:", 'http://localhost:5173/api/register');
+        // 1. Register the user
+        console.log("Sending registration request to:", 'http://localhost:5173/api/register');
+        const registerResponse = await fetch('http://localhost:5173/api/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ email, password, name: email.split('@')[0] }), // Add a default name
+        });
 
-        const response = await fetch('http://localhost:5173/api/register', {
+        if (!registerResponse.ok) {
+          const error = await registerResponse.json();
+          throw new Error(error.error || 'Registration failed');
+        }
+
+        console.log("Registration successful, logging in...");
+
+        // 2. Log the user in after successful registration
+        const loginResponse = await fetch('http://localhost:5173/api/login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -47,23 +64,32 @@ export function SignUpForm() {
           body: JSON.stringify({ email, password }),
         });
 
-        console.log("Response received:", response);
-
-        const data = await response.json();
-        console.log("Response data:", data);
-
-        router.push('/dashboard');
-      } catch (error) {
-        console.error("Detailed error information:", error);
-        // Check if it's a network error
-        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-          console.log(error)
-          console.error("Network error - Could not reach the server. Flask backend might not be running or accessible.");
+        if (!loginResponse.ok) {
+          const error = await loginResponse.json();
+          throw new Error(error.error || 'Login after registration failed');
         }
+
+        const { token } = await loginResponse.json();
+
+        // 3. Save the token to localStorage
+        localStorage.setItem('token', token);
+        console.log("Login successful, token saved");
+
+        // 4. Redirect to onboarding
+        router.push('/onboarding');
+
+      } catch (error) {
+        console.error("Error during signup:", error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "An error occurred during signup",
+          variant: "destructive",
+        });
+      } finally {
         setIsLoading(false);
       }
     } else {
-      // For social logins, just redirect for now
+      // For social logins
       console.log(`Signing up with ${provider} (not implemented)`)
       setIsLoading(false)
       toast({

@@ -9,7 +9,7 @@ users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 @jwt_required()
 def get_me():
     current_user = get_jwt_identity()
-    user = User.query.get(current_user['id'])
+    user = User.query.get(current_user)
     return jsonify({
         'id': user.id,
         'email': user.email,
@@ -53,12 +53,16 @@ def delete_user(user_id):
 @users_bp.route('/profile', methods=['POST'])
 @jwt_required()
 def update_profile():
+    print("getting JWT identity")
+    print("Request headers:", request.headers)  # Add this line
     current_user = get_jwt_identity()
-    user_id = current_user['id']
+    print("Current user from JWT:", current_user)  # Add this line
 
+    user_id = current_user
     data = request.get_json()
-    user = User.query.get(user_id)
+    print("Request data:", data)  # Add this line
 
+    user = User.query.get(user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 

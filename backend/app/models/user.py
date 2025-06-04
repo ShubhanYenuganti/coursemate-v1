@@ -1,8 +1,6 @@
 import uuid
 from datetime import datetime
-from app import init
-
-db = init.db
+from app.init import db
 
 
 class User(db.Model):

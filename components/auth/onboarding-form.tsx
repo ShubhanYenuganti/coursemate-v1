@@ -2,16 +2,18 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useToast } from "@/components/ui/use-toast"
 
 export function OnboardingForm() {
   const router = useRouter()
+  const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
     fullName: "",
@@ -19,6 +21,18 @@ export function OnboardingForm() {
     year: "",
     major: "",
   })
+
+  // Add this useEffect hook
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tokenFromUrl = params.get('token');
+
+    if (tokenFromUrl) {
+      localStorage.setItem('token', tokenFromUrl);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -35,31 +49,53 @@ export function OnboardingForm() {
 
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("No authentication token found. Please log in again.");
+      }
 
       const response = await fetch('http://localhost:5173/api/users/profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
         },
-        body: JSON.stringify(formData),
+        credentials: 'include',
+        body: JSON.stringify({
+          fullName: formData.fullName,  // Changed from first_name/last_name to fullName
+          college: formData.college,
+          year: formData.year,
+          major: formData.major
+        }),
       });
 
       const data = await response.json();
+      console.log("Response data:", data);  // Add this for debugging
+      console.log("Sending request with token:", token ? "Token exists" : "No token");
+      console.log("Request headers:", {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      });
+      console.log(token);
 
       if (!response.ok) {
-        console.error("Profile update error:", data.error);
-        alert(data.error || "Failed to update profile");
-        setIsLoading(false);
-        return;
+        throw new Error(data.error || data.message || "Failed to update profile");
       }
 
-      console.log("Profile updated successfully:", data.message);
-      // Redirect to dashboard after successful profile completion
+      toast({
+        title: "Success",
+        description: "Profile updated successfully!",
+      });
       router.push("/dashboard");
-    } catch (error) {
-      console.error("Profile update error:", error);
-      alert("Failed to update profile. Please try again.");
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
     }
   };
