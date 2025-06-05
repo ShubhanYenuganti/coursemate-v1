@@ -41,3 +41,4 @@ def login():
             'role': user.role
         }
     })
+
