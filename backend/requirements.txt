@@ -1,0 +1,27 @@
+# Core
+Flask==2.3.3
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+Flask-Cors==4.0.0
+python-dotenv==1.0.0
+
+# Authentication
+Flask-JWT-Extended==4.5.2
+passlib==1.7.4
+itsdangerous==2.1.2
+
+# Email
+Flask-Mail==0.9.1
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.23
+
+# Utilities
+python-dateutil==2.8.2
+requests>=2.32.2
+
+# Development
+alembic==1.12.1
+pytest==7.4.2
+pytest-cov==4.1.0

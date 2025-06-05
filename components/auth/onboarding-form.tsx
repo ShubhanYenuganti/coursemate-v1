@@ -52,6 +52,7 @@ export function OnboardingForm() {
       if (!token) {
         throw new Error("No authentication token found. Please log in again.");
       }
+        console.log("Token retrieved from localStorage:", token);  // Add this for debugging
 
       const response = await fetch('http://localhost:5173/api/users/profile', {
         method: 'POST',

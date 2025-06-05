@@ -14,6 +14,7 @@ export function SignUpForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showVerificationNotice, setShowVerificationNotice] = useState(false)
 
   const handleSignUp = async (provider: string) => {
     setIsLoading(true);
@@ -47,36 +48,20 @@ export function SignUpForm() {
           body: JSON.stringify({ email, password, name: email.split('@')[0] }), // Add a default name
         });
 
+        const result = await registerResponse.json();
+        
         if (!registerResponse.ok) {
-          const error = await registerResponse.json();
-          throw new Error(error.error || 'Registration failed');
+          throw new Error(result.error || 'Registration failed');
         }
 
-        console.log("Registration successful, logging in...");
-
-        // 2. Log the user in after successful registration
-        const loginResponse = await fetch('http://localhost:5173/api/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({ email, password }),
+        console.log("Registration successful, verification email sent");
+        setShowVerificationNotice(true);
+        
+        // Show success message
+        toast({
+          title: "Check your email",
+          description: "We've sent a verification link to your email address. Please verify your email to continue.",
         });
-
-        if (!loginResponse.ok) {
-          const error = await loginResponse.json();
-          throw new Error(error.error || 'Login after registration failed');
-        }
-
-        const { token } = await loginResponse.json();
-
-        // 3. Save the token to localStorage
-        localStorage.setItem('token', token);
-        console.log("Login successful, token saved");
-
-        // 4. Redirect to onboarding
-        router.push('/onboarding');
 
       } catch (error) {
         console.error("Error during signup:", error);
@@ -101,7 +86,26 @@ export function SignUpForm() {
 
   return (
     <Card className="p-6">
-      <div className="space-y-4">
+      {showVerificationNotice ? (
+        <div className="space-y-4 text-center">
+          <h2 className="text-2xl font-bold">Check your email</h2>
+          <p className="text-muted-foreground">
+            We've sent a verification link to <span className="font-semibold">{email}</span>.
+            Please click the link to verify your email address.
+          </p>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setShowVerificationNotice(false);
+              setEmail('');
+              setPassword('');
+            }}
+          >
+            Back to sign up
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
         {/* Social login buttons (unchanged) */}
         <Button
           variant="outline"
@@ -156,6 +160,7 @@ export function SignUpForm() {
           </Button>
         </div>
       </div>
+      )}
     </Card>
   )
 }
