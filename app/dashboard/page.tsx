@@ -9,14 +9,26 @@ import { useCourses } from "@/contexts/course-context"
 import { Button } from "@/components/ui/button"
 import { PlusCircle, Calendar, TrendingUp } from "lucide-react"
 import { CalendarModal } from "@/components/dashboard/calendar-modal"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 export default function DashboardPage() {
-  const { selectedCourseId, courses } = useCourses()
+  const { selectedCourseId, courses, selectCourse } = useCourses()
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+
+  // Handle course ID from URL when component mounts
+  useEffect(() => {
+    const path = window.location.pathname
+    const courseIdMatch = path.match(/^\/dashboard\/courses\/([^/]+)$/)
+
+    if (courseIdMatch && courseIdMatch[1]) {
+      selectCourse(courseIdMatch[1])
+    }
+  }, [selectCourse])
 
   // Find the selected course
   const selectedCourse = selectedCourseId ? courses.find((course) => course.id === selectedCourseId) : null
+
+
 
   return (
     <div className="flex min-h-screen flex-col">

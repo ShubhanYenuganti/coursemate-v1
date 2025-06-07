@@ -59,9 +59,42 @@ export function CourseProvider({ children }: { children: ReactNode }) {
     }
   }, [selectedCourseId])
 
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname
+      const courseIdMatch = path.match(/^\/dashboard\/courses\/([^/]+)$/)
+
+      if (courseIdMatch && courseIdMatch[1]) {
+        // If the URL has a course ID, select that course
+        setSelectedCourseId(courseIdMatch[1])
+      } else if (path === '/dashboard') {
+        // If we're on the dashboard root, deselect any course
+        setSelectedCourseId(null)
+      }
+    }
+
+    // Set up the event listener
+    window.addEventListener('popstate', handlePopState)
+
+    // Initial check in case the page is loaded with a course ID in the URL
+    handlePopState()
+
+    // Clean up the event listener
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
+
   const selectCourse = useCallback((courseId: string | null) => {
     console.log("selectCourse called with:", courseId)
     setSelectedCourseId(courseId)
+
+    // Update the URL to include the course ID
+    if (courseId) {
+      window.history.pushState({}, '', `/dashboard/courses/${courseId}`)
+    } else {
+      window.history.pushState({}, '', '/dashboard')
+    }
   }, [])
 
   const addCourse = useCallback((courseData: Omit<Course, "id">) => {
