@@ -1,50 +1,86 @@
-export function SummaryCards() {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-      <div className="bg-purple-500 rounded-lg p-6 text-white shadow-md">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-3xl font-bold">5</h3>
-            <p className="text-sm opacity-80">Currently enrolled</p>
-          </div>
-          <div className="rounded-full bg-white/20 p-3">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </div>
-        </div>
-        <h2 className="text-xl font-bold mt-2">Active Courses</h2>
-      </div>
+import React from 'react';
 
-      <div className="bg-blue-500 rounded-lg p-6 text-white shadow-md">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-3xl font-bold">25.5 hrs</h3>
-            <p className="text-sm opacity-80">This week</p>
-          </div>
-          <div className="rounded-full bg-white/20 p-3">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-        </div>
-        <h2 className="text-xl font-bold mt-2">Study Hours</h2>
-      </div>
-
-      <div className="bg-green-500 rounded-lg p-6 text-white shadow-md">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-3xl font-bold">18</h3>
-            <p className="text-sm opacity-80">Out of 23 tasks</p>
-          </div>
-          <div className="rounded-full bg-white/20 p-3">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-        </div>
-        <h2 className="text-xl font-bold mt-2">Tasks Completed</h2>
-      </div>
-    </div>
-  )
+export interface AnalyticsCardData {
+  id: number;
+  icon: string;
+  value: string;
+  label: string;
+  bgColor: string;
+  iconColor: string;
+  gradient: string;
 }
+
+interface AnalyticsCardsProps {
+  analyticsData?: AnalyticsCardData[];
+}
+
+const defaultAnalytics: AnalyticsCardData[] = [
+  {
+    id: 1,
+    icon: '🔥',
+    value: '12',
+    label: 'Day Study Streak',
+    bgColor: 'bg-orange-100',
+    iconColor: 'text-orange-500',
+    gradient: 'from-orange-400 to-orange-500',
+  },
+  {
+    id: 2,
+    icon: '⏰',
+    value: '25.5 hrs',
+    label: 'Hours Logged (Weekly)',
+    bgColor: 'bg-emerald-100',
+    iconColor: 'text-emerald-500',
+    gradient: 'from-emerald-400 to-emerald-500',
+  },
+  {
+    id: 3,
+    icon: '📊',
+    value: '60%',
+    label: 'Overall Completion',
+    bgColor: 'bg-indigo-100',
+    iconColor: 'text-indigo-500',
+    gradient: 'from-indigo-400 to-indigo-500',
+  },
+  {
+    id: 4,
+    icon: '🏆',
+    value: '5',
+    label: 'Achievements Unlocked',
+    bgColor: 'bg-amber-100',
+    iconColor: 'text-amber-500',
+    gradient: 'from-amber-400 to-amber-500',
+  },
+];
+
+const AnalyticsCards: React.FC<AnalyticsCardsProps> = ({ analyticsData = [] }) => {
+  const dataToDisplay = analyticsData.length > 0 ? analyticsData : defaultAnalytics;
+
+  return (
+    <div className="grid grid-cols-4 gap-4">
+      {dataToDisplay.map(item => (
+        <div
+          key={item.id}
+          className="relative overflow-hidden rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
+        >
+          <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-10`} />
+          <div className="relative bg-white/80 backdrop-blur-sm p-3 flex flex-row items-center gap-3">
+            <div className={`w-10 h-10 ${item.bgColor} ${item.iconColor} rounded-lg flex items-center justify-center text-xl flex-shrink-0`}>
+              {item.icon}
+            </div>
+            <div className="flex flex-col items-start">
+              <div className="text-xl font-bold text-gray-800">
+                {item.value}
+              </div>
+              <div className="text-xs text-gray-600">
+                {item.label}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default AnalyticsCards;

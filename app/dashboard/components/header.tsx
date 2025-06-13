@@ -39,7 +39,7 @@ export function Header({
 
   return (
     <div className="sticky top-0 z-10 border-gray-200 mb-6">
-      <div className="flex justify-between items-center p-4">
+      <div className="flex justify-between items-center px-4 pt-3 pb-0">
         {/* Welcome Section */}
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
