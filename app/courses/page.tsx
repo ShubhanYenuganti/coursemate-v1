@@ -185,7 +185,7 @@ const CoursesPage = () => {
   }, [courses, searchTerm, selectedSemester, filterChips, showArchived, sortBy]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8 relative">
       <div className="max-w-7xl mx-auto">
         <CourseHeader />
         
@@ -237,12 +237,13 @@ const CoursesPage = () => {
         {filteredCourses.length === 0 && (
           <EmptyState onClearFilters={clearAllFilters} />
         )}
-        
-        {/* Floating Add Button */}
-        <button className="fixed bottom-8 right-8 bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-110 transform group">
-          <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
-        </button>
       </div>
+      
+      {/* Floating Add Button - Positioned relative to the page container */}
+      <button className="absolute bottom-8 right-8 z-50 bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-110 hover:shadow-3xl transform group animate-pulse hover:animate-none">
+        <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
+        <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+      </button>
     </div>
   );
 };
