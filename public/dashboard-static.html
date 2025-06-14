@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudyBuddy Dashboard (Static)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet"> -->
+</head>
+<body class="bg-gray-50 font-sans">
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r flex flex-col justify-between">
+      <div>
+        <div class="flex items-center gap-2 px-6 py-6">
+          <div class="bg-indigo-100 p-2 rounded-lg">
+            <span class="text-2xl">📚</span>
+          </div>
+          <span class="font-bold text-xl text-gray-800">StudyBuddy</span>
+        </div>
+        <nav class="mt-4">
+          <ul class="space-y-1 px-4">
+            <li><a href="#" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 text-indigo-600 font-semibold"><span>🏠</span> Dashboard</a></li>
+            <li><a href="#" class="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100"><span>📖</span> My Courses</a></li>
+            <li><a href="#" class="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100"><span>🗓️</span> Calendar</a></li>
+            <li><a href="#" class="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100"><span>💬</span> Chat</a></li>
+            <li><a href="#" class="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100"><span>📚</span> Resources</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="px-6 py-4 border-t flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-lg font-bold text-gray-700">N</div>
+        <div>
+          <div class="font-semibold text-gray-800">Nikhil Sharma</div>
+          <div class="text-xs text-gray-500">View Profile</div>
+        </div>
+        <span class="ml-auto text-green-500 text-xs">● Active</span>
+      </div>
+    </aside>
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-y-auto">
+      <!-- Header -->
+      <header class="sticky top-0 z-20 w-full bg-white shadow-sm px-8 py-6 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900 mb-1">Welcome back, Nikhil!!</h1>
+            <div class="text-gray-500 text-sm">"The beautiful thing about learning is that no one can take it away from you." – B.B. King</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="text" placeholder="Search courses, tasks..." class="border rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            <button class="relative p-2 rounded-full hover:bg-gray-100">
+              <span class="text-xl">🔔</span>
+              <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            </button>
+          </div>
+        </div>
+      </header>
+      <!-- Action Buttons -->
+      <div class="flex gap-3 px-8 mt-6 mb-4">
+        <button class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">Add Task</button>
+        <button class="bg-green-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-600 transition">Add Course</button>
+        <button class="bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-600 transition">Join Study Group</button>
+        <button class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 transition">View Full Calendar</button>
+      </div>
+      <!-- Motivation Analytics -->
+      <section class="px-8 mb-6">
+        <div class="grid grid-cols-4 gap-4">
+          <div class="relative overflow-hidden rounded-xl shadow-md hover:shadow-lg transition-all duration-300">
+            <div class="absolute inset-0 bg-gradient-to-br from-orange-400 to-orange-500 opacity-10"></div>
+            <div class="relative bg-white/80 backdrop-blur-sm p-3 flex flex-row items-center gap-3">
+              <div class="w-10 h-10 bg-orange-100 text-orange-500 rounded-lg flex items-center justify-center text-xl flex-shrink-0">🔥</div>
+              <div class="flex flex-col items-start">
+                <div class="text-xl font-bold text-gray-800">12</div>
+                <div class="text-xs text-gray-600">Day Study Streak</div>
+              </div>
+            </div>
+          </div>
+          <div class="relative overflow-hidden rounded-xl shadow-md hover:shadow-lg transition-all duration-300">
+            <div class="absolute inset-0 bg-gradient-to-br from-emerald-400 to-emerald-500 opacity-10"></div>
+            <div class="relative bg-white/80 backdrop-blur-sm p-3 flex flex-row items-center gap-3">
+              <div class="w-10 h-10 bg-emerald-100 text-emerald-500 rounded-lg flex items-center justify-center text-xl flex-shrink-0">⏰</div>
+              <div class="flex flex-col items-start">
+                <div class="text-xl font-bold text-gray-800">25.5 hrs</div>
+                <div class="text-xs text-gray-600">Hours Logged (Weekly)</div>
+              </div>
+            </div>
+          </div>
+          <div class="relative overflow-hidden rounded-xl shadow-md hover:shadow-lg transition-all duration-300">
+            <div class="absolute inset-0 bg-gradient-to-br from-indigo-400 to-indigo-500 opacity-10"></div>
+            <div class="relative bg-white/80 backdrop-blur-sm p-3 flex flex-row items-center gap-3">
+              <div class="w-10 h-10 bg-indigo-100 text-indigo-500 rounded-lg flex items-center justify-center text-xl flex-shrink-0">📊</div>
+              <div class="flex flex-col items-start">
+                <div class="text-xl font-bold text-gray-800">60%</div>
+                <div class="text-xs text-gray-600">Overall Completion</div>
+              </div>
+            </div>
+          </div>
+          <div class="relative overflow-hidden rounded-xl shadow-md hover:shadow-lg transition-all duration-300">
+            <div class="absolute inset-0 bg-gradient-to-br from-amber-400 to-amber-500 opacity-10"></div>
+            <div class="relative bg-white/80 backdrop-blur-sm p-3 flex flex-row items-center gap-3">
+              <div class="w-10 h-10 bg-amber-100 text-amber-500 rounded-lg flex items-center justify-center text-xl flex-shrink-0">🏆</div>
+              <div class="flex flex-col items-start">
+                <div class="text-xl font-bold text-gray-800">5</div>
+                <div class="text-xs text-gray-600">Achievements Unlocked</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- Main Grid -->
+      <div class="flex flex-row gap-6 px-8">
+        <!-- Left Column -->
+        <div class="flex-1 flex flex-col gap-6">
+          <!-- Calendar Widget -->
+          <section class="bg-white rounded-xl shadow-sm p-6">
+            <div class="mb-4 flex items-center justify-between">
+              <h2 class="text-lg font-bold text-gray-800">Calendar</h2>
+              <div class="flex items-center gap-2 text-gray-500">
+                <span>October 2023</span>
+                <select class="border rounded px-2 py-1 text-xs">
+                  <option>Month View</option>
+                  <option>Week View</option>
+                </select>
+              </div>
+            </div>
+            <table class="w-full text-center border-collapse">
+              <thead>
+                <tr class="text-xs text-gray-500">
+                  <th class="py-1">Sun</th>
+                  <th class="py-1">Mon</th>
+                  <th class="py-1">Tue</th>
+                  <th class="py-1">Wed</th>
+                  <th class="py-1">Thu</th>
+                  <th class="py-1">Fri</th>
+                  <th class="py-1">Sat</th>
+                </tr>
+              </thead>
+              <tbody class="text-sm">
+                <tr>
+                  <td class="text-gray-400">24</td>
+                  <td class="text-gray-400">25</td>
+                  <td class="text-gray-400">26</td>
+                  <td class="text-gray-400">27</td>
+                  <td class="text-gray-400">28</td>
+                  <td class="text-gray-400">29</td>
+                  <td class="text-gray-400">30</td>
+                </tr>
+                <tr>
+                  <td>1</td><td>2</td><td>3</td><td>4</td>
+                  <td class="border-2 border-indigo-500 rounded-lg bg-indigo-50 font-bold">5 (Today)</td>
+                  <td>6</td><td>7</td>
+                </tr>
+                <tr>
+                  <td>8</td><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td><td>14</td>
+                </tr>
+                <tr>
+                  <td>...</td><td>...</td><td>...</td><td>...</td><td>...</td><td>...</td><td>...</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <!-- My Courses -->
+          <section class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-800">My Courses</h2>
+              <button class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-sm font-semibold hover:bg-indigo-100">+ Add Course</button>
+            </div>
+            <div class="flex gap-4">
+              <div class="flex-1 bg-red-50 rounded-lg p-4 flex flex-col justify-between">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-lg">📕</span>
+                  <span class="font-semibold text-gray-800">Calculus 101</span>
+                </div>
+                <div class="text-xs text-gray-500 mb-1">Prof. Einstein | Mon, Wed, Fri</div>
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                  <div class="bg-red-400 h-2 rounded-full" style="width: 75%"></div>
+                </div>
+                <div class="text-xs text-gray-500 mb-2">75% complete</div>
+                <div class="flex gap-2">
+                  <button class="bg-white border border-gray-200 text-gray-700 px-3 py-1 rounded-lg text-xs font-semibold hover:bg-gray-50">View Details</button>
+                  <button class="bg-red-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-red-600">Continue</button>
+                </div>
+              </div>
+              <div class="flex-1 bg-blue-50 rounded-lg p-4 flex flex-col justify-between">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-lg">📘</span>
+                  <span class="font-semibold text-gray-800">Physics Fundamentals</span>
+                </div>
+                <div class="text-xs text-gray-500 mb-1">Prof. Newton | Tue, Thu</div>
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                  <div class="bg-blue-400 h-2 rounded-full" style="width: 40%"></div>
+                </div>
+                <div class="text-xs text-gray-500 mb-2">40% complete</div>
+                <div class="flex gap-2">
+                  <button class="bg-white border border-gray-200 text-gray-700 px-3 py-1 rounded-lg text-xs font-semibold hover:bg-gray-50">View Details</button>
+                  <button class="bg-blue-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-blue-600">Continue</button>
+                </div>
+              </div>
+              <div class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-lg p-4 text-gray-400">
+                <span class="text-3xl mb-2">+</span>
+                <span class="text-sm">No more courses</span>
+                <button class="mt-2 bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-xs font-semibold hover:bg-indigo-100">Add New Course</button>
+              </div>
+            </div>
+          </section>
+        </div>
+        <!-- Right Column -->
+        <div class="w-96 flex flex-col gap-6">
+          <!-- Today's Checklist -->
+          <section class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-800">Today's Checklist</h2>
+              <button class="bg-gray-100 text-gray-600 rounded-full w-7 h-7 flex items-center justify-center text-lg font-bold">+</button>
+            </div>
+            <ul class="space-y-2 mb-4">
+              <li class="flex items-center gap-2 p-2 rounded-lg bg-indigo-50">
+                <input type="checkbox" checked class="accent-indigo-500" />
+                <div>
+                  <div class="font-semibold text-indigo-700 text-sm">Physics Quiz - Chapter 4</div>
+                  <div class="text-xs text-gray-500">Physics Fundamentals</div>
+                </div>
+                <span class="ml-auto text-xs text-gray-400">...</span>
+              </li>
+              <li class="flex items-center gap-2 p-2 rounded-lg bg-red-50">
+                <input type="checkbox" class="accent-red-400" />
+                <div>
+                  <div class="font-semibold text-red-700 text-sm">Review Lecture Notes</div>
+                  <div class="text-xs text-gray-500">Calculus 101</div>
+                </div>
+                <span class="ml-auto text-xs text-gray-400">...</span>
+              </li>
+              <li class="flex items-center gap-2 p-2 rounded-lg bg-green-50">
+                <input type="checkbox" class="accent-green-500" />
+                <div>
+                  <div class="font-semibold text-green-700 text-sm">Work on Project Proposal</div>
+                  <div class="text-xs text-gray-500">Intro to Programming</div>
+                </div>
+                <span class="ml-auto text-xs text-gray-400">...</span>
+              </li>
+            </ul>
+            <div class="text-xs text-gray-400 mb-2">Nothing scheduled for today. Time to relax or plan ahead!</div>
+            <button class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg text-xs font-semibold hover:bg-indigo-200">+ Add a task</button>
+          </section>
+          <!-- Community Activity -->
+          <section class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-800">Community Activity</h2>
+              <select class="border rounded px-2 py-1 text-xs">
+                <option>All Activity</option>
+                <option>My Groups</option>
+              </select>
+            </div>
+            <ul class="space-y-4">
+              <li class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">PP</div>
+                <div>
+                  <div class="text-sm"><span class="font-semibold text-indigo-700">Priya Patel</span> posted in <span class="font-semibold text-indigo-700">Calculus Study Group</span></div>
+                  <div class="text-xs text-gray-500 mb-1">25 mins ago</div>
+                  <div class="bg-gray-50 rounded p-2 text-xs text-gray-700 mb-1">"Anyone else stuck on problem 5 of the latest assignment? Would love some hints!"</div>
+                  <div class="flex gap-3 text-xs text-gray-400">
+                    <span>👍 12</span>
+                    <span>💬 3</span>
+                  </div>
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">DL</div>
+                <div>
+                  <div class="text-sm"><span class="font-semibold text-blue-700">David Lee</span> shared a resource in <span class="font-semibold text-blue-700">Physics Help Forum</span></div>
+                  <div class="text-xs text-gray-500 mb-1">1 hour ago</div>
+                  <div class="bg-gray-50 rounded p-2 text-xs text-gray-700 mb-1">"Useful Video on Thermodynamics"<br><a href="#" class="text-blue-500 underline">Watch Video</a></div>
+                </div>
+              </li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html> 
