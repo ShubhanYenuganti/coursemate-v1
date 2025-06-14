@@ -21,7 +21,7 @@ export function Sidebar() {
     },
     {
       name: 'My Courses',
-      href: '/dashboard/courses',
+      href: '/courses',
       icon: '📚',
     },
     {
