@@ -14,7 +14,6 @@ export interface Course {
   title: string;
   subject: string;
   semester: string;
-  progress: number;
   dailyProgress: number;
   lastAccessed: string;
   badge: string;
@@ -33,8 +32,8 @@ interface CourseCardProps {
 const CourseCard: React.FC<CourseCardProps> = ({ course, onTogglePin, onToggleArchive }) => {
   const IconComponent = course.icon;
   
-  const getProgressColor = (progress: number, dailyProgress: number) => {
-    if (progress === 100) return 'bg-green-500';
+  const getProgressColor = (dailyProgress: number) => {
+    if (dailyProgress === 100) return 'bg-green-500';
     if (dailyProgress >= 80) return 'bg-green-400';
     if (dailyProgress >= 50) return 'bg-yellow-400';
     return 'bg-red-400';
@@ -53,8 +52,8 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onTogglePin, onToggleAr
         </div>
       )}
       
-      <div className="aspect-video bg-gradient-to-br from-blue-500 to-purple-600 relative flex items-center justify-center">
-        <IconComponent className="w-12 h-12 text-white opacity-80" />
+      <div className="aspect-[16/9] bg-gradient-to-br from-blue-500 to-purple-600 relative flex items-center justify-center">
+        <IconComponent className="w-10 h-10 text-white opacity-80" />
         {isActiveToday(course.lastAccessed) && (
           <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium">
             Active Today
@@ -67,7 +66,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onTogglePin, onToggleAr
         </div>
       </div>
       
-      <div className="p-4">
+      <div className="p-6">
         <div className="flex items-start justify-between mb-2">
           <h3 className="font-semibold text-gray-900 text-sm leading-tight group-hover:text-blue-600 transition-colors" title={course.title}>
             {course.title}
@@ -87,13 +86,13 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onTogglePin, onToggleAr
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-500">Progress</span>
-            <span className="font-medium">{course.progress}%</span>
+            <span className="font-medium">{course.dailyProgress}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div 
-              className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(course.progress, course.dailyProgress)}`}
-              style={{ width: `${course.progress}%` }}
-              title={`Overall: ${course.progress}% | Daily: ${course.dailyProgress}%`}
+              className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(course.dailyProgress)}`}
+              style={{ width: `${course.dailyProgress}%` }}
+              title={`Daily: ${course.dailyProgress}%`}
             ></div>
           </div>
         </div>

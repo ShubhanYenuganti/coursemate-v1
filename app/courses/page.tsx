@@ -7,6 +7,7 @@ import CourseCard from "./components/CourseCard";
 import CourseListItem from "./components/CourseListItem";
 import EmptyState from "./components/EmptyState";
 import { Course } from "./components/CourseCard";
+import CreateCourseModal from "./components/CreateCourseModal";
 
 interface FilterChip {
   id: string;
@@ -23,6 +24,7 @@ const CoursesPage = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [filterChips, setFilterChips] = useState<FilterChip[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [isCreateModalOpen, setCreateModalOpen] = useState(false);
 
   // Sample course data
   const [courses, setCourses] = useState<Course[]>([
@@ -31,7 +33,6 @@ const CoursesPage = () => {
       title: "Advanced React Development",
       subject: "Programming",
       semester: "Fall 2024",
-      progress: 75,
       dailyProgress: 80,
       lastAccessed: "2024-06-13",
       badge: "Creator",
@@ -45,7 +46,6 @@ const CoursesPage = () => {
       title: "Organic Chemistry Fundamentals",
       subject: "Science",
       semester: "Fall 2024", 
-      progress: 45,
       dailyProgress: 60,
       lastAccessed: "2024-06-12",
       badge: "Enrolled",
@@ -59,7 +59,6 @@ const CoursesPage = () => {
       title: "Calculus III - Multivariable",
       subject: "Mathematics",
       semester: "Spring 2024",
-      progress: 100,
       dailyProgress: 100,
       lastAccessed: "2024-05-15",
       badge: "Enrolled",
@@ -73,7 +72,6 @@ const CoursesPage = () => {
       title: "World History: Ancient Civilizations",
       subject: "History",
       semester: "Fall 2023",
-      progress: 90,
       dailyProgress: 0,
       lastAccessed: "2024-01-20",
       badge: "Creator",
@@ -87,7 +85,6 @@ const CoursesPage = () => {
       title: "Digital Art and Design",
       subject: "Art",
       semester: "Fall 2024",
-      progress: 30,
       dailyProgress: 90,
       lastAccessed: "2024-06-13",
       badge: "Enrolled",
@@ -101,7 +98,6 @@ const CoursesPage = () => {
       title: "Music Theory Basics",
       subject: "Music",
       semester: "Summer 2024",
-      progress: 60,
       dailyProgress: 40,
       lastAccessed: "2024-06-10",
       badge: "Enrolled",
@@ -154,9 +150,9 @@ const CoursesPage = () => {
       const matchesFilters = filterChips.every(chip => {
         if (chip.type === 'Subject') return course.subject === chip.value;
         if (chip.type === 'Progress') {
-          if (chip.value === '100% Complete') return course.progress === 100;
-          if (chip.value === '80%+ Complete') return course.progress >= 80;
-          if (chip.value === 'In Progress') return course.progress > 0 && course.progress < 100;
+          if (chip.value === '100% Complete') return course.dailyProgress === 100;
+          if (chip.value === '80%+ Complete') return course.dailyProgress >= 80;
+          if (chip.value === 'In Progress') return course.dailyProgress > 0 && course.dailyProgress < 100;
         }
         return true;
       });
@@ -173,7 +169,7 @@ const CoursesPage = () => {
         case 'title':
           return a.title.localeCompare(b.title);
         case 'progress':
-          return b.progress - a.progress;
+          return b.dailyProgress - a.dailyProgress;
         case 'lastAccessed':
           return new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime();
         default:
@@ -210,7 +206,7 @@ const CoursesPage = () => {
         {/* Course Grid/List */}
         <div className="mb-6">
           {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredCourses.map(course => (
                 <CourseCard 
                   key={course.id} 
@@ -239,11 +235,36 @@ const CoursesPage = () => {
         )}
       </div>
       
-      {/* Floating Add Button - Positioned relative to the page container */}
-      <button className="absolute bottom-8 right-8 z-50 bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-110 hover:shadow-3xl transform group animate-pulse hover:animate-none">
-        <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-      </button>
+      {/* Floating Add Button with Speed Dial */}
+      <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end group">
+        {/* Speed dial options (hidden by default, shown on hover, animate upwards) */}
+        <div className="flex flex-col items-end space-y-2 mb-2">
+          <button
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium hover:from-indigo-700 hover:to-purple-700 transform transition-all duration-300 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0"
+            style={{ transitionDelay: '100ms' }}
+            onClick={() => setCreateModalOpen(true)}
+          >
+            + Add Course
+          </button>
+          <button
+            className="bg-gradient-to-r from-blue-400 to-purple-400 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium hover:from-blue-500 hover:to-purple-500 transform transition-all duration-300 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0"
+            style={{ transitionDelay: '200ms' }}
+            tabIndex={-1}
+          >
+            🔍 Discover Course
+          </button>
+        </div>
+        {/* Main Add button */}
+        <button
+          className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-110 hover:shadow-3xl transform group group-hover:animate-pulse"
+        >
+          <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
+          <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+        </button>
+      </div>
+      {isCreateModalOpen && (
+        <CreateCourseModal onClose={() => setCreateModalOpen(false)} />
+      )}
     </div>
   );
 };
