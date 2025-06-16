@@ -253,24 +253,32 @@ const CreateCourseModal = ({ onClose }: { onClose: () => void }) => {
           <div>
             <label className="block font-semibold mb-1">Visibility</label>
             <div className="flex gap-3 items-center">
-              {['Public', 'Private', 'Only Me', 'Friends Only'].map(opt => (
-                <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="visibility"
-                    value={opt}
-                    checked={visibility === opt}
-                    onChange={() => setVisibility(opt)}
-                  />
-                  <span>{opt}</span>
-                  <span className="text-gray-400 text-xs" title={
-                    opt === 'Public' ? 'Anyone can view this course.' :
-                    opt === 'Private' ? 'Only invited users can view.' :
-                    opt === 'Only Me' ? 'Visible only to you.' :
-                    'Visible to your friends.'
-                  }>?</span>
-                </label>
-              ))}
+              {['Public', 'Private', 'Only Me', 'Friends Only'].map(opt => {
+                const descriptions: { [key: string]: string } = {
+                  'Public': 'Anyone can view this course.',
+                  'Private': 'Only invited users can view.',
+                  'Only Me': 'Visible only to you.',
+                  'Friends Only': 'Visible to your friends.'
+                };
+                return (
+                  <label key={opt} className="flex items-center gap-1 cursor-pointer relative">
+                    <input
+                      type="radio"
+                      name="visibility"
+                      value={opt}
+                      checked={visibility === opt}
+                      onChange={() => setVisibility(opt)}
+                    />
+                    <span>{opt}</span>
+                    <span className="text-gray-400 text-xs relative group/tooltip">
+                      ?
+                      <span className="absolute left-1/2 -translate-x-1/2 top-6 z-10 w-max min-w-[140px] bg-gray-900 text-white text-xs rounded px-2 py-1 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap shadow-lg">
+                        {descriptions[opt]}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </div>
           {/* Co-author/Collaborators */}

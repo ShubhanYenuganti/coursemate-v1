@@ -7,6 +7,7 @@ import {
   Edit 
 } from 'lucide-react';
 import { Course } from './CourseCard';
+import Link from "next/link";
 
 interface CourseListItemProps {
   course: Course;
@@ -80,10 +81,12 @@ const CourseListItem: React.FC<CourseListItemProps> = ({ course, onTogglePin }) 
           </div>
           
           <div className="flex gap-3">
-            <button className="bg-blue-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1">
-              <Play className="w-4 h-4" />
-              Enter
-            </button>
+            <Link href={`/courses/${course.id}`} legacyBehavior>
+              <a className="bg-blue-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1">
+                <Play className="w-4 h-4" />
+                Enter
+              </a>
+            </Link>
             <button className="bg-gray-100 text-gray-700 py-2 px-3 rounded-md text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-1">
               <Edit className="w-4 h-4" />
               Edit

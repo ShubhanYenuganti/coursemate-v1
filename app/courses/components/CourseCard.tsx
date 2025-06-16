@@ -8,6 +8,7 @@ import {
   CheckCircle2, 
   Archive 
 } from 'lucide-react';
+import Link from "next/link";
 
 export interface Course {
   id: number;
@@ -110,10 +111,12 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onTogglePin, onToggleAr
         </div>
         
         <div className="flex gap-2 mt-4">
-          <button className="flex-1 bg-blue-600 text-white py-2 px-3 rounded-md text-xs font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1">
-            <Play className="w-3 h-3" />
-            Enter Course
-          </button>
+          <Link href={`/courses/${course.id}`} legacyBehavior>
+            <a className="flex-1 bg-blue-600 text-white py-2 px-3 rounded-md text-xs font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1">
+              <Play className="w-3 h-3" />
+              Enter Course
+            </a>
+          </Link>
           <button className="flex-1 bg-gray-100 text-gray-700 py-2 px-3 rounded-md text-xs font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-1">
             <Edit className="w-3 h-3" />
             Edit Course
