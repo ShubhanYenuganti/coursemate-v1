@@ -291,7 +291,7 @@ const CoursesPage = () => {
         </div>
         {/* Main Add button - MADE MORE VISIBLE FOR DEBUG */}
         <button 
-          className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-110 hover:shadow-2xl transform relative border-4 border-yellow-400"
+          className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-110 hover:shadow-2xl transform relative border-4"
           onClick={() => setCreateModalOpen(true)}
           style={{ minWidth: '80px', minHeight: '80px' }}
         >
