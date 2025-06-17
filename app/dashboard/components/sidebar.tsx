@@ -26,27 +26,27 @@ export function Sidebar() {
     },
     {
       name: 'Calendar',
-      href: '/dashboard/calendar',
+      href: '/calendar',
       icon: '📅',
     },
     {
       name: 'Chat',
-      href: '/dashboard/chat',
+      href: '/chat',
       icon: '💬',
     },
     {
       name: 'Notes',
-      href: '/dashboard/notes',
+      href: '/notes',
       icon: '📝',
     },
     {
       name: 'Resources',
-      href: '/dashboard/resources',
+      href: '/resources',
       icon: '📖',
     },
     {
       name: 'Study Plan',
-      href: '/dashboard/study-plan',
+      href: '/study-plan',
       icon: '📋',
     },
   ];
