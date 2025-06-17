@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, use } from "react";
 import CourseDetailHeader from "../components/CourseDetailHeader";
 import CourseDetailTabs from "../components/CourseDetailTabs";
 import { Course } from "../components/CourseCard";
@@ -37,7 +37,7 @@ const mapCourse = (data: CourseData): Course => ({
 });
 
 interface Props {
-  params: { courseId: string };
+  params: Promise<{ courseId: string }>;
 }
 
 const CourseDetailPage: React.FC<Props> = ({ params }) => {
@@ -46,10 +46,13 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Unwrap params Promise
+  const { courseId } = use(params);
+
   useEffect(() => {
     const fetchCourse = async () => {
       try {
-        const data = await courseService.getCourse(params.courseId);
+        const data = await courseService.getCourse(courseId);
         setCourse(mapCourse(data));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load course');
@@ -58,7 +61,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
       }
     };
     fetchCourse();
-  }, [params.courseId]);
+  }, [courseId]);
 
   if (loading) {
     return (<div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>);
@@ -77,11 +80,11 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
         <div className="text-center text-gray-400">[More overview content coming soon]</div>
       </div>
     ),
-    materials: <div className="text-center text-gray-400">[Materials tab coming soon]</div>,
-    ai: <div className="text-center text-gray-400">[AI Chat tab coming soon]</div>,
-    study: <div className="text-center text-gray-400">[Study Plan tab coming soon]</div>,
-    community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
-    progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
+  materials: <div className="text-center text-gray-400">[Materials tab coming soon]</div>,
+  ai: <div className="text-center text-gray-400">[AI Chat tab coming soon]</div>,
+  study: <div className="text-center text-gray-400">[Study Plan tab coming soon]</div>,
+  community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
+  progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
   };
   const tabContent = tabContentMap[activeTab];
 

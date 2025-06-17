@@ -103,7 +103,7 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
       const response = await courseService.createCourse(courseData);
       
       // Success - close modal and refresh courses if callback provided
-      onClose();
+    onClose();
       if (onCourseCreated) {
         onCourseCreated();
       }
