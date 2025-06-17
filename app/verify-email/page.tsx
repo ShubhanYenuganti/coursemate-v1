@@ -46,7 +46,8 @@ export default function VerifyEmail() {
         }
       } catch (err) {
         console.error('Verification error:', err);
-        setError(err.message || 'Failed to verify email. The link may have expired or already been used.');
+        const errorMsg = err instanceof Error ? err.message : 'Failed to verify email. The link may have expired or already been used.';
+        setError(errorMsg);
         setStatus('');
       }
     };

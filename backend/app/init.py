@@ -1,6 +1,8 @@
 from flask import Flask
 from flask_cors import CORS
 from app.extensions import db, migrate, jwt, mail
+from flask import jsonify
+
 
 def create_app():
     app = Flask(__name__)
@@ -45,9 +47,11 @@ def create_app():
     from app.routes.auth import auth_bp
     from app.routes.users import users_bp
     from app.routes.courses import courses_bp
+    from app.routes.health import health_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(courses_bp)
+    app.register_blueprint(health_bp)
 
     @app.route("/")
     def index():
