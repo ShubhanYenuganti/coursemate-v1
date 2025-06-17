@@ -1,7 +1,10 @@
-import React from "react";
+"use client";
+import React, { useState } from "react";
 import CourseDetailHeader from "../components/CourseDetailHeader";
+import CourseDetailTabs from "../components/CourseDetailTabs";
 import { Course } from "../components/CourseCard";
 import { Code, Beaker, Calculator, Globe, Palette, Music } from 'lucide-react';
+import { use } from 'react';
 
 // Sample course data (same as in page.tsx)
 const courses: Course[] = [
@@ -85,8 +88,19 @@ const courses: Course[] = [
   }
 ];
 
-const CourseDetailPage = ({ params }: { params: { courseId: string } }) => {
-  const course = courses.find(c => c.id === Number(params.courseId));
+const TAB_COMPONENTS = (course: Course): Record<string, React.ReactNode> => ({
+  overview: <div><CourseDetailHeader course={course} /><div className="text-center text-gray-400">[More overview content coming soon]</div></div>,
+  materials: <div className="text-center text-gray-400">[Materials tab coming soon]</div>,
+  ai: <div className="text-center text-gray-400">[AI Chat tab coming soon]</div>,
+  study: <div className="text-center text-gray-400">[Study Plan tab coming soon]</div>,
+  community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
+  progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
+});
+
+const CourseDetailPage = ({ params }: { params: Promise<{ courseId: string }> }) => {
+  const [activeTab, setActiveTab] = useState("overview");
+  const { courseId } = use(params);
+  const course = courses.find(c => c.id === Number(courseId));
   if (!course) {
     return (
       <div className="min-h-screen flex items-center justify-center text-2xl text-gray-400">
@@ -94,12 +108,14 @@ const CourseDetailPage = ({ params }: { params: { courseId: string } }) => {
       </div>
     );
   }
+  const tabContent = TAB_COMPONENTS(course)[activeTab];
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8 relative">
       <div className="max-w-5xl mx-auto">
-        <CourseDetailHeader course={course} />
-        {/* TODO: Add Course Banner, Description, Materials, Outline, AI Chat, Notes, etc. */}
-        <div className="mt-8 text-center text-gray-400">[Course detail sections coming soon]</div>
+        <CourseDetailTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+        <div id={`tab-panel-${activeTab}`} role="tabpanel">
+          {tabContent}
+        </div>
       </div>
     </div>
   );
