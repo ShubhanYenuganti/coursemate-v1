@@ -36,15 +36,6 @@ const mapCourse = (data: CourseData): Course => ({
   icon: getSubjectIcon(data.subject)
 });
 
-const TAB_COMPONENTS = (course: Course): Record<string, React.ReactNode> => ({
-  overview: <div><CourseDetailHeader course={course} /><div className="text-center text-gray-400">[More overview content coming soon]</div></div>,
-  materials: <div className="text-center text-gray-400">[Materials tab coming soon]</div>,
-  ai: <div className="text-center text-gray-400">[AI Chat tab coming soon]</div>,
-  study: <div className="text-center text-gray-400">[Study Plan tab coming soon]</div>,
-  community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
-  progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
-});
-
 interface Props {
   params: { courseId: string };
 }
@@ -76,7 +67,24 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     return (<div className="min-h-screen flex items-center justify-center text-2xl text-gray-400">Course not found</div>);
   }
 
-  const tabContent = TAB_COMPONENTS(course)[activeTab];
+  const tabContentMap: Record<string, React.ReactNode> = {
+    overview: (
+      <div>
+        <CourseDetailHeader
+          course={course}
+          onDescriptionUpdated={(d) => setCourse({ ...course, description: d })}
+        />
+        <div className="text-center text-gray-400">[More overview content coming soon]</div>
+      </div>
+    ),
+    materials: <div className="text-center text-gray-400">[Materials tab coming soon]</div>,
+    ai: <div className="text-center text-gray-400">[AI Chat tab coming soon]</div>,
+    study: <div className="text-center text-gray-400">[Study Plan tab coming soon]</div>,
+    community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
+    progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
+  };
+  const tabContent = tabContentMap[activeTab];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8 relative">
       <div className="max-w-5xl mx-auto">
