@@ -37,8 +37,10 @@ export function LoginForm() {
           return;
         }
 
-        // Store the token in localStorage or a more secure storage method
-        localStorage.setItem("token", data.token);
+        // Store JWT access token returned by backend
+        if (data.access_token) {
+          localStorage.setItem("token", data.access_token);
+        }
 
         // Redirect to dashboard after successful login
         router.push("/dashboard");

@@ -17,6 +17,7 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/api')
 
 @auth_bp.route('/register', methods=['POST', 'OPTIONS'])
 def register():
+    print(bcrypt.hash("testpassword"))
     if request.method == 'OPTIONS':
         return '', 204
 
