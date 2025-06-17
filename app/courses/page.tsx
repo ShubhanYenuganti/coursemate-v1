@@ -29,6 +29,7 @@ const getSubjectIcon = (subject: string) => {
 const convertToDisplayFormat = (courseData: CourseData): Course => {
   return {
     id: parseInt(courseData.id || '0'), // Convert string ID to number for component compatibility
+    dbId: courseData.id || '',
     title: courseData.title,
     subject: courseData.subject,
     semester: courseData.semester,

@@ -11,7 +11,8 @@ import {
 import Link from "next/link";
 
 export interface Course {
-  id: number;
+  id: number;          // numeric id only for UI component keys
+  dbId: string;        // real UUID from database
   title: string;
   subject: string;
   semester: string;
@@ -111,7 +112,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onTogglePin, onToggleAr
         </div>
         
         <div className="flex gap-2 mt-4">
-          <Link href={`/courses/${course.id}`} legacyBehavior>
+          <Link href={`/courses/${course.dbId}`} legacyBehavior>
             <a className="flex-1 bg-blue-600 text-white py-2 px-3 rounded-md text-xs font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1">
               <Play className="w-3 h-3" />
               Enter Course

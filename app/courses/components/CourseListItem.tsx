@@ -81,7 +81,7 @@ const CourseListItem: React.FC<CourseListItemProps> = ({ course, onTogglePin }) 
           </div>
           
           <div className="flex gap-3">
-            <Link href={`/courses/${course.id}`} legacyBehavior>
+            <Link href={`/courses/${course.dbId}`} legacyBehavior>
               <a className="bg-blue-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1">
                 <Play className="w-4 h-4" />
                 Enter
