@@ -9,6 +9,7 @@ import CourseListItem from "./components/CourseListItem";
 import EmptyState from "./components/EmptyState";
 import { Course } from "./components/CourseCard";
 import CreateCourseModal from "./components/CreateCourseModal";
+import Link from "next/link";
 
 // Helper function to get icon based on subject
 const getSubjectIcon = (subject: string) => {
@@ -279,13 +280,14 @@ const CoursesPage = () => {
           >
             + Add Course
           </button>
-          <button
-            className="bg-gradient-to-r from-blue-400 to-purple-400 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium hover:from-blue-500 hover:to-purple-500 transform transition-all duration-300 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0"
-            style={{ transitionDelay: '200ms' }}
-            tabIndex={-1}
-          >
-            🔍 Discover Course
-          </button>
+          <Link href="/courses/discover" tabIndex={-1} legacyBehavior>
+            <button
+              className="bg-gradient-to-r from-blue-400 to-purple-400 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium hover:from-blue-500 hover:to-purple-500 transform transition-all duration-300 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0"
+              style={{ transitionDelay: '200ms' }}
+            >
+              🔍 Discover Course
+            </button>
+          </Link>
         </div>
         {/* Main Add button - MADE MORE VISIBLE FOR DEBUG */}
         <button
