@@ -9,7 +9,8 @@ const AISuggestionsBanner: React.FC<AISuggestionsBannerProps> = ({
   onDismiss,
 }) => {
   return (
-    <div className="rounded-lg bg-gradient-to-r from-purple-500 to-blue-500 p-4 text-white">
+    // <div className="rounded-lg from-purple-500 to-blue-500 p-4 text-white">
+    <div className="rounded-lg bg-purple-500 p-4 text-white">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <Sparkles className="h-5 w-5" />

@@ -133,11 +133,11 @@ const CoursesPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Back Button */}
-      <div className="bg-white shadow">
-        <div className="container mx-auto px-4 py-4">
+      <div className="bg-white shadow-sm border-b border-gray-100">
+        <div className="container mx-auto px-6 py-5">
           <Link
             href="/courses"
-            className="inline-flex items-center text-gray-600 hover:text-gray-900"
+            className="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors duration-200 px-3 py-2 rounded-lg hover:bg-gray-100"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to My Courses
@@ -146,27 +146,35 @@ const CoursesPage: React.FC = () => {
       </div>
 
       {/* Header */}
-      <CourseHeader
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-      />
+      <div className="bg-white shadow-sm">
+        <div className="px-6 py-8">
+          <CourseHeader
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
+        </div>
+      </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-6 py-10">
         {/* Search and Filters */}
-        <SearchAndFilters
-          filters={filters}
-          onFilterToggle={toggleFilter}
-          sortOptions={sortOptions}
-          selectedSort={selectedSort}
-          onSortChange={setSelectedSort}
-        />
+        <div className="mb-8">
+          <SearchAndFilters
+            filters={filters}
+            onFilterToggle={toggleFilter}
+            sortOptions={sortOptions}
+            selectedSort={selectedSort}
+            onSortChange={setSelectedSort}
+          />
+        </div>
 
         {/* AI Suggestions Banner */}
         {showAISuggestions && (
-          <AISuggestionsBanner
-            onDismiss={() => setShowAISuggestions(false)}
-          />
+          <div className="mb-8">
+            <AISuggestionsBanner
+              onDismiss={() => setShowAISuggestions(false)}
+            />
+          </div>
         )}
 
         {loading ? (
@@ -174,20 +182,22 @@ const CoursesPage: React.FC = () => {
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
           </div>
         ) : (
-          <>
+          <div className="space-y-8">
             <CourseGrid
               courses={paginatedCourses}
               onSaveCourse={handleSaveCourse}
               onDismissAIRecommendation={handleDismissAIRecommendation}
             />
             {totalPages > 1 && (
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
+              <div className="pt-4">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
             )}
-          </>
+          </div>
         )}
       </div>
 
@@ -195,7 +205,7 @@ const CoursesPage: React.FC = () => {
       {showBackToTop && (
         <button
           onClick={handleScrollToTop}
-          className="fixed bottom-8 right-8 rounded-full bg-blue-600 p-3 text-white shadow-lg hover:bg-blue-700"
+          className="fixed bottom-8 right-8 rounded-full bg-blue-600 p-4 text-white shadow-xl hover:bg-blue-700 transition-all duration-200 hover:scale-105"
         >
           <ArrowLeft className="h-6 w-6 rotate-90" />
         </button>
