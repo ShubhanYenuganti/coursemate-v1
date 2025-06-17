@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { courseService, CreateCourseRequest } from "../../../lib/api/courseService";
 
 const departmentList = [
   "Computer Science",
@@ -27,7 +28,7 @@ const semesterOptions = [
 ];
 const tagSuggestions = ["AI", "GenEd", "Lab-heavy", "Project", "Elective"];
 
-const CreateCourseModal = ({ onClose }: { onClose: () => void }) => {
+const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; onCourseCreated?: () => void }) => {
   const [subject, setSubject] = useState("");
   const [courseName, setCourseName] = useState("");
   const [customCourseName, setCustomCourseName] = useState("");
@@ -45,6 +46,7 @@ const CreateCourseModal = ({ onClose }: { onClose: () => void }) => {
   const [image, setImage] = useState<File | null>(null);
   const [materials, setMaterials] = useState<File[]>([]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [isLoading, setIsLoading] = useState(false);
 
   // Validation
   const validate = () => {
@@ -76,10 +78,41 @@ const CreateCourseModal = ({ onClose }: { onClose: () => void }) => {
   };
 
   // Save handler
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    // TODO: Save logic
-    onClose();
+    
+    setIsLoading(true);
+    try {
+      const courseTitle = customCourseName || courseName;
+      const courseData: CreateCourseRequest = {
+        subject,
+        courseName: courseName || undefined,
+        customCourseName: customCourseName || undefined,
+        title: courseTitle,
+        courseCode,
+        semester,
+        professor: professor || undefined,
+        units,
+        variableUnits,
+        description,
+        visibility,
+        tags,
+        collaborators
+      };
+
+      const response = await courseService.createCourse(courseData);
+      
+      // Success - close modal and refresh courses if callback provided
+      onClose();
+      if (onCourseCreated) {
+        onCourseCreated();
+      }
+    } catch (error) {
+      console.error('Failed to create course:', error);
+      setErrors({ submit: error instanceof Error ? error.message : 'Failed to create course' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Modal backdrop click
@@ -95,6 +128,14 @@ const CreateCourseModal = ({ onClose }: { onClose: () => void }) => {
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-4 sm:p-6 relative animate-fade-in max-h-[90vh] overflow-y-auto">
         <button className="absolute top-3 right-3 text-gray-400 hover:text-gray-700" onClick={onClose} aria-label="Close">&times;</button>
         <h2 className="text-xl sm:text-2xl font-bold mb-4 text-center bg-gradient-to-r from-gray-900 via-indigo-900 to-purple-900 bg-clip-text text-transparent">Create New Course</h2>
+        
+        {/* Error Display */}
+        {errors.submit && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
+            {errors.submit}
+          </div>
+        )}
+        
         <form className="space-y-3 sm:space-y-4">
           {/* Subject Dropdown */}
           <div>
@@ -314,8 +355,25 @@ const CreateCourseModal = ({ onClose }: { onClose: () => void }) => {
           </div>
           {/* Save/Cancel Buttons */}
           <div className="flex justify-end gap-3 mt-6">
-            <button type="button" className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium" onClick={onClose}>Cancel</button>
-            <button type="button" className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium hover:from-indigo-700 hover:to-purple-700 shadow-lg" onClick={handleSave}>Save</button>
+            <button 
+              type="button" 
+              className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium disabled:opacity-50" 
+              onClick={onClose}
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium hover:from-indigo-700 hover:to-purple-700 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2" 
+              onClick={handleSave}
+              disabled={isLoading}
+            >
+              {isLoading && (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              )}
+              {isLoading ? 'Creating...' : 'Save'}
+            </button>
           </div>
         </form>
       </div>

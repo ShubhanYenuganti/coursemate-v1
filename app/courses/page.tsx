@@ -1,6 +1,7 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Plus, Code, Beaker, Calculator, Globe, Palette, Music } from 'lucide-react';
+import { courseService, CourseData } from "../../lib/api/courseService";
 import CourseHeader from "./components/CourseHeader";
 import CourseFilters from "./components/CourseFilters";
 import CourseCard from "./components/CourseCard";
@@ -8,6 +9,38 @@ import CourseListItem from "./components/CourseListItem";
 import EmptyState from "./components/EmptyState";
 import { Course } from "./components/CourseCard";
 import CreateCourseModal from "./components/CreateCourseModal";
+
+// Helper function to get icon based on subject
+const getSubjectIcon = (subject: string) => {
+  const iconMap: { [key: string]: React.ComponentType<any> } = {
+    'Programming': Code,
+    'Computer Science': Code,
+    'Science': Beaker,
+    'Biology': Beaker,
+    'Mathematics': Calculator,
+    'History': Globe,
+    'Art': Palette,
+    'Music': Music,
+  };
+  return iconMap[subject] || Code; // Default to Code icon
+};
+
+// Helper function to convert CourseData to Course format
+const convertToDisplayFormat = (courseData: CourseData): Course => {
+  return {
+    id: parseInt(courseData.id || '0'), // Convert string ID to number for component compatibility
+    title: courseData.title,
+    subject: courseData.subject,
+    semester: courseData.semester,
+    dailyProgress: courseData.dailyProgress || 0,
+    lastAccessed: courseData.lastAccessed || new Date().toISOString().split('T')[0],
+    badge: courseData.badge || 'Creator',
+    isPinned: courseData.isPinned || false,
+    isArchived: courseData.isArchived || false,
+    description: courseData.description,
+    icon: getSubjectIcon(courseData.subject)
+  };
+};
 
 interface FilterChip {
   id: string;
@@ -25,99 +58,72 @@ const CoursesPage = () => {
   const [filterChips, setFilterChips] = useState<FilterChip[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Sample course data
-  const [courses, setCourses] = useState<Course[]>([
-    {
-      id: 1,
-      title: "Advanced React Development",
-      subject: "Programming",
-      semester: "Fall 2024",
-      dailyProgress: 80,
-      lastAccessed: "2024-06-13",
-      badge: "Creator",
-      isPinned: true,
-      isArchived: false,
-      description: "Deep dive into React hooks, context, and performance optimization",
-      icon: Code
-    },
-    {
-      id: 2,
-      title: "Organic Chemistry Fundamentals",
-      subject: "Science",
-      semester: "Fall 2024", 
-      dailyProgress: 60,
-      lastAccessed: "2024-06-12",
-      badge: "Enrolled",
-      isPinned: false,
-      isArchived: false,
-      description: "Introduction to organic molecular structures and reactions",
-      icon: Beaker
-    },
-    {
-      id: 3,
-      title: "Calculus III - Multivariable",
-      subject: "Mathematics",
-      semester: "Spring 2024",
-      dailyProgress: 100,
-      lastAccessed: "2024-05-15",
-      badge: "Enrolled",
-      isPinned: false,
-      isArchived: false,
-      description: "Vector calculus, partial derivatives, and multiple integrals",
-      icon: Calculator
-    },
-    {
-      id: 4,
-      title: "World History: Ancient Civilizations",
-      subject: "History",
-      semester: "Fall 2023",
-      dailyProgress: 0,
-      lastAccessed: "2024-01-20",
-      badge: "Creator",
-      isPinned: false,
-      isArchived: true,
-      description: "Comprehensive study of ancient civilizations and their impact",
-      icon: Globe
-    },
-    {
-      id: 5,
-      title: "Digital Art and Design",
-      subject: "Art",
-      semester: "Fall 2024",
-      dailyProgress: 90,
-      lastAccessed: "2024-06-13",
-      badge: "Enrolled",
-      isPinned: true,
-      isArchived: false,
-      description: "Modern digital art techniques and design principles",
-      icon: Palette
-    },
-    {
-      id: 6,
-      title: "Music Theory Basics",
-      subject: "Music",
-      semester: "Summer 2024",
-      dailyProgress: 40,
-      lastAccessed: "2024-06-10",
-      badge: "Enrolled",
-      isPinned: false,
-      isArchived: false,
-      description: "Fundamentals of music theory, scales, and harmony",
-      icon: Music
+  // Course data from backend
+  const [courses, setCourses] = useState<CourseData[]>([]);
+
+  // Load courses from backend
+  const loadCourses = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const coursesData = await courseService.getCourses({
+        showArchived,
+        search: searchTerm,
+        semester: selectedSemester,
+        sortBy: sortBy as 'title' | 'progress' | 'last_accessed'
+      });
+      setCourses(coursesData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load courses');
+      console.error('Failed to load courses:', err);
+    } finally {
+      setIsLoading(false);
     }
-  ]);
-
-  const togglePin = (courseId: number) => {
-    setCourses(prev => prev.map(course => 
-      course.id === courseId ? { ...course, isPinned: !course.isPinned } : course
-    ));
   };
 
-  const toggleArchive = (courseId: number) => {
-    setCourses(prev => prev.map(course => 
-      course.id === courseId ? { ...course, isArchived: !course.isArchived } : course
-    ));
+  // Load courses on component mount and when filters change
+  useEffect(() => {
+    loadCourses();
+  }, [showArchived, searchTerm, selectedSemester, sortBy]);
+
+  const togglePin = async (courseId: string) => {
+    try {
+      await courseService.togglePin(courseId);
+      setCourses(prev => prev.map(course => 
+        course.id === courseId ? { ...course, isPinned: !course.isPinned } : course
+      ));
+    } catch (error) {
+      console.error('Failed to toggle pin:', error);
+    }
+  };
+
+  const toggleArchive = async (courseId: string) => {
+    try {
+      await courseService.toggleArchive(courseId);
+      setCourses(prev => prev.map(course => 
+        course.id === courseId ? { ...course, isArchived: !course.isArchived } : course
+      ));
+    } catch (error) {
+      console.error('Failed to toggle archive:', error);
+    }
+  };
+
+  // Wrapper functions for component compatibility (number ID to string ID)
+  const handleTogglePin = (courseId: number) => {
+    const course = courses.find(c => parseInt(c.id || '0') === courseId);
+    if (course?.id) {
+      togglePin(course.id);
+    }
+  };
+
+  const handleToggleArchive = (courseId: number) => {
+    const course = courses.find(c => parseInt(c.id || '0') === courseId);
+    if (course?.id) {
+      toggleArchive(course.id);
+    }
   };
 
   const addFilterChip = (type: string, value: string) => {
@@ -150,9 +156,10 @@ const CoursesPage = () => {
       const matchesFilters = filterChips.every(chip => {
         if (chip.type === 'Subject') return course.subject === chip.value;
         if (chip.type === 'Progress') {
-          if (chip.value === '100% Complete') return course.dailyProgress === 100;
-          if (chip.value === '80%+ Complete') return course.dailyProgress >= 80;
-          if (chip.value === 'In Progress') return course.dailyProgress > 0 && course.dailyProgress < 100;
+          const progress = course.dailyProgress || 0;
+          if (chip.value === '100% Complete') return progress === 100;
+          if (chip.value === '80%+ Complete') return progress >= 80;
+          if (chip.value === 'In Progress') return progress > 0 && progress < 100;
         }
         return true;
       });
@@ -169,9 +176,11 @@ const CoursesPage = () => {
         case 'title':
           return a.title.localeCompare(b.title);
         case 'progress':
-          return b.dailyProgress - a.dailyProgress;
+          return (b.dailyProgress || 0) - (a.dailyProgress || 0);
         case 'lastAccessed':
-          return new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime();
+          const aDate = a.lastAccessed ? new Date(a.lastAccessed).getTime() : 0;
+          const bDate = b.lastAccessed ? new Date(b.lastAccessed).getTime() : 0;
+          return bDate - aDate;
         default:
           return 0;
       }
@@ -203,16 +212,38 @@ const CoursesPage = () => {
           onRemoveFilterChip={removeFilterChip}
         />
         
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex justify-center items-center py-12">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="ml-3 text-gray-600">Loading courses...</span>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
+            <p>Error: {error}</p>
+            <button 
+              onClick={() => loadCourses()} 
+              className="mt-2 text-sm underline hover:no-underline"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
         {/* Course Grid/List */}
-        <div className="mb-6">
-          {viewMode === 'grid' ? (
+        {!isLoading && !error && (
+          <div className="mb-6">
+            {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredCourses.map(course => (
                 <CourseCard 
                   key={course.id} 
-                  course={course} 
-                  onTogglePin={togglePin}
-                  onToggleArchive={toggleArchive}
+                  course={convertToDisplayFormat(course)} 
+                  onTogglePin={handleTogglePin}
+                  onToggleArchive={handleToggleArchive}
                 />
               ))}
             </div>
@@ -221,22 +252,23 @@ const CoursesPage = () => {
               {filteredCourses.map(course => (
                 <CourseListItem 
                   key={course.id} 
-                  course={course} 
-                  onTogglePin={togglePin}
+                  course={convertToDisplayFormat(course)} 
+                  onTogglePin={handleTogglePin}
                 />
               ))}
             </div>
           )}
-        </div>
+          </div>
+        )}
         
         {/* Empty State */}
-        {filteredCourses.length === 0 && (
+        {!isLoading && !error && filteredCourses.length === 0 && (
           <EmptyState onClearFilters={clearAllFilters} />
         )}
       </div>
       
-      {/* Floating Add Button with Speed Dial */}
-      <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end group">
+      {/* Floating Add Button with Speed Dial - DEBUG VERSION */}
+      <div className="fixed bottom-8 right-8 z-[9999] flex flex-col items-end group">
         {/* Speed dial options (hidden by default, shown on hover, animate upwards) */}
         <div className="flex flex-col items-end space-y-2 mb-2">
           <button
@@ -254,16 +286,21 @@ const CoursesPage = () => {
             🔍 Discover Course
           </button>
         </div>
-        {/* Main Add button */}
+        {/* Main Add button - MADE MORE VISIBLE FOR DEBUG */}
         <button
-          className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-110 hover:shadow-3xl transform group group-hover:animate-pulse"
+          className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-110 hover:shadow-2xl transform relative border-4 border-yellow-400"
+          onClick={() => setCreateModalOpen(true)}
+          style={{ minWidth: '80px', minHeight: '80px' }}
         >
-          <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+          <Plus className="w-8 h-8 transition-transform duration-300" />
+          <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 hover:opacity-20 transition-opacity duration-300"></div>
         </button>
       </div>
       {isCreateModalOpen && (
-        <CreateCourseModal onClose={() => setCreateModalOpen(false)} />
+        <CreateCourseModal 
+          onClose={() => setCreateModalOpen(false)} 
+          onCourseCreated={loadCourses}
+        />
       )}
     </div>
   );
