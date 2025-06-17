@@ -1,9 +1,9 @@
 "use client"
 
-import React, { useState } from "react"
-import { mockCourses } from "../../discover/data/mockData"
+import React, { useState, useEffect } from "react"
 import { ArrowLeft, FileText, MessageSquare, Star } from "lucide-react"
 import Link from "next/link"
+import { courseService, CourseData } from "@/lib/api/courseService"
 
 interface Tab {
   id: string
@@ -46,16 +46,48 @@ const mockReviews = [
 export default function CoursePreviewPage({
   params,
 }: {
-  params: { courseId: string }
+  params: Promise<{ courseId: string }>
 }) {
   const [activeTab, setActiveTab] = useState("description")
-  const course = mockCourses.find((c) => c.id === parseInt(params.courseId))
+  const [course, setCourse] = useState<CourseData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
+  const resolvedParams = React.use(params)
 
-  if (!course) {
+  useEffect(() => {
+    const fetchCourse = async () => {
+      try {
+        setLoading(true)
+        const courseData = await courseService.getCourse(resolvedParams.courseId)
+        setCourse(courseData)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load course')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCourse()
+  }, [resolvedParams.courseId])
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading course...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !course) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900">Course not found</h1>
+          <p className="mt-2 text-gray-600">{error}</p>
           <Link
             href="/courses/discover"
             className="mt-4 inline-flex items-center text-blue-600 hover:text-blue-700"
@@ -129,31 +161,48 @@ export default function CoursePreviewPage({
                   <h2 className="text-xl font-semibold text-gray-900">
                     About This Course
                   </h2>
-                  <p className="mt-4 text-gray-600">{course.description}</p>
+                  <p className="mt-4 text-gray-600">{course.description || 'No description available.'}</p>
                   <div className="mt-6">
                     <h3 className="text-lg font-semibold text-gray-900">
-                      What You'll Learn
+                      Course Details
                     </h3>
-                    <ul className="mt-4 space-y-2">
-                      <li className="flex items-start">
-                        <span className="mr-2 text-blue-600">•</span>
-                        <span className="text-gray-600">
-                          Master key concepts and fundamentals
-                        </span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="mr-2 text-blue-600">•</span>
-                        <span className="text-gray-600">
-                          Apply knowledge through hands-on projects
-                        </span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="mr-2 text-blue-600">•</span>
-                        <span className="text-gray-600">
-                          Develop practical skills for real-world applications
-                        </span>
-                      </li>
-                    </ul>
+                    <div className="mt-4 grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm font-medium text-gray-500">Subject:</span>
+                        <p className="text-gray-900">{course.subject}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-500">Course Code:</span>
+                        <p className="text-gray-900">{course.courseCode}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-500">Professor:</span>
+                        <p className="text-gray-900">{course.professor}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-500">Units:</span>
+                        <p className="text-gray-900">{course.units}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-500">Semester:</span>
+                        <p className="text-gray-900">{course.semester}</p>
+                      </div>
+                    </div>
+                    {course.tags && course.tags.length > 0 && (
+                      <div className="mt-4">
+                        <span className="text-sm font-medium text-gray-500">Tags:</span>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {course.tags.map((tag: string, index: number) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -162,24 +211,22 @@ export default function CoursePreviewPage({
                   <h2 className="text-xl font-semibold text-gray-900">
                     Course Resources
                   </h2>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-lg border border-gray-200 p-4">
-                      <h3 className="font-medium text-gray-900">Course Materials</h3>
-                      <ul className="mt-2 space-y-2">
-                        <li className="text-sm text-gray-600">• Course Syllabus</li>
-                        <li className="text-sm text-gray-600">• Reading Materials</li>
-                        <li className="text-sm text-gray-600">• Practice Exercises</li>
-                      </ul>
+                  {course.materials && course.materials.length > 0 ? (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-lg border border-gray-200 p-4">
+                        <h3 className="font-medium text-gray-900">Course Materials</h3>
+                                                 <ul className="mt-2 space-y-2">
+                           {course.materials.map((material: string, index: number) => (
+                             <li key={index} className="text-sm text-gray-600">• {material}</li>
+                           ))}
+                         </ul>
+                      </div>
                     </div>
+                  ) : (
                     <div className="rounded-lg border border-gray-200 p-4">
-                      <h3 className="font-medium text-gray-900">Additional Resources</h3>
-                      <ul className="mt-2 space-y-2">
-                        <li className="text-sm text-gray-600">• Reference Books</li>
-                        <li className="text-sm text-gray-600">• Online Tools</li>
-                        <li className="text-sm text-gray-600">• External Links</li>
-                      </ul>
+                      <p className="text-sm text-gray-600">No materials available for this course yet.</p>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
               {activeTab === "discussions" && (
@@ -218,11 +265,11 @@ export default function CoursePreviewPage({
                   <div className="rounded-lg border border-gray-200 p-6">
                     <div className="flex items-center space-x-4">
                       <div className="text-4xl font-bold text-gray-900">
-                        {course.rating}
+                        4.5
                       </div>
                       <div>
                         <div className="flex">
-                          {renderStars(Math.round(course.rating))}
+                          {renderStars(4)}
                         </div>
                         <p className="mt-1 text-sm text-gray-600">
                           Based on {mockReviews.length} reviews
@@ -266,41 +313,36 @@ export default function CoursePreviewPage({
           {/* Sidebar */}
           <div className="lg:col-span-1">
             <div className="sticky top-8 rounded-lg bg-white p-6 shadow">
-              <div className="aspect-video w-full overflow-hidden rounded-lg">
-                <img
-                  src={course.thumbnail}
-                  alt={course.title}
-                  className="h-full w-full object-cover"
-                />
+              <div className="aspect-video w-full overflow-hidden rounded-lg bg-gradient-to-br from-blue-400 to-purple-600 flex items-center justify-center">
+                <h3 className="text-white text-xl font-bold text-center px-4">
+                  {course.subject}
+                </h3>
               </div>
               <div className="mt-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-500">
-                    Rating
-                  </span>
-                  <div className="flex items-center">
-                    <span className="text-lg font-semibold text-gray-900">
-                      {course.rating}
-                    </span>
-                    <span className="ml-1 text-sm text-gray-500">/5</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-500">
-                    Students
+                    Progress
                   </span>
                   <span className="text-sm text-gray-900">
-                    {course.students.toLocaleString()}
+                    {course.dailyProgress || 0}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-500">
-                    Category
+                    Units
                   </span>
-                  <span className="text-sm text-gray-900">{course.category}</span>
+                  <span className="text-sm text-gray-900">
+                    {course.units}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-500">
+                    Visibility
+                  </span>
+                  <span className="text-sm text-gray-900">{course.visibility}</span>
                 </div>
                 <button className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
-                  Enroll Now
+                  Contact Student
                 </button>
               </div>
             </div>

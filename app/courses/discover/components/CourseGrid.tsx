@@ -82,7 +82,7 @@ const CourseGrid: React.FC<CourseGridProps> = ({
               ))}
             </div>
             <div className="mt-4">
-              <Link href={`/courses/${course.id}/preview`}>
+                              <Link href={`/courses/discover/${course.id}/preview`}>
                 <button className="flex w-full items-center justify-center space-x-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
                   <Eye className="h-4 w-4" />
                   <span>Preview Course</span>
