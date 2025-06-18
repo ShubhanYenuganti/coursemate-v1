@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { ArrowLeft, FileText, MessageSquare, Star } from "lucide-react"
+import { ArrowLeft, FileText, MessageSquare, Star, Play, Image } from "lucide-react"
 import Link from "next/link"
 import { courseService, CourseData } from "@/lib/api/courseService"
 
@@ -162,71 +162,177 @@ export default function CoursePreviewPage({
                     About This Course
                   </h2>
                   <p className="mt-4 text-gray-600">{course.description || 'No description available.'}</p>
-                  <div className="mt-6">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      Course Details
-                    </h3>
-                    <div className="mt-4 grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Subject:</span>
-                        <p className="text-gray-900">{course.subject}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Course Code:</span>
-                        <p className="text-gray-900">{course.courseCode}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Professor:</span>
-                        <p className="text-gray-900">{course.professor}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Units:</span>
-                        <p className="text-gray-900">{course.units}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Semester:</span>
-                        <p className="text-gray-900">{course.semester}</p>
-                      </div>
-                    </div>
-                    {course.tags && course.tags.length > 0 && (
-                      <div className="mt-4">
-                        <span className="text-sm font-medium text-gray-500">Tags:</span>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {course.tags.map((tag: string, index: number) => (
-                            <span
-                              key={index}
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                            >
-                              {tag}
-                            </span>
-                          ))}
+                  
+                  {/* Course Details */}
+                  <div className="mt-8 space-y-8">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Course Details
+                      </h3>
+                      <div className="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Subject:</span>
+                          <p className="text-gray-900">{course.subject}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Course Code:</span>
+                          <p className="text-gray-900">{course.courseCode}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Professor:</span>
+                          <p className="text-gray-900">{course.professor}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Units:</span>
+                          <p className="text-gray-900">{course.units}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Semester:</span>
+                          <p className="text-gray-900">{course.semester}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Level:</span>
+                          <span className="text-sm text-gray-900">Intermediate</span>
                         </div>
                       </div>
-                    )}
+                      {course.tags && course.tags.length > 0 && (
+                        <div className="mt-4">
+                          <span className="text-sm font-medium text-gray-500">Tags:</span>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {course.tags.map((tag: string, index: number) => (
+                              <span
+                                key={index}
+                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Prerequisites
+                      </h3>
+                      <div className="mt-4 space-y-4">
+                        <div className="flex items-start">
+                          <span className="mr-2 text-blue-600">•</span>
+                          <span className="text-sm text-gray-600">
+                            Basic understanding of programming concepts
+                          </span>
+                        </div>
+                        <div className="flex items-start">
+                          <span className="mr-2 text-blue-600">•</span>
+                          <span className="text-sm text-gray-600">
+                            Familiarity with data structures and algorithms
+                          </span>
+                        </div>
+                        <div className="flex items-start">
+                          <span className="mr-2 text-blue-600">•</span>
+                          <span className="text-sm text-gray-600">
+                            Experience with at least one programming language
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      What You'll Learn
+                    </h3>
+                    <ul className="mt-4 space-y-2">
+                      <li className="flex items-start">
+                        <span className="mr-2 text-blue-600">•</span>
+                        <span className="text-gray-600">
+                          Master key concepts and fundamentals
+                        </span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2 text-blue-600">•</span>
+                        <span className="text-gray-600">
+                          Apply knowledge through hands-on projects
+                        </span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2 text-blue-600">•</span>
+                        <span className="text-gray-600">
+                          Develop practical skills for real-world applications
+                        </span>
+                      </li>
+                    </ul>
                   </div>
                 </div>
               )}
               {activeTab === "resources" && (
-                <div className="space-y-6">
+                <div className="space-y-8">
                   <h2 className="text-xl font-semibold text-gray-900">
                     Course Resources
                   </h2>
-                  {course.materials && course.materials.length > 0 ? (
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-lg border border-gray-200 p-4">
-                        <h3 className="font-medium text-gray-900">Course Materials</h3>
-                                                 <ul className="mt-2 space-y-2">
-                           {course.materials.map((material: string, index: number) => (
-                             <li key={index} className="text-sm text-gray-600">• {material}</li>
-                           ))}
-                         </ul>
+
+                  {/* Student Uploads */}
+                  <div>
+                    <h3 className="mb-4 text-lg font-semibold text-gray-900">
+                      Student Uploads
+                    </h3>
+                    <div className="space-y-4">
+                      {course.materials && course.materials.length > 0 ? (
+                        course.materials.map((material: string, index: number) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between rounded-lg border border-gray-200 p-4"
+                          >
+                            <div className="flex items-center space-x-4">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
+                                <FileText className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-medium text-gray-900">
+                                  {material}
+                                </h4>
+                                <p className="text-sm text-gray-500">
+                                  Course material
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                              <button className="rounded-lg bg-gray-100 px-3 py-1 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-200">
+                                View
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-lg border border-gray-200 p-8 text-center">
+                          <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                          <h3 className="mt-4 text-lg font-medium text-gray-900">No student uploads yet</h3>
+                          <p className="mt-2 text-sm text-gray-500">
+                            Student-uploaded materials like notes, study guides, and resources will appear here.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* External Resources */}
+                  <div>
+                    <h3 className="mb-4 text-lg font-semibold text-gray-900">
+                      External Resources
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="rounded-lg border border-gray-200 p-8 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-gray-50">
+                          <FileText className="h-6 w-6 text-gray-400" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-medium text-gray-900">No external resources yet</h3>
+                        <p className="mt-2 text-sm text-gray-500">
+                          External links, documentation, and additional resources will be listed here.
+                        </p>
                       </div>
                     </div>
-                  ) : (
-                    <div className="rounded-lg border border-gray-200 p-4">
-                      <p className="text-sm text-gray-600">No materials available for this course yet.</p>
-                    </div>
-                  )}
+                  </div>
                 </div>
               )}
               {activeTab === "discussions" && (
