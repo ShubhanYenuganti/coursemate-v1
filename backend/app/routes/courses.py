@@ -279,4 +279,20 @@ def get_public_courses():
         'page': page,
         'per_page': per_page,
         'total_pages': (total + per_page - 1) // per_page
-    }) 
+    })
+
+@courses_bp.route('/public/<course_id>', methods=['GET'], strict_slashes=False)
+@jwt_required()
+def get_public_course(course_id):
+    """Get details of a specific public course, including ownership information"""
+    current_user_id = get_jwt_identity()
+    
+    course = Course.query.filter_by(id=course_id, visibility='Public').first()
+    if not course:
+        return jsonify({'error': 'Course not found or not public'}), 404
+    
+    course_dict = course.to_dict()
+    # Add ownership information
+    course_dict['is_owned_by_user'] = (course.user_id == current_user_id)
+    
+    return jsonify(course_dict) 

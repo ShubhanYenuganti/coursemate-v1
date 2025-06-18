@@ -182,6 +182,14 @@ class CourseService {
       throw error;
     }
   }
+
+  async getPublicCourse(courseId: string): Promise<CourseData & { is_owned_by_user?: boolean }> {
+    const response = await fetch(`${this.baseUrl}/api/courses/public/${courseId}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
 }
 
 export const courseService = new CourseService();
