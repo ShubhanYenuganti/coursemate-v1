@@ -5,71 +5,179 @@ import { courseService } from "../../../lib/api/courseService";
 const defaultBanner =
   "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80";
 
+const editableFields = ["title", "subject", "semester", "tags", "description"] as const;
+type EditableField = typeof editableFields[number];
+
 const CourseDetailHeader = ({ course, onDescriptionUpdated }: { course: Course; onDescriptionUpdated: (d: string)=>void }) => {
   const [editing, setEditing] = useState(false);
-  const [desc, setDesc] = useState(course.description);
+  const [fieldValues, setFieldValues] = useState({
+    title: course.title,
+    subject: course.subject,
+    semester: course.semester,
+    tags: course.tags ? [...course.tags] : [],
+    description: course.description,
+  });
   const [saving, setSaving] = useState(false);
+  const [newTag, setNewTag] = useState("");
 
-  const saveDesc = async () => {
+  const saveAll = async () => {
     try {
       setSaving(true);
-      await courseService.updateCourse(course.dbId, { description: desc });
+      const update: any = { ...fieldValues };
+      await courseService.updateCourse(course.dbId, update);
       setEditing(false);
-      onDescriptionUpdated(desc);
+      onDescriptionUpdated(fieldValues.description);
     } catch(e){
-      console.error('Failed to update description', e);
-    } finally { setSaving(false);}  
+      console.error('Failed to update course', e);
+    } finally { setSaving(false); }
+  };
+
+  const handleFieldChange = (field: EditableField, value: any) => {
+    setFieldValues(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddTag = () => {
+    if (newTag.trim() && !fieldValues.tags.includes(newTag.trim())) {
+      setFieldValues(prev => ({ ...prev, tags: [...prev.tags, newTag.trim()] }));
+      setNewTag("");
+    }
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    setFieldValues(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
+  };
+
+  const handleCancel = () => {
+    setFieldValues({
+      title: course.title,
+      subject: course.subject,
+      semester: course.semester,
+      tags: course.tags ? [...course.tags] : [],
+      description: course.description,
+    });
+    setEditing(false);
   };
 
   return (
-  <div className="bg-white rounded-xl shadow-md p-8 mb-8">
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-      <div>
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">{course.title}</h1>
-        <div className="text-lg text-gray-600 mb-3">
-          {course.subject} · {course.semester} · {course.badge} · {course.id}
+    <div className="bg-white rounded-xl shadow-md p-8 mb-8 relative">
+      {/* Top right edit button toggles all editing */}
+      {course.badge === 'Creator' && !editing && (
+        <button
+          onClick={() => setEditing(true)}
+          className="absolute top-4 right-4 text-blue-600 hover:text-blue-800 font-semibold"
+          title="Edit Course"
+        >
+          ✏️ Edit
+        </button>
+      )}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+        <div>
+          {/* Title */}
+          <div className="flex items-center gap-2">
+            {editing ? (
+              <input
+                className="text-4xl font-bold text-gray-900 mb-2 border rounded px-2 py-1"
+                value={fieldValues.title}
+                onChange={e => handleFieldChange("title", e.target.value)}
+                autoFocus
+              />
+            ) : (
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">{fieldValues.title}</h1>
+            )}
+          </div>
+          {/* Subject, Semester, Badge, ID */}
+          <div className="text-lg text-gray-600 mb-3 flex flex-wrap gap-2 items-center">
+            {/* Subject */}
+            {editing ? (
+              <input
+                className="border rounded px-2 py-1"
+                value={fieldValues.subject}
+                onChange={e => handleFieldChange("subject", e.target.value)}
+              />
+            ) : (
+              <span>{fieldValues.subject}</span>
+            )}
+            <span>·</span>
+            {/* Semester */}
+            {editing ? (
+              <input
+                className="border rounded px-2 py-1"
+                value={fieldValues.semester}
+                onChange={e => handleFieldChange("semester", e.target.value)}
+              />
+            ) : (
+              <span>{fieldValues.semester}</span>
+            )}
+            <span>· {course.badge} · {course.id}</span>
+          </div>
         </div>
       </div>
-      {/* Optionally show Edit button if user is creator */}
-    </div>
-    <div className="flex flex-wrap gap-3 mb-6">
-      <span className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg font-medium text-base">
-        {course.subject}
-      </span>
-      <span className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg font-medium text-base">
-        {course.semester}
-      </span>
-    </div>
-    <div className="mb-8">
-      <img
-        src={defaultBanner}
-        alt="Course banner"
-        className="w-full h-48 object-cover rounded-xl bg-gray-100"
-      />
-    </div>
-    <div>
+      {/* Tags */}
+      <div className="flex flex-wrap gap-3 mb-6 items-center">
+        {editing ? (
+          <>
+            {fieldValues.tags.map((tag, idx) => (
+              <span key={idx} className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg font-medium text-base flex items-center gap-2">
+                {tag}
+                <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-red-500">×</button>
+              </span>
+            ))}
+            <input
+              className="border rounded px-2 py-1"
+              value={newTag}
+              onChange={e => setNewTag(e.target.value)}
+              placeholder="Add tag"
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); }}}
+            />
+            <button onClick={handleAddTag} className="px-2 py-1 bg-blue-100 text-blue-700 rounded">Add</button>
+          </>
+        ) : (
+          <>
+            {fieldValues.tags.map((tag, idx) => (
+              <span key={idx} className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg font-medium text-base">{tag}</span>
+            ))}
+          </>
+        )}
+      </div>
+      <div className="mb-8">
+        <img
+          src={defaultBanner}
+          alt="Course banner"
+          className="w-full h-48 object-cover rounded-xl bg-gray-100"
+        />
+      </div>
+      {/* Description */}
+      <div>
         <h2 className="text-2xl font-bold mb-2 flex items-center gap-4">
           Course Description
-          {course.badge === 'Creator' && !editing && (
-            <button onClick={() => setEditing(true)} className="text-sm text-blue-600 underline">Edit</button>
-          )}
         </h2>
         {editing ? (
-          <div className="space-y-3">
-            <textarea value={desc} onChange={e=>setDesc(e.target.value)} className="w-full border rounded-lg p-2" rows={4}/>
-            <div className="flex gap-3">
-              <button onClick={saveDesc} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">
-                {saving? 'Saving...' : 'Save'}
-              </button>
-              <button onClick={()=>{setEditing(false); setDesc(course.description);}} className="px-4 py-2 bg-gray-100 rounded-lg">Cancel</button>
-            </div>
-          </div>
+          <textarea value={fieldValues.description} onChange={e=>handleFieldChange("description", e.target.value)} className="w-full border rounded-lg p-2" rows={4}/>
         ): (
-          <p className="text-lg text-gray-800 whitespace-pre-line">{course.description}</p>
+          <p className="text-lg text-gray-800 whitespace-pre-line">{fieldValues.description}</p>
         )}
+      </div>
+      {/* Save/Cancel controls at the bottom */}
+      {editing && (
+        <div className="flex justify-between items-center mt-8">
+          <button
+            onClick={handleCancel}
+            className="px-6 py-2 bg-gray-100 rounded-lg text-gray-700 font-semibold shadow-sm hover:bg-gray-200"
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={saveAll}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold shadow-sm hover:bg-blue-700"
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
 };
 
 export default CourseDetailHeader; 
