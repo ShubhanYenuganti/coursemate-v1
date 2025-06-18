@@ -151,6 +151,37 @@ class CourseService {
 
     return this.handleResponse(response);
   }
+
+  /**
+   * Fetch public courses for the Discover page
+   * @param page - Page number for pagination
+   * @param perPage - Number of courses per page
+   * @param search - Optional search term to filter courses
+   * @param subject - Optional subject to filter courses
+   */
+  async getPublicCourses(
+    page: number = 1,
+    perPage: number = 10,
+    search: string = '',
+    subject: string = ''
+  ): Promise<{ courses: CourseData[]; total: number; page: number; per_page: number; total_pages: number }> {
+    try {
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        per_page: perPage.toString(),
+        search,
+        subject
+      });
+      const response = await fetch(`${this.baseUrl}/api/courses/public?${queryParams.toString()}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      return this.handleResponse(response);
+    } catch (error) {
+      console.error('Error fetching public courses:', error);
+      throw error;
+    }
+  }
 }
 
 export const courseService = new CourseService();

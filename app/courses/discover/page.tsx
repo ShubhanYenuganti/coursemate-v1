@@ -11,13 +11,18 @@ import Pagination from "./components/Pagination"
 import { mockCourses, filterOptions, sortOptions } from "./data/mockData"
 import { Course, Filter, SortOption } from "./types"
 import Link from "next/link"
+import { courseService } from '@/lib/api/courseService'
+import { CourseData } from '@/lib/api/courseService'
 
 const CoursesPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("")
   const [filters, setFilters] = useState<Filter[]>(filterOptions)
   const [selectedSort, setSelectedSort] = useState("smart")
-  const [courses, setCourses] = useState<Course[]>(mockCourses)
-  const [loading, setLoading] = useState(false)
+  const [courses, setCourses] = useState<Course[]>([])
+  const [total, setTotal] = useState<number>(0)
+  const [page, setPage] = useState<number>(1)
+  const [perPage, setPerPage] = useState<number>(10)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
   const [showAISuggestions, setShowAISuggestions] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [showBackToTop, setShowBackToTop] = useState(false)
@@ -33,67 +38,38 @@ const CoursesPage: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    setLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      let filteredCourses = [...mockCourses]
-
-      // Apply search filter
-      if (searchQuery) {
-        filteredCourses = filteredCourses.filter(
-          (course) =>
-            course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            course.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            course.tags.some((tag) =>
-              tag.toLowerCase().includes(searchQuery.toLowerCase())
-            )
-        )
+    const fetchPublicCourses = async () => {
+      setIsLoading(true)
+      try {
+        const data = await courseService.getPublicCourses(page, perPage, searchQuery, "")
+        const mappedCourses = data.courses.map((courseData: CourseData) => ({
+          id: courseData.id || "",
+          title: courseData.title,
+          description: courseData.description,
+          subject: courseData.subject,
+          category: courseData.subject || "Uncategorized",
+          thumbnail: courseData.courseImage || null,
+          creator: courseData.professor || "Unknown",
+          rating: 0,
+          students: 0,
+          isNew: false,
+          isPopular: false,
+          isAIRecommended: false,
+          tags: courseData.tags || []
+        }))
+        setCourses(mappedCourses)
+        setTotal(data.total)
+        setPage(data.page)
+        setPerPage(data.per_page)
+      } catch (error) {
+        console.error("Failed to fetch public courses:", error)
+      } finally {
+        setIsLoading(false)
       }
+    }
 
-      // Apply active filters
-      const activeFilters = filters.filter((f) => f.active)
-      if (activeFilters.length > 0) {
-        filteredCourses = filteredCourses.filter((course) => {
-          return activeFilters.some((filter) => {
-            switch (filter.id) {
-              case "popular":
-                return course.isPopular
-              case "new":
-                return course.isNew
-              case "rated":
-                return course.rating >= 4.5
-              case "ai":
-                return course.isAIRecommended
-              default:
-                return true
-            }
-          })
-        })
-      }
-
-      // Apply sorting
-      switch (selectedSort) {
-        case "popular":
-          filteredCourses.sort((a, b) => b.students - a.students)
-          break
-        case "rating":
-          filteredCourses.sort((a, b) => b.rating - a.rating)
-          break
-        case "newest":
-          filteredCourses.sort((a, b) => (a.isNew ? -1 : 1))
-          break
-        default:
-          // Smart sort - combination of rating and popularity
-          filteredCourses.sort(
-            (a, b) =>
-              b.rating * Math.log(b.students) - a.rating * Math.log(a.students)
-          )
-      }
-
-      setCourses(filteredCourses)
-      setLoading(false)
-    }, 500)
-  }, [searchQuery, filters, selectedSort])
+    fetchPublicCourses()
+  }, [page, perPage, searchQuery])
 
   const toggleFilter = (filterId: string) => {
     setFilters((prev) =>
@@ -124,11 +100,34 @@ const CoursesPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  const totalPages = Math.ceil(courses.length / coursesPerPage)
+  const totalPages = Math.ceil(total / perPage)
   const paginatedCourses = courses.slice(
     (currentPage - 1) * coursesPerPage,
     currentPage * coursesPerPage
   )
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage)
+  }
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value)
+    setPage(1) // Reset to first page on new search
+  }
+
+  const handleSubjectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    // Implement subject change logic
+    console.log("Subject changed to:", event.target.value)
+    setPage(1) // Reset to first page on new filter
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-purple-500"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -177,10 +176,9 @@ const CoursesPage: React.FC = () => {
           </div>
         )}
 
-        {loading ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
-          </div>
+        {/* Course Grid */}
+        {courses.length === 0 ? (
+          <p className="text-center text-gray-500">No public courses found.</p>
         ) : (
           <div className="space-y-8">
             <CourseGrid
@@ -193,7 +191,7 @@ const CoursesPage: React.FC = () => {
                 <Pagination
                   currentPage={currentPage}
                   totalPages={totalPages}
-                  onPageChange={setCurrentPage}
+                  onPageChange={handlePageChange}
                 />
               </div>
             )}

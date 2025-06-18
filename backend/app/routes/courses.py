@@ -241,4 +241,42 @@ def update_progress(course_id):
     return jsonify({
         'message': 'Progress updated successfully',
         'daily_progress': course.daily_progress
+    })
+
+@courses_bp.route('/public', methods=['GET'], strict_slashes=False)
+@jwt_required()
+def get_public_courses():
+    """Get all public courses for the Discover page"""
+    current_user_id = get_jwt_identity()
+    
+    # Parse query parameters for pagination and filtering
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 10))
+    search_term = request.args.get('search', '').strip()
+    subject = request.args.get('subject', '')
+    
+    # Base query - only get public courses
+    query = Course.query.filter_by(visibility='Public')
+    
+    # Apply filters
+    if search_term:
+        query = query.filter(
+            (Course.title.ilike(f'%{search_term}%')) |
+            (Course.subject.ilike(f'%{search_term}%')) |
+            (Course.course_code.ilike(f'%{search_term}%'))
+        )
+    
+    if subject:
+        query = query.filter_by(subject=subject)
+    
+    # Apply pagination
+    total = query.count()
+    courses = query.order_by(Course.updated_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    
+    return jsonify({
+        'courses': [course.to_dict() for course in courses],
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': (total + per_page - 1) // per_page
     }) 
