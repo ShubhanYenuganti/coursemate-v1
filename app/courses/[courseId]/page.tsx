@@ -100,9 +100,23 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
   };
   const tabContent = tabContentMap[activeTab];
 
+  const tabLabel = {
+    overview: 'Overview',
+    materials: 'Materials',
+    ai: 'AI Chat',
+    study: 'Study Plan',
+    community: 'Community',
+    progress: 'Progress',
+  }[activeTab] || '';
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8 relative">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative">
+      {/* Banner Header as horizontal bar extending sidebar's top border */}
+      <div className="bg-white border-b border-gray-200 flex items-center px-8 py-4 sticky top-0 z-10 mb-6">
+        <h2 className="text-3xl font-bold text-gray-800 truncate mr-4">{course.title}</h2>
+        <span className="text-xl text-gray-500 font-medium">- {tabLabel}</span>
+      </div>
+      <div className="max-w-5xl mx-auto p-8">
         <CourseDetailTabs activeTab={activeTab} setActiveTab={setActiveTab} />
         <div id={`tab-panel-${activeTab}`} role="tabpanel">
           {tabContent}
