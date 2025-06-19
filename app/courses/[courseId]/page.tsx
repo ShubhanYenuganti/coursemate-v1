@@ -5,6 +5,10 @@ import CourseDetailTabs from "../components/CourseDetailTabs";
 import { Course } from "../components/CourseCard";
 import { courseService, CourseData } from "../../../lib/api/courseService";
 import { Code, Beaker, Calculator, Globe, Palette, Music } from 'lucide-react';
+import PinnedResources from "../components/PinnedResources";
+import ShareInviteFeature from "../components/ShareInviteFeature";
+import MaterialsList from "../components/MaterialsList";
+import UploadMaterials from "../components/UploadMaterials";
 
 // helper to map subject to icon
 const getSubjectIcon = (subject: string) => {
@@ -77,14 +81,22 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
           course={course}
           onDescriptionUpdated={(d) => setCourse({ ...course, description: d })}
         />
-        <div className="text-center text-gray-400">[More overview content coming soon]</div>
+        <PinnedResources course={course} />
+        <div className="mt-8" />
+        <ShareInviteFeature course={course} />
       </div>
     ),
-  materials: <div className="text-center text-gray-400">[Materials tab coming soon]</div>,
-  ai: <div className="text-center text-gray-400">[AI Chat tab coming soon]</div>,
-  study: <div className="text-center text-gray-400">[Study Plan tab coming soon]</div>,
-  community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
-  progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
+    materials: (
+      <div>
+        <MaterialsList />
+        <div className="mt-8" />
+        <UploadMaterials />
+      </div>
+    ),
+    ai: <div className="text-center text-gray-400">[AI Chat tab coming soon]</div>,
+    study: <div className="text-center text-gray-400">[Study Plan tab coming soon]</div>,
+    community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
+    progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
   };
   const tabContent = tabContentMap[activeTab];
 

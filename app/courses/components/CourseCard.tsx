@@ -23,6 +23,7 @@ export interface Course {
   isArchived: boolean;
   description: string;
   icon: React.ComponentType<any>;
+  tags?: string[];
 }
 
 interface CourseCardProps {
