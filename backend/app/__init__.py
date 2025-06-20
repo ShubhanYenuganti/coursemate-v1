@@ -1,8 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
 from .config import Config
-from .extensions import db, migrate, mail
-from flask_jwt_extended import JWTManager
+from .extensions import db, migrate, jwt, mail
 import os
 
 def create_app(config_class=Config):
@@ -12,9 +11,27 @@ def create_app(config_class=Config):
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
+    jwt.init_app(app)
     mail.init_app(app)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
-    jwt = JWTManager(app)
+    
+    # Configure CORS with specific origins like in init.py
+    CORS(app,
+         resources={
+             r"/api/*": {
+                 "origins": [
+                     "http://192.168.1.198:3001",
+                     "http://172.31.215.88:3001", 
+                     "http://localhost:3001",
+                     "http://localhost:3000"
+                 ],
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+                 "expose_headers": ["Content-Type", "X-Total-Count"],
+                 "supports_credentials": True,
+                 "max_age": 3600
+             }
+         },
+         supports_credentials=True)
 
     # JWT Error Handler for debugging
     @jwt.invalid_token_loader
@@ -44,12 +61,33 @@ def create_app(config_class=Config):
     from .routes.users import users_bp
     from .routes.health import health_bp
     from .routes.uploads import uploads_bp
+    from .routes.chat import chat_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(uploads_bp)
+    app.register_blueprint(chat_bp)
+
+    # Global error handler to return JSON errors with CORS headers
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        from flask import jsonify
+        response = jsonify(message=str(e))
+        response.status_code = 500
+        return response
+
+    @app.route("/")
+    def index():
+        return "Flask backend is working!"
+        
+    # Import models to ensure they're registered with SQLAlchemy
+    from .models.course import Course
+    
+    # Create tables if they don't exist
+    with app.app_context():
+        db.create_all()
 
     # Log the current storage backend being used
     storage_backend = app.config.get('FILE_STORAGE', 'LOCAL').upper()

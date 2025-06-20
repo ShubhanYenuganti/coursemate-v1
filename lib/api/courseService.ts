@@ -62,6 +62,16 @@ class CourseService {
 
   private async handleResponse(response: Response) {
     if (!response.ok) {
+      // Handle token expiration (401 Unauthorized)
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        // Redirect to login page
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+        throw new Error('Session expired. Please log in again.');
+      }
+      
       const error = await response.json().catch(() => ({ error: 'Network error' }));
       throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
     }

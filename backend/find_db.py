@@ -1,8 +1,8 @@
 # Create a temporary script called find_db.py
-from app import init
+from app import create_app
 import os
 
-app = init.create_app()
+app = create_app()
 with app.app_context():
     # Get the configured database URI
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI')

@@ -10,6 +10,7 @@ import ShareInviteFeature from "../components/ShareInviteFeature";
 import MaterialsList from "../components/MaterialsList";
 import UploadMaterials from "../components/UploadMaterials";
 import RecommendedResources from "../components/RecommendedResources";
+import AIChatInterface from "../components/AIChatInterface";
 
 // helper to map subject to icon
 const getSubjectIcon = (subject: string) => {
@@ -57,6 +58,8 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationDirection, setAnimationDirection] = useState<'left' | 'right'>('right');
 
   // Save tab to localStorage when it changes
   useEffect(() => {
@@ -64,6 +67,28 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
       localStorage.setItem('lastCourseTab', activeTab);
     }
   }, [activeTab]);
+
+  // Tab order for animation direction
+  const tabOrder = ['overview', 'materials', 'ai', 'study', 'community', 'progress'];
+
+  // Handle animated tab switching
+  const handleTabChange = (newTab: string) => {
+    if (newTab === activeTab || isAnimating) return;
+    
+    const currentIndex = tabOrder.indexOf(activeTab);
+    const newIndex = tabOrder.indexOf(newTab);
+    const direction = newIndex > currentIndex ? 'left' : 'right';
+    
+    // Immediately update the tab (load new content)
+    setActiveTab(newTab);
+    setAnimationDirection(direction);
+    setIsAnimating(true);
+    
+    // End animation after slide-in completes
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 500);
+  };
 
   // Unwrap params Promise
   const { courseId } = use(params);
@@ -108,7 +133,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
         <UploadMaterials courseId={course.dbId} onUploadComplete={() => setRefreshTrigger(r => r + 1)} />
       </div>
     ),
-    ai: <div className="text-center text-gray-400">[AI Chat tab coming soon]</div>,
+    ai: <AIChatInterface courseId={course.dbId} />,
     study: <div className="text-center text-gray-400">[Study Plan tab coming soon]</div>,
     community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
     progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
@@ -131,10 +156,24 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
         <h2 className="text-3xl font-bold text-gray-800 truncate mr-4">{course.title}</h2>
         <span className="text-xl text-gray-500 font-medium">- {tabLabel}</span>
       </div>
-      <div className="max-w-5xl mx-auto p-8">
-        <CourseDetailTabs activeTab={activeTab} setActiveTab={setActiveTab} />
-        <div id={`tab-panel-${activeTab}`} role="tabpanel">
-          {tabContent}
+      <div className={`mx-auto p-8 ${activeTab === 'ai' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+        <CourseDetailTabs activeTab={activeTab} setActiveTab={handleTabChange} />
+        <div className="relative overflow-hidden min-h-[400px]">
+          <div 
+            className="transition-all duration-500 ease-out"
+            style={{
+              transform: isAnimating 
+                ? animationDirection === 'left' 
+                  ? 'translateX(-20px)' 
+                  : 'translateX(20px)'
+                : 'translateX(0)',
+              opacity: isAnimating ? 0.3 : 1
+            }}
+            id={`tab-panel-${activeTab}`} 
+            role="tabpanel"
+          >
+            {tabContent}
+          </div>
         </div>
       </div>
     </div>

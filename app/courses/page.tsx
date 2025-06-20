@@ -226,12 +226,22 @@ const CoursesPage = () => {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
             <p>Error: {error}</p>
-            <button 
-              onClick={() => loadCourses()} 
-              className="mt-2 text-sm underline hover:no-underline"
-            >
-              Try again
-            </button>
+            <div className="mt-2 space-x-2">
+              <button 
+                onClick={() => loadCourses()} 
+                className="text-sm underline hover:no-underline"
+              >
+                Try again
+              </button>
+              {error.includes('Session expired') && (
+                <button 
+                  onClick={() => window.location.href = '/login'} 
+                  className="text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                >
+                  Login Again
+                </button>
+              )}
+            </div>
           </div>
         )}
 
