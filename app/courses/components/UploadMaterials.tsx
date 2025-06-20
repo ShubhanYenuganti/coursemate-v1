@@ -1,51 +1,79 @@
 import React, { useRef, useState } from "react";
 
-interface UploadFile {
-  id: string;
-  name: string;
-  type: string;
-  size: string;
-  url: string;
-  versionHistory: { date: string; url: string }[];
+export interface UploadMaterialsProps {
+  courseId: string;
+  onUploadComplete?: () => void;
 }
 
-const UploadMaterials: React.FC = () => {
-  const [files, setFiles] = useState<UploadFile[]>([]);
-  const [link, setLink] = useState("");
-  const dropRef = useRef<HTMLDivElement>(null);
+interface UploadedFile {
+  name: string;
+  url: string;
+  type: string;
+}
 
-  const handleDrop = (e: React.DragEvent) => {
+const UploadMaterials: React.FC<UploadMaterialsProps> = ({ courseId, onUploadComplete }) => {
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     const droppedFiles = Array.from(e.dataTransfer.files);
-    const newFiles = droppedFiles.map(file => ({
-      id: Date.now().toString() + Math.random(),
-      name: file.name,
-      type: file.type || "unknown",
-      size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
-      url: URL.createObjectURL(file),
-      versionHistory: [{ date: new Date().toISOString().split('T')[0], url: URL.createObjectURL(file) }],
-    }));
-    setFiles(prev => [...prev, ...newFiles]);
+    await handleFiles(droppedFiles);
+  };
+
+  const handleFiles = async (selectedFiles: File[]) => {
+    setFiles(prev => [...prev, ...selectedFiles]);
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const newUploaded: UploadedFile[] = [];
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`/api/courses/${courseId}/materials/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          newUploaded.push({
+            name: file.name,
+            url: data.url,
+            type: file.type,
+          });
+        } else {
+          setUploadError('Failed to upload one or more files.');
+        }
+      }
+      setUploadedFiles(prev => [...prev, ...newUploaded]);
+      if (onUploadComplete) onUploadComplete();
+    } catch (err) {
+      setUploadError('Failed to upload one or more files.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
   };
 
-  const handleAddLink = () => {
-    if (link.trim()) {
-      setFiles(prev => [
-        ...prev,
-        {
-          id: Date.now().toString() + Math.random(),
-          name: link,
-          type: link.includes("youtube") ? "YouTube" : link.includes("docs.google") ? "Google Doc" : "Link",
-          size: "-",
-          url: link,
-          versionHistory: [{ date: new Date().toISOString().split('T')[0], url: link }],
-        },
-      ]);
-      setLink("");
+  const handleClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      handleFiles(Array.from(e.target.files));
+      e.target.value = '';
     }
   };
 
@@ -56,40 +84,40 @@ const UploadMaterials: React.FC = () => {
         ref={dropRef}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
+        onClick={handleClick}
         className="border-2 border-dashed border-blue-400 rounded-lg p-8 text-center mb-4 bg-blue-50 hover:bg-blue-100 cursor-pointer"
+        style={{ userSelect: 'none' }}
       >
-        <p className="text-blue-700 font-semibold">Drag and drop files here to upload</p>
-        <p className="text-gray-500 text-sm">Bulk upload supported</p>
-      </div>
-      <div className="flex gap-2 mb-4">
         <input
-          className="border rounded p-2 flex-1"
-          placeholder="Paste file link (YouTube, Google Docs, etc.)"
-          value={link}
-          onChange={e => setLink(e.target.value)}
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: 'none' }}
+          onChange={handleFileInputChange}
         />
-        <button onClick={handleAddLink} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">Add Link</button>
+        <p className="text-blue-700 font-semibold">Drag and drop files here to upload</p>
+        <p className="text-gray-500 text-sm">Bulk upload supported, or click to select files</p>
+        {uploading && <div className="text-blue-600 mt-2">Uploading...</div>}
+        {uploadError && <div className="text-red-600 mt-2">{uploadError}</div>}
       </div>
-      <div className="space-y-4">
-        {files.map(file => (
-          <div key={file.id} className="bg-gray-50 border border-gray-200 rounded-lg shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex-1">
-              <div className="font-semibold text-blue-700 truncate">{file.name}</div>
-              <div className="text-xs text-gray-400 mb-1">{file.type} {file.size && `(${file.size})`}</div>
-              <div className="text-xs text-gray-500 mb-1">Version history:</div>
-              <ul className="list-disc pl-6 text-xs text-gray-500">
-                {file.versionHistory.map((v, idx) => (
-                  <li key={idx}><a href={v.url} target="_blank" rel="noopener noreferrer" className="underline">{v.date}</a></li>
-                ))}
-              </ul>
+      {/* Preview of uploaded files */}
+      {uploadedFiles.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <h4 className="font-semibold mb-2">Uploaded Files:</h4>
+          {uploadedFiles.map((file, idx) => (
+            <div key={idx} className="flex items-center gap-3 bg-gray-50 border rounded p-2">
+              {file.type.startsWith('image') ? (
+                <img src={file.url} alt={file.name} className="w-16 h-16 object-cover rounded" />
+              ) : file.type.startsWith('video') ? (
+                <video src={file.url} className="w-16 h-16 object-cover rounded" controls />
+              ) : (
+                <span className="w-16 h-16 flex items-center justify-center bg-gray-200 rounded text-gray-500">FILE</span>
+              )}
+              <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">{file.name}</a>
             </div>
-            <div className="flex flex-col gap-2 items-end">
-              <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">Open</a>
-              {/* Add replace/delete actions here if needed */}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
