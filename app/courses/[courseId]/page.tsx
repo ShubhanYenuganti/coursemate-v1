@@ -46,11 +46,24 @@ interface Props {
 }
 
 const CourseDetailPage: React.FC<Props> = ({ params }) => {
-  const [activeTab, setActiveTab] = useState("overview");
+  // Use localStorage to persist the last opened tab
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lastCourseTab') || 'overview';
+    }
+    return 'overview';
+  });
   const [course, setCourse] = useState<Course | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Save tab to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lastCourseTab', activeTab);
+    }
+  }, [activeTab]);
 
   // Unwrap params Promise
   const { courseId } = use(params);
