@@ -9,6 +9,7 @@ import PinnedResources from "../components/PinnedResources";
 import ShareInviteFeature from "../components/ShareInviteFeature";
 import MaterialsList from "../components/MaterialsList";
 import UploadMaterials from "../components/UploadMaterials";
+import RecommendedResources from "../components/RecommendedResources";
 
 // helper to map subject to icon
 const getSubjectIcon = (subject: string) => {
@@ -45,10 +46,24 @@ interface Props {
 }
 
 const CourseDetailPage: React.FC<Props> = ({ params }) => {
-  const [activeTab, setActiveTab] = useState("overview");
+  // Use localStorage to persist the last opened tab
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lastCourseTab') || 'overview';
+    }
+    return 'overview';
+  });
   const [course, setCourse] = useState<Course | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Save tab to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lastCourseTab', activeTab);
+    }
+  }, [activeTab]);
 
   // Unwrap params Promise
   const { courseId } = use(params);
@@ -88,9 +103,9 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     ),
     materials: (
       <div>
-        <MaterialsList />
-        <div className="mt-8" />
-        <UploadMaterials />
+        <MaterialsList courseId={course.dbId} refreshTrigger={refreshTrigger} onFileDeleted={() => setRefreshTrigger(r => r + 1)} />
+        {/* <RecommendedResources course={course} /> */}
+        <UploadMaterials courseId={course.dbId} onUploadComplete={() => setRefreshTrigger(r => r + 1)} />
       </div>
     ),
     ai: <div className="text-center text-gray-400">[AI Chat tab coming soon]</div>,

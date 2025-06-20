@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.course import Course
 from app.models.user import User
@@ -6,11 +6,14 @@ from app.init import db
 from datetime import datetime
 import os
 from werkzeug.utils import secure_filename
+from app.utils.s3 import upload_file_to_s3, list_files_in_s3, delete_file_from_s3
 
 courses_bp = Blueprint('courses', __name__, url_prefix='/api/courses')
 
+# Base upload directory relative to the backend folder (for local storage)
+UPLOAD_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'uploads'))
+
 # Configuration for file uploads
-UPLOAD_FOLDER = 'uploads/courses'
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'ppt', 'pptx', 'mp4'}
 
 def allowed_file(filename):
@@ -295,4 +298,71 @@ def get_public_course(course_id):
     # Add ownership information
     course_dict['is_owned_by_user'] = (course.user_id == current_user_id)
     
-    return jsonify(course_dict) 
+    return jsonify(course_dict)
+
+@courses_bp.route('/<course_id>/materials/upload', methods=['POST'])
+@jwt_required()
+def upload_material(course_id):
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    filename = secure_filename(file.filename)
+    
+    if current_app.config['FILE_STORAGE'] == 'S3':
+        s3_path = f"courses/{course_id}/{filename}"
+        upload_file_to_s3(file, s3_path)
+        # The URL will be generated on-the-fly when listing files
+        return jsonify({'url': s3_path, 'filename': filename}), 201
+    else: # Local storage
+        course_dir = os.path.join(UPLOAD_FOLDER, 'courses', course_id)
+        os.makedirs(course_dir, exist_ok=True)
+        file.save(os.path.join(course_dir, filename))
+        file_url = f'/uploads/courses/{course_id}/{filename}'
+        return jsonify({'url': file_url, 'filename': filename}), 201
+
+@courses_bp.route('/<course_id>/materials', methods=['GET'])
+@jwt_required()
+def list_materials(course_id):
+    if current_app.config['FILE_STORAGE'] == 'S3':
+        s3_prefix = f"courses/{course_id}/"
+        files_data = list_files_in_s3(s3_prefix)
+        # Add a 'name' field to match the expected frontend structure
+        for file_data in files_data:
+            file_data['name'] = os.path.basename(file_data['key'])
+        return jsonify(files_data)
+    else: # Local storage
+        course_dir = os.path.join(UPLOAD_FOLDER, 'courses', course_id)
+        if not os.path.isdir(course_dir):
+            return jsonify([])
+
+        files_data = []
+        for filename in os.listdir(course_dir):
+            file_path = os.path.join(course_dir, filename)
+            if os.path.isfile(file_path):
+                 files_data.append({
+                    'key': filename, # Use filename as key for local
+                    'name': filename,
+                    'url': f'/uploads/courses/{course_id}/{filename}',
+                    'size': os.path.getsize(file_path),
+                    'last_modified': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
+                 })
+        return jsonify(files_data)
+
+@courses_bp.route('/<course_id>/materials/<path:filename>', methods=['DELETE'])
+@jwt_required()
+def delete_material(course_id, filename):
+    if current_app.config['FILE_STORAGE'] == 'S3':
+        # filename is the full S3 key
+        delete_file_from_s3(filename)
+        return jsonify({'message': 'File deleted successfully from S3'}), 200
+    else: # Local storage
+        safe_filename = secure_filename(filename)
+        file_path = os.path.join(UPLOAD_FOLDER, 'courses', course_id, safe_filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return jsonify({'message': 'File deleted successfully'}), 200
+        else:
+            return jsonify({'error': 'File not found'}), 404 

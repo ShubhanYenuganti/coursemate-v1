@@ -9,6 +9,15 @@ class Config:
     # App Configuration
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-key-change-me')
     
+    # File Storage Configuration (LOCAL or S3)
+    FILE_STORAGE = os.getenv('FILE_STORAGE', 'LOCAL')
+
+    # S3 Configuration (only used if FILE_STORAGE is 'S3')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+    S3_KEY = os.getenv('S3_KEY')
+    S3_SECRET = os.getenv('S3_SECRET')
+    S3_REGION = os.getenv('S3_REGION')
+    
     # Database configuration
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
