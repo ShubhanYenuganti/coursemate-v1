@@ -3,6 +3,8 @@ from datetime import datetime
 from app.init import db
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import Text
+from app.utils.s3 import get_presigned_url
+import os
 
 class Course(db.Model):
     __tablename__ = 'courses'
@@ -34,7 +36,7 @@ class Course(db.Model):
     badge = db.Column(db.Enum('Creator', 'Enrolled', name='badge_enum'), default='Creator')
     
     # File storage (store file paths/URLs)
-    course_image = db.Column(db.String(500), nullable=True)  # Path to uploaded image
+    course_image = db.Column(db.String(500), nullable=True)  # Path to uploaded image/S3 key
     materials = db.Column(db.JSON, default=list)  # Array of file paths/metadata
     
     # Timestamps
@@ -47,6 +49,11 @@ class Course(db.Model):
     
     def to_dict(self):
         """Convert course to dictionary for JSON serialization"""
+        
+        course_image_url = self.course_image
+        if os.environ.get('FILE_STORAGE') == 'S3' and self.course_image:
+            course_image_url = get_presigned_url(self.course_image)
+
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -65,7 +72,7 @@ class Course(db.Model):
             'is_pinned': self.is_pinned,
             'is_archived': self.is_archived,
             'badge': self.badge,
-            'course_image': self.course_image,
+            'course_image': course_image_url,
             'materials': self.materials or [],
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,

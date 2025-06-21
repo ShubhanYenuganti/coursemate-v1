@@ -24,6 +24,7 @@ export interface Course {
   description: string;
   icon: React.ComponentType<any>;
   tags?: string[];
+  course_image?: string | null;
 }
 
 interface CourseCardProps {

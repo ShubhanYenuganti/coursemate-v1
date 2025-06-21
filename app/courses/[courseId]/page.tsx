@@ -33,13 +33,15 @@ const mapCourse = (data: CourseData): Course => ({
   title: data.title,
   subject: data.subject,
   semester: data.semester,
-  dailyProgress: data.dailyProgress ?? 0,
-  lastAccessed: data.lastAccessed ?? new Date().toISOString().split('T')[0],
+  dailyProgress: data.daily_progress ?? 0,
+  lastAccessed: data.last_accessed ?? new Date().toISOString().split('T')[0],
   badge: data.badge ?? 'Creator',
-  isPinned: data.isPinned ?? false,
-  isArchived: data.isArchived ?? false,
+  isPinned: data.is_pinned ?? false,
+  isArchived: data.is_archived ?? false,
   description: data.description,
-  icon: getSubjectIcon(data.subject)
+  icon: getSubjectIcon(data.subject),
+  tags: data.tags,
+  course_image: data.course_image
 });
 
 interface Props {
@@ -114,12 +116,17 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     return (<div className="min-h-screen flex items-center justify-center text-2xl text-gray-400">Course not found</div>);
   }
 
+  const handleCourseUpdate = (updatedCourseData: CourseData) => {
+    const updatedCourse = mapCourse(updatedCourseData);
+    setCourse(updatedCourse);
+  };
+
   const tabContentMap: Record<string, React.ReactNode> = {
     overview: (
       <div>
         <CourseDetailHeader
           course={course}
-          onDescriptionUpdated={(d) => setCourse({ ...course, description: d })}
+          onCourseUpdate={handleCourseUpdate}
         />
         <PinnedResources course={course} />
         <div className="mt-8" />

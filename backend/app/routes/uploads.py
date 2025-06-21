@@ -2,7 +2,7 @@ from flask import Blueprint, send_from_directory
 import os
 
 uploads_bp = Blueprint('uploads', __name__, url_prefix='/uploads')
-
+ 
 @uploads_bp.route('/<path:filename>')
 def serve_upload(filename):
     """Serves an uploaded file from the UPLOAD_FOLDER."""
