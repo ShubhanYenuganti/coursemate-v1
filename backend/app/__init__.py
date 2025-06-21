@@ -62,6 +62,7 @@ def create_app(config_class=Config):
     from .routes.health import health_bp
     from .routes.uploads import uploads_bp
     from .routes.chat import chat_bp
+    from .routes.oauth import oauth_bp, register_oauth
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
@@ -69,6 +70,8 @@ def create_app(config_class=Config):
     app.register_blueprint(health_bp)
     app.register_blueprint(uploads_bp)
     app.register_blueprint(chat_bp)
+    register_oauth(app)
+    app.register_blueprint(oauth_bp)
 
     # Global error handler to return JSON errors with CORS headers
     @app.errorhandler(Exception)

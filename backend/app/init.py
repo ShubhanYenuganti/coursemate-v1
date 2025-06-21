@@ -48,10 +48,14 @@ def create_app():
     from app.routes.users import users_bp
     from app.routes.courses import courses_bp
     from app.routes.health import health_bp
+    from app.routes.oauth import oauth_bp, register_oauth
+    
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(courses_bp)
     app.register_blueprint(health_bp)
+    register_oauth(app)
+    app.register_blueprint(oauth_bp)
 
     @app.route("/")
     def index():
@@ -64,5 +68,5 @@ def create_app():
     # Create tables if they don't exist
     with app.app_context():
         db.create_all()
-
+    
     return app
