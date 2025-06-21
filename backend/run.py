@@ -1,4 +1,3 @@
-from app import init
 from app.config import Config
 from dotenv import load_dotenv
 import os
