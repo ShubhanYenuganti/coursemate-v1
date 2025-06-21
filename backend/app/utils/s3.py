@@ -32,6 +32,26 @@ def upload_file_to_s3(file_obj, s3_path):
     # For now, we return the path. A separate endpoint can generate URLs.
     return s3_path
 
+def get_presigned_url(s3_key):
+    """Generates a presigned URL for an S3 object."""
+    s3 = get_s3_client()
+    bucket_name = current_app.config['AWS_STORAGE_BUCKET_NAME']
+    
+    try:
+        url = s3.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': bucket_name,
+                'Key': s3_key,
+                'ResponseContentDisposition': 'inline'
+            },
+            ExpiresIn=3600  # URL expires in 1 hour
+        )
+        return url
+    except Exception as e:
+        print(f"Error generating presigned URL for {s3_key}: {e}")
+        return None
+
 def list_files_in_s3(prefix):
     """
     Lists files in a given directory (prefix) in the S3 bucket.
@@ -45,21 +65,15 @@ def list_files_in_s3(prefix):
     if 'Contents' in response:
         for obj in response['Contents']:
             # Generate a presigned URL for temporary access
-            url = s3.generate_presigned_url(
-                'get_object',
-                Params={
-                    'Bucket': bucket_name,
-                    'Key': obj['Key'],
-                    'ResponseContentDisposition': 'inline'
-                },
-                ExpiresIn=3600  # URL expires in 1 hour
-            )
-            files.append({
-                'key': obj['Key'],
-                'url': url,
-                'size': obj['Size'],
-                'last_modified': obj['LastModified'].isoformat()
-            })
+            url = get_presigned_url(obj['Key'])
+            
+            if url:
+                files.append({
+                    'key': obj['Key'],
+                    'url': url,
+                    'size': obj['Size'],
+                    'last_modified': obj['LastModified'].isoformat()
+                })
     return files
 
 def delete_file_from_s3(s3_path):

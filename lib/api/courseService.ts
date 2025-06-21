@@ -2,24 +2,24 @@ interface CourseData {
   id?: string;
   title: string;
   subject: string;
-  courseCode?: string;
+  course_code?: string;
   semester: string;
   professor?: string;
   units?: number;
-  variableUnits?: boolean;
+  variable_units?: boolean;
   description: string;
   visibility?: 'Public' | 'Private' | 'Only Me' | 'Friends Only';
   tags?: string[];
   collaborators?: string[];
-  dailyProgress?: number;
-  isPinned?: boolean;
-  isArchived?: boolean;
+  daily_progress?: number;
+  is_pinned?: boolean;
+  is_archived?: boolean;
   badge?: 'Creator' | 'Enrolled';
-  courseImage?: string;
+  course_image?: string;
   materials?: string[];
-  createdAt?: string;
-  updatedAt?: string;
-  lastAccessed?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_accessed?: string;
 }
 
 interface CreateCourseRequest {
@@ -188,6 +188,33 @@ class CourseService {
       method: 'GET',
       headers: this.getAuthHeaders(),
     });
+    return this.handleResponse(response);
+  }
+
+  async uploadBanner(courseId: string, file: File): Promise<{ message: string; course: CourseData }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = localStorage.getItem('token');
+    const headers = {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+
+    const response = await fetch(`${this.baseUrl}/api/courses/${courseId}/banner`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    return this.handleResponse(response);
+  }
+
+  async deleteBanner(courseId: string): Promise<{ message: string; course: CourseData }> {
+    const response = await fetch(`${this.baseUrl}/api/courses/${courseId}/banner`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+
     return this.handleResponse(response);
   }
 }

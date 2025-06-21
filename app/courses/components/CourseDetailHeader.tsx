@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Course } from "./CourseCard";
-import { courseService } from "../../../lib/api/courseService";
+import { courseService, CourseData } from "../../../lib/api/courseService";
+import { UploadCloud, Trash2 } from "lucide-react";
+import ImageCropModal from "./ImageCropModal";
 
 const defaultBanner =
   "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80";
@@ -8,7 +10,7 @@ const defaultBanner =
 const editableFields = ["title", "subject", "semester", "tags", "description"] as const;
 type EditableField = typeof editableFields[number];
 
-const CourseDetailHeader = ({ course, onDescriptionUpdated }: { course: Course; onDescriptionUpdated: (d: string)=>void }) => {
+const CourseDetailHeader = ({ course, onCourseUpdate }: { course: Course; onCourseUpdate: (course: CourseData) => void }) => {
   const [editing, setEditing] = useState(false);
   const [fieldValues, setFieldValues] = useState({
     title: course.title,
@@ -19,17 +21,80 @@ const CourseDetailHeader = ({ course, onDescriptionUpdated }: { course: Course; 
   });
   const [saving, setSaving] = useState(false);
   const [newTag, setNewTag] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [tempImageUrl, setTempImageUrl] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
 
   const saveAll = async () => {
     try {
       setSaving(true);
-      const update: any = { ...fieldValues };
-      await courseService.updateCourse(course.dbId, update);
+      const update: Partial<CourseData> = { ...fieldValues, id: course.dbId };
+      const response = await courseService.updateCourse(course.dbId, update);
       setEditing(false);
-      onDescriptionUpdated(fieldValues.description);
+      onCourseUpdate(response.course);
     } catch(e){
       console.error('Failed to update course', e);
     } finally { setSaving(false); }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Create a temporary URL for the crop modal
+    const tempUrl = URL.createObjectURL(file);
+    setTempImageUrl(tempUrl);
+    setCropModalOpen(true);
+    
+    // Clear the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCropConfirm = async (croppedImageUrl: string) => {
+    try {
+      setUploading(true);
+      
+      // Convert the blob URL back to a File object
+      const response = await fetch(croppedImageUrl);
+      const blob = await response.blob();
+      const file = new File([blob], 'banner.jpg', { type: 'image/jpeg' });
+      
+      // Upload the cropped image
+      const uploadResponse = await courseService.uploadBanner(course.dbId, file);
+      onCourseUpdate(uploadResponse.course);
+      
+      // Clean up the temporary URLs
+      URL.revokeObjectURL(tempImageUrl);
+      URL.revokeObjectURL(croppedImageUrl);
+      
+    } catch (error) {
+      console.error("Failed to upload cropped banner:", error);
+    } finally {
+      setUploading(false);
+      setCropModalOpen(false);
+      setTempImageUrl("");
+    }
+  };
+
+  const handleClearBanner = async () => {
+    try {
+      setUploading(true);
+      const response = await courseService.deleteBanner(course.dbId);
+      onCourseUpdate(response.course);
+    } catch (error) {
+      console.error("Failed to delete banner:", error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleBannerClick = () => {
+    if (course.badge === 'Creator') {
+      fileInputRef.current?.click();
+    }
   };
 
   const handleFieldChange = (field: EditableField, value: any) => {
@@ -139,12 +204,41 @@ const CourseDetailHeader = ({ course, onDescriptionUpdated }: { course: Course; 
           </>
         )}
       </div>
-      <div className="mb-8">
+      <div className="mb-8 relative group">
         <img
-          src={defaultBanner}
+          src={course.course_image || defaultBanner}
           alt="Course banner"
           className="w-full h-48 object-cover rounded-xl bg-gray-100"
         />
+        {course.badge === 'Creator' && (
+          <div className="absolute top-2 right-2 flex flex-col gap-2">
+            <button
+              onClick={handleBannerClick}
+              disabled={uploading}
+              className="bg-white bg-opacity-90 hover:bg-opacity-100 p-2 rounded-lg shadow-md transition-all duration-200 hover:scale-105 disabled:opacity-50"
+              title="Upload Banner Image"
+            >
+              <UploadCloud className="w-5 h-5 text-gray-700" />
+            </button>
+            {course.course_image && (
+              <button
+                onClick={handleClearBanner}
+                disabled={uploading}
+                className="bg-white bg-opacity-90 hover:bg-opacity-100 p-2 rounded-lg shadow-md transition-all duration-200 hover:scale-105 disabled:opacity-50"
+                title="Clear Banner Image"
+              >
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </button>
+            )}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept="image/png, image/jpeg, image/gif"
+            />
+          </div>
+        )}
       </div>
       {/* Description */}
       <div>
@@ -176,6 +270,21 @@ const CourseDetailHeader = ({ course, onDescriptionUpdated }: { course: Course; 
           </button>
         </div>
       )}
+
+      {/* Image Crop Modal */}
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        onClose={() => {
+          setCropModalOpen(false);
+          if (tempImageUrl) {
+            URL.revokeObjectURL(tempImageUrl);
+            setTempImageUrl("");
+          }
+        }}
+        imageUrl={tempImageUrl}
+        onCrop={handleCropConfirm}
+        aspectRatio={16 / 9}
+      />
     </div>
   );
 };

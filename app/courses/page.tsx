@@ -34,11 +34,11 @@ const convertToDisplayFormat = (courseData: CourseData): Course => {
     title: courseData.title,
     subject: courseData.subject,
     semester: courseData.semester,
-    dailyProgress: courseData.dailyProgress || 0,
-    lastAccessed: courseData.lastAccessed || new Date().toISOString().split('T')[0],
+    dailyProgress: courseData.daily_progress || 0,
+    lastAccessed: courseData.last_accessed || new Date().toISOString().split('T')[0],
     badge: courseData.badge || 'Creator',
-    isPinned: courseData.isPinned || false,
-    isArchived: courseData.isArchived || false,
+    isPinned: courseData.is_pinned || false,
+    isArchived: courseData.is_archived || false,
     description: courseData.description,
     icon: getSubjectIcon(courseData.subject)
   };
@@ -95,7 +95,7 @@ const CoursesPage = () => {
     try {
       await courseService.togglePin(courseId);
       setCourses(prev => prev.map(course => 
-        course.id === courseId ? { ...course, isPinned: !course.isPinned } : course
+        course.id === courseId ? { ...course, isPinned: !course.is_pinned } : course
       ));
     } catch (error) {
       console.error('Failed to toggle pin:', error);
@@ -106,7 +106,7 @@ const CoursesPage = () => {
     try {
       await courseService.toggleArchive(courseId);
       setCourses(prev => prev.map(course => 
-        course.id === courseId ? { ...course, isArchived: !course.isArchived } : course
+        course.id === courseId ? { ...course, isArchived: !course.is_archived } : course
       ));
     } catch (error) {
       console.error('Failed to toggle archive:', error);
@@ -148,7 +148,7 @@ const CoursesPage = () => {
 
   const filteredCourses = useMemo(() => {
     let filtered = courses.filter(course => {
-      if (!showArchived && course.isArchived) return false;
+      if (!showArchived && course.is_archived) return false;
       
       const matchesSearch = course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            course.subject.toLowerCase().includes(searchTerm.toLowerCase());
@@ -158,7 +158,7 @@ const CoursesPage = () => {
       const matchesFilters = filterChips.every(chip => {
         if (chip.type === 'Subject') return course.subject === chip.value;
         if (chip.type === 'Progress') {
-          const progress = course.dailyProgress || 0;
+          const progress = course.daily_progress || 0;
           if (chip.value === '100% Complete') return progress === 100;
           if (chip.value === '80%+ Complete') return progress >= 80;
           if (chip.value === 'In Progress') return progress > 0 && progress < 100;
@@ -171,17 +171,17 @@ const CoursesPage = () => {
 
     // Sort courses
     filtered.sort((a, b) => {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
       
       switch (sortBy) {
         case 'title':
           return a.title.localeCompare(b.title);
         case 'progress':
-          return (b.dailyProgress || 0) - (a.dailyProgress || 0);
+          return (b.daily_progress || 0) - (a.daily_progress || 0);
         case 'lastAccessed':
-          const aDate = a.lastAccessed ? new Date(a.lastAccessed).getTime() : 0;
-          const bDate = b.lastAccessed ? new Date(b.lastAccessed).getTime() : 0;
+          const aDate = a.last_accessed ? new Date(a.last_accessed).getTime() : 0;
+          const bDate = b.last_accessed ? new Date(b.last_accessed).getTime() : 0;
           return bDate - aDate;
         default:
           return 0;

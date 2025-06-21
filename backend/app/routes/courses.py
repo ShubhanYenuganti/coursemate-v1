@@ -6,7 +6,7 @@ from app.init import db
 from datetime import datetime
 import os
 from werkzeug.utils import secure_filename
-from app.utils.s3 import upload_file_to_s3, list_files_in_s3, delete_file_from_s3
+from app.utils.s3 import upload_file_to_s3, list_files_in_s3, delete_file_from_s3, get_presigned_url
 
 courses_bp = Blueprint('courses', __name__, url_prefix='/api/courses')
 
@@ -246,6 +246,105 @@ def update_progress(course_id):
         'daily_progress': course.daily_progress
     })
 
+@courses_bp.route('/<course_id>/banner', methods=['POST'])
+@jwt_required()
+def upload_banner(course_id):
+    """Upload or update a banner image for a course."""
+    current_user_id = get_jwt_identity()
+    
+    course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
+    if not course:
+        return jsonify({'error': 'Course not found or unauthorized'}), 404
+        
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+        
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        
+        # S3 vs. local storage handling
+        storage_mode = current_app.config['FILE_STORAGE']
+        
+        # Delete old banner if it exists
+        if course.course_image:
+            try:
+                if storage_mode == 'S3':
+                    delete_file_from_s3(course.course_image)
+                else:
+                    old_file_path = os.path.join(UPLOAD_FOLDER, course.course_image)
+                    if os.path.exists(old_file_path):
+                        os.remove(old_file_path)
+            except Exception as e:
+                # Log the error but continue with upload
+                print(f"Warning: Failed to delete old banner: {str(e)}")
+        
+        if storage_mode == 'S3':
+            s3_path = f"banners/{course_id}/{filename}"
+            try:
+                upload_file_to_s3(file, s3_path)
+                course.course_image = s3_path  # Store S3 key
+            except Exception as e:
+                return jsonify({'error': f'S3 upload failed: {str(e)}'}), 500
+        else: # local storage
+            course_dir = os.path.join(UPLOAD_FOLDER, 'banners', course_id)
+            os.makedirs(course_dir, exist_ok=True)
+            file_path = os.path.join(course_dir, filename)
+            file.save(file_path)
+            # Store relative path for local files
+            course.course_image = os.path.join('banners', course_id, filename)
+
+        db.session.commit()
+        
+        # Return the updated course, which will include the new presigned URL
+        return jsonify({
+            'message': 'Banner uploaded successfully',
+            'course': course.to_dict()
+        })
+
+    return jsonify({'error': 'File type not allowed'}), 400
+
+@courses_bp.route('/<course_id>/banner', methods=['DELETE'])
+@jwt_required()
+def delete_banner(course_id):
+    """Delete the banner image for a course."""
+    current_user_id = get_jwt_identity()
+    
+    course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
+    if not course:
+        return jsonify({'error': 'Course not found or unauthorized'}), 404
+    
+    if not course.course_image:
+        return jsonify({'error': 'No banner image to delete'}), 404
+    
+    try:
+        # Delete from S3 or local storage
+        storage_mode = current_app.config['FILE_STORAGE']
+        
+        if storage_mode == 'S3':
+            # Delete from S3
+            delete_file_from_s3(course.course_image)
+        else:
+            # Delete from local storage
+            file_path = os.path.join(UPLOAD_FOLDER, course.course_image)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        
+        # Clear the course_image field
+        course.course_image = None
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Banner deleted successfully',
+            'course': course.to_dict()
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to delete banner: {str(e)}'}), 500
+
 @courses_bp.route('/public', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def get_public_courses():
@@ -329,10 +428,15 @@ def list_materials(course_id):
     if current_app.config['FILE_STORAGE'] == 'S3':
         s3_prefix = f"courses/{course_id}/"
         files_data = list_files_in_s3(s3_prefix)
-        # Add a 'name' field to match the expected frontend structure
+        # Filter out banner files and add a 'name' field to match the expected frontend structure
+        filtered_files = []
         for file_data in files_data:
+            # Skip banner files (both old and new path structures)
+            if 'banner' in file_data['key'].lower():
+                continue
             file_data['name'] = os.path.basename(file_data['key'])
-        return jsonify(files_data)
+            filtered_files.append(file_data)
+        return jsonify(filtered_files)
     else: # Local storage
         course_dir = os.path.join(UPLOAD_FOLDER, 'courses', course_id)
         if not os.path.isdir(course_dir):
@@ -340,6 +444,9 @@ def list_materials(course_id):
 
         files_data = []
         for filename in os.listdir(course_dir):
+            # Skip banner files
+            if 'banner' in filename.lower():
+                continue
             file_path = os.path.join(course_dir, filename)
             if os.path.isfile(file_path):
                  files_data.append({
