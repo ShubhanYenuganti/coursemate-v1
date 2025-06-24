@@ -30,6 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { User, Bell, Shield, HelpCircle, LogOut } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import useAuthRedirect from "@/hooks/useAuthRedirect"
 
 const calendarEvents = [
   {
@@ -241,13 +242,29 @@ export function CalendarScheduler() {
   }
 
   const handleTaskClick = (task: any) => {
-    setSelectedTask(task)
+    setSelectedTask((prev) => (prev && prev.id === task.id ? null : task))
   }
+
 
   const getTasksForCourse = (courseName: string) => {
     return allTasks.filter((task) => task.course === courseName)
   }
 
+  const handleConnectCalendar = () => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("token")
+      if (token) {
+        window.location.href = `http://localhost:5173/api/calendar/auth?token=${token}`
+      }
+    }
+  }
+
+  const loading = useAuthRedirect()
+
+  if (loading) {
+    return <div>Loading...</div>
+  }
+  
   return (
     <div className="flex h-screen bg-[#ffffff]">
       {/* Header */}
@@ -382,10 +399,8 @@ export function CalendarScheduler() {
               </div>
             </div>
             <div className="grid grid-cols-7 gap-1 text-xs text-center mb-2">
-              {["S", "M", "T", "W", "T", "F", "S"].map((day) => (
-                <div key={day} className="text-[#71717a] py-1">
-                  {day}
-                </div>
+              {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+                <div key={`${day}-${index}`}>{day}</div>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-1 text-sm">
@@ -398,13 +413,12 @@ export function CalendarScheduler() {
                 return (
                   <div
                     key={i}
-                    className={`h-8 flex items-center justify-center cursor-pointer rounded transition-colors ${
-                      isSelected
+                    className={`h-8 flex items-center justify-center cursor-pointer rounded transition-colors ${isSelected
                         ? "bg-[#0a80ed] text-white"
                         : isCurrentMonth
                           ? "text-white hover:bg-[#71717a]"
                           : "text-[#71717a]"
-                    }`}
+                      }`}
                     onClick={() => {
                       if (isCurrentMonth) {
                         setCurrentDate(clickableDate)
@@ -601,16 +615,14 @@ export function CalendarScheduler() {
                       return (
                         <div
                           key={index}
-                          className={`bg-white p-2 min-h-[120px] ${
-                            !isCurrentMonth ? "bg-[#f8f9fa] text-[#a1a1aa]" : ""
-                          }`}
+                          className={`bg-white p-2 min-h-[120px] ${!isCurrentMonth ? "bg-[#f8f9fa] text-[#a1a1aa]" : ""
+                            }`}
                         >
                           <div
-                            className={`text-sm font-medium mb-2 ${
-                              isToday
+                            className={`text-sm font-medium mb-2 ${isToday
                                 ? "bg-[#0a80ed] text-white w-6 h-6 rounded-full flex items-center justify-center"
                                 : ""
-                            }`}
+                              }`}
                           >
                             {date.getDate()}
                           </div>
@@ -711,11 +723,10 @@ export function CalendarScheduler() {
                             return (
                               <div
                                 key={date}
-                                className={`h-6 flex items-center justify-center text-xs relative ${
-                                  isToday && isCurrentMonth
+                                className={`h-6 flex items-center justify-center text-xs relative ${isToday && isCurrentMonth
                                     ? "bg-[#0a80ed] text-white rounded-full"
                                     : "text-[#18181b] hover:bg-[#f0f0f0] rounded"
-                                }`}
+                                  }`}
                               >
                                 {date}
                                 {hasEvents && (
@@ -862,13 +873,12 @@ export function CalendarScheduler() {
                                 </div>
                                 <div className="text-xs text-[#71717a] truncate">{task.course}</div>
                                 <div
-                                  className={`text-xs mt-1 px-2 py-1 rounded-full inline-block ${
-                                    task.priority === "high"
+                                  className={`text-xs mt-1 px-2 py-1 rounded-full inline-block ${task.priority === "high"
                                       ? "bg-red-100 text-red-700"
                                       : task.priority === "medium"
                                         ? "bg-yellow-100 text-yellow-700"
                                         : "bg-green-100 text-green-700"
-                                  }`}
+                                    }`}
                                 >
                                   {task.priority}
                                 </div>
@@ -887,51 +897,27 @@ export function CalendarScheduler() {
       </div>
 
       {/* Bottom Task Display Section */}
-      <div className="fixed bottom-0 left-80 right-80 bg-[#ffffff] border-t border-[#e5e8eb] p-4 z-40">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Task Display</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedTask ? (
+      {selectedTask && (
+        <div className="fixed bottom-0 left-80 right-80 bg-[#ffffff] border-t border-[#e5e8eb] p-4 z-40">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Task Display</CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 rounded-full" style={{ backgroundColor: selectedTask.color }}></div>
                   <h3 className="font-semibold text-[#18181b]">{selectedTask.title}</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-[#71717a]">Course:</span>
-                    <span className="ml-2 font-medium">{selectedTask.course || selectedTask.subtitle}</span>
-                  </div>
-                  <div>
-                    <span className="text-[#71717a]">Due Date:</span>
-                    <span className="ml-2 font-medium">{selectedTask.dueDate || "Not specified"}</span>
-                  </div>
-                  <div>
-                    <span className="text-[#71717a]">Priority:</span>
-                    <span
-                      className={`ml-2 px-2 py-1 rounded-full text-xs ${
-                        selectedTask.priority === "high"
-                          ? "bg-red-100 text-red-700"
-                          : selectedTask.priority === "medium"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-green-100 text-green-700"
-                      }`}
-                    >
-                      {selectedTask.priority || "Medium"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[#71717a]">Status:</span>
-                    <span
-                      className={`ml-2 px-2 py-1 rounded-full text-xs ${
-                        selectedTask.completed ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {selectedTask.completed ? "Completed" : "Pending"}
-                    </span>
-                  </div>
+                  <div><span className="text-[#71717a]">Course:</span><span className="ml-2 font-medium">{selectedTask.course || selectedTask.subtitle}</span></div>
+                  <div><span className="text-[#71717a]">Due Date:</span><span className="ml-2 font-medium">{selectedTask.dueDate || "Not specified"}</span></div>
+                  <div><span className="text-[#71717a]">Priority:</span><span className={`ml-2 px-2 py-1 rounded-full text-xs ${selectedTask.priority === "high" ? "bg-red-100 text-red-700" :
+                      selectedTask.priority === "medium" ? "bg-yellow-100 text-yellow-700" :
+                        "bg-green-100 text-green-700"
+                    }`}>{selectedTask.priority || "Medium"}</span></div>
+                  <div><span className="text-[#71717a]">Status:</span><span className={`ml-2 px-2 py-1 rounded-full text-xs ${selectedTask.completed ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                    }`}>{selectedTask.completed ? "Completed" : "Pending"}</span></div>
                 </div>
                 {selectedTask.description && (
                   <div>
@@ -940,15 +926,10 @@ export function CalendarScheduler() {
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="text-center text-[#71717a] py-8">
-                <p>No task selected</p>
-                <p className="text-sm mt-1">Click on a task in the calendar or sidebar to view details</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Settings Dialog */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
@@ -1012,6 +993,7 @@ export function CalendarScheduler() {
                         <Button
                           variant="outline"
                           className="border-[#0a80ed] text-[#0a80ed] hover:bg-[#0a80ed] hover:text-white"
+                          onClick={handleConnectCalendar}
                         >
                           Connect
                         </Button>
@@ -1242,20 +1224,18 @@ export function CalendarScheduler() {
                                 <span>Due: {new Date(task.dueDate).toLocaleDateString()}</span>
                               </div>
                               <div
-                                className={`px-2 py-1 rounded-full ${
-                                  task.priority === "high"
+                                className={`px-2 py-1 rounded-full ${task.priority === "high"
                                     ? "bg-red-100 text-red-700"
                                     : task.priority === "medium"
                                       ? "bg-yellow-100 text-yellow-700"
                                       : "bg-green-100 text-green-700"
-                                }`}
+                                  }`}
                               >
                                 {task.priority} priority
                               </div>
                               <div
-                                className={`px-2 py-1 rounded-full ${
-                                  task.completed ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                                }`}
+                                className={`px-2 py-1 rounded-full ${task.completed ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                                  }`}
                               >
                                 {task.completed ? "Completed" : "Pending"}
                               </div>
@@ -1277,11 +1257,10 @@ export function CalendarScheduler() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className={`${
-                                task.completed
+                              className={`${task.completed
                                   ? "text-[#71717a] hover:text-[#18181b]"
                                   : "text-green-600 hover:text-green-700"
-                              }`}
+                                }`}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 // Toggle completion functionality

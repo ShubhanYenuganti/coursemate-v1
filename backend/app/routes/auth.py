@@ -255,8 +255,14 @@ def refresh():
         expires_delta=expires
     )
     
+    refresh_token = create_access_token(
+        identity=current_user_id,
+        expires_delta=timedelta(days=30)
+    )
+    
     return jsonify({
         'access_token': new_token,
+        'refresh_token': refresh_token,
         'user': {
             'id': user.id,
             'email': user.email,

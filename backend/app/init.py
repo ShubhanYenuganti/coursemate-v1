@@ -49,6 +49,7 @@ def create_app():
     from app.routes.courses import courses_bp
     from app.routes.health import health_bp
     from app.routes.oauth import oauth_bp, register_oauth
+    from app.routes.calendar import calendar_bp, register_calendar_oauth
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
@@ -56,6 +57,8 @@ def create_app():
     app.register_blueprint(health_bp)
     register_oauth(app)
     app.register_blueprint(oauth_bp)
+    app.register_blueprint(calendar_bp)
+    register_calendar_oauth(app)
 
     @app.route("/")
     def index():
