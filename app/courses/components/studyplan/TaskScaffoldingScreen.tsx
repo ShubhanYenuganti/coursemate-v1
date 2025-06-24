@@ -1,97 +1,44 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Calendar, Clock, Save, Plus, Trash2 } from 'lucide-react';
-import { Goal, Task, Subtask } from './types';
+import React, { useState } from 'react';
+import { ArrowLeft, Plus, Save, Clock, Calendar, X } from 'lucide-react';
+import { GoalWithProgress, Task, Subtask } from './types';
 
 interface TaskScaffoldingScreenProps {
-  isOpen: boolean;
-  onClose: () => void;
-  goal: Goal | null;
-  onSave: (goal: Goal, tasks: Task[], subtasks: Subtask[]) => void;
+  goal: GoalWithProgress;
+  onBack: () => void;
+  onSave: (tasks: Task[], subtasks: Subtask[]) => void;
 }
 
-interface TaskTemplate {
-  id: string;
-  name: string;
-  scheduledDate: string;
-  subtasks: {
-    name: string;
-    type: Subtask['type'];
-    estimatedTimeMinutes: number;
-  }[];
-}
+const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onBack, onSave }) => {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [currentStep, setCurrentStep] = useState<'tasks' | 'subtasks'>('tasks');
 
-const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ 
-  isOpen, 
-  onClose, 
-  goal, 
-  onSave 
-}) => {
-  const [tasks, setTasks] = useState<TaskTemplate[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (goal && isOpen) {
-      generateTaskSchedule(goal);
-    }
-  }, [goal, isOpen]);
-
-  const generateTaskSchedule = (goal: Goal) => {
-    if (!goal) return;
-
-    const startDate = new Date();
-    const endDate = new Date(goal.targetDate);
-    const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  // Generate initial task schedule based on goal
+  const generateTaskSchedule = () => {
+    const targetDate = new Date(goal.targetDate);
+    const today = new Date();
+    const daysUntilTarget = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
-    // Calculate how many study sessions we need based on frequency
-    let studyDays = [];
-    if (goal.frequency === 'daily') {
-      studyDays = Array.from({ length: totalDays }, (_, i) => {
-        const date = new Date(startDate);
-        date.setDate(date.getDate() + i);
-        return date;
-      });
-    } else if (goal.frequency === 'weekly') {
-      const weeksCount = Math.ceil(totalDays / 7);
-      studyDays = Array.from({ length: weeksCount }, (_, i) => {
-        const date = new Date(startDate);
-        date.setDate(date.getDate() + (i * 7));
-        return date;
-      });
-    } else if (goal.frequency === 'custom' && goal.customScheduleDays) {
-      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-      const customDayNumbers = goal.customScheduleDays.map(day => dayNames.indexOf(day));
+    const taskCount = Math.max(3, Math.ceil(daysUntilTarget / 3)); // At least 3 tasks, spread out
+    const newTasks: Task[] = [];
+    
+    for (let i = 0; i < taskCount; i++) {
+      const taskDate = new Date(today);
+      taskDate.setDate(today.getDate() + Math.floor((i + 1) * daysUntilTarget / taskCount));
       
-      for (let i = 0; i < totalDays; i++) {
-        const date = new Date(startDate);
-        date.setDate(date.getDate() + i);
-        if (customDayNumbers.includes(date.getDay())) {
-          studyDays.push(date);
-        }
-      }
+      newTasks.push({
+        id: `temp-task-${i}`,
+        goalId: goal.id,
+        name: '',
+        scheduledDate: taskDate.toISOString().split('T')[0],
+        completed: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
     }
-
-    // Generate task templates
-    const taskTemplates: TaskTemplate[] = studyDays.slice(0, Math.min(studyDays.length, 10)).map((date, index) => ({
-      id: `task-${index + 1}`,
-      name: `Study Session ${index + 1}`,
-      scheduledDate: date.toISOString().split('T')[0],
-      subtasks: generateSubtasksForSession(goal.workMinutesPerDay)
-    }));
-
-    setTasks(taskTemplates);
-  };
-
-  const generateSubtasksForSession = (totalMinutes: number) => {
-    const subtaskTypes: Subtask['type'][] = ['reading', 'practice', 'review'];
-    const subtasksPerSession = 3;
-    const timePerSubtask = Math.floor(totalMinutes / subtasksPerSession);
-
-    return Array.from({ length: subtasksPerSession }, (_, index) => ({
-      name: `${subtaskTypes[index] || 'other'} activity`,
-      type: subtaskTypes[index] || 'other',
-      estimatedTimeMinutes: timePerSubtask
-    }));
+    
+    setTasks(newTasks);
   };
 
   const handleTaskNameChange = (taskId: string, name: string) => {
@@ -100,213 +47,295 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({
     ));
   };
 
-  const handleSubtaskChange = (taskId: string, subtaskIndex: number, field: string, value: any) => {
+  const handleTaskDateChange = (taskId: string, date: string) => {
     setTasks(prev => prev.map(task => 
-      task.id === taskId 
-        ? {
-            ...task,
-            subtasks: task.subtasks.map((subtask, index) => 
-              index === subtaskIndex 
-                ? { ...subtask, [field]: value }
-                : subtask
-            )
-          }
-        : task
+      task.id === taskId ? { ...task, scheduledDate: date } : task
     ));
   };
 
-  const handleAddTask = () => {
-    const newTask: TaskTemplate = {
-      id: `task-${Date.now()}`,
-      name: `Study Session ${tasks.length + 1}`,
+  const addTask = () => {
+    const newTask: Task = {
+      id: `temp-task-${Date.now()}`,
+      goalId: goal.id,
+      name: '',
       scheduledDate: new Date().toISOString().split('T')[0],
-      subtasks: generateSubtasksForSession(goal?.workMinutesPerDay || 30)
+      completed: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
     setTasks(prev => [...prev, newTask]);
   };
 
-  const handleRemoveTask = (taskId: string) => {
+  const removeTask = (taskId: string) => {
     setTasks(prev => prev.filter(task => task.id !== taskId));
+    setSubtasks(prev => prev.filter(subtask => !subtask.taskId.startsWith(taskId)));
   };
 
-  const handleSave = async () => {
-    if (!goal) return;
-
-    setIsSubmitting(true);
-    try {
-      const createdTasks: Task[] = tasks.map((task, index) => ({
-        id: Date.now().toString() + index,
-        goalId: goal.id,
-        name: task.name,
-        scheduledDate: task.scheduledDate,
-        completed: false,
-        order: index + 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }));
-
-      const createdSubtasks: Subtask[] = [];
-      tasks.forEach((task, taskIndex) => {
-        task.subtasks.forEach((subtask, subtaskIndex) => {
-          createdSubtasks.push({
-            id: `${Date.now()}-${taskIndex}-${subtaskIndex}`,
-            taskId: createdTasks[taskIndex].id,
-            name: subtask.name,
-            type: subtask.type,
-            estimatedTimeMinutes: subtask.estimatedTimeMinutes,
+  const generateSubtasks = () => {
+    const newSubtasks: Subtask[] = [];
+    
+    tasks.forEach(task => {
+      if (task.name.trim()) {
+        // Generate 3 subtasks per task
+        const subtaskTypes: Array<'reading' | 'flashcard' | 'quiz' | 'practice' | 'review' | 'other'> = [
+          'reading', 'practice', 'review'
+        ];
+        
+        subtaskTypes.forEach((type, index) => {
+          newSubtasks.push({
+            id: `temp-subtask-${task.id}-${index}`,
+            taskId: task.id,
+            name: '',
+            type,
+            estimatedTimeMinutes: Math.ceil(goal.workMinutesPerDay / 3),
             completed: false,
-            order: subtaskIndex + 1,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
         });
-      });
-
-      onSave(goal, createdTasks, createdSubtasks);
-      onClose();
-    } catch (error) {
-      console.error('Error saving scaffolded tasks:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
+      }
+    });
+    
+    setSubtasks(newSubtasks);
+    setCurrentStep('subtasks');
   };
 
-  if (!isOpen || !goal) return null;
+  const handleSubtaskChange = (subtaskId: string, field: string, value: any) => {
+    setSubtasks(prev => prev.map(subtask => 
+      subtask.id === subtaskId ? { ...subtask, [field]: value } : subtask
+    ));
+  };
+
+  const addSubtask = (taskId: string) => {
+    const newSubtask: Subtask = {
+      id: `temp-subtask-${taskId}-${Date.now()}`,
+      taskId,
+      name: '',
+      type: 'other',
+      estimatedTimeMinutes: 15,
+      completed: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setSubtasks(prev => [...prev, newSubtask]);
+  };
+
+  const removeSubtask = (subtaskId: string) => {
+    setSubtasks(prev => prev.filter(subtask => subtask.id !== subtaskId));
+  };
+
+  const handleSave = () => {
+    const validTasks = tasks.filter(task => task.name.trim());
+    const validSubtasks = subtasks.filter(subtask => subtask.name.trim());
+    
+    // Generate real IDs
+    const finalTasks = validTasks.map((task, index) => ({
+      ...task,
+      id: `task-${Date.now()}-${index}`
+    }));
+    
+    const finalSubtasks = validSubtasks.map((subtask, index) => ({
+      ...subtask,
+      id: `subtask-${Date.now()}-${index}`,
+      taskId: finalTasks.find(task => task.id === subtask.taskId)?.id || subtask.taskId
+    }));
+    
+    onSave(finalTasks, finalSubtasks);
+  };
+
+  const canProceedToSubtasks = tasks.some(task => task.name.trim());
+  const canSave = currentStep === 'subtasks' && subtasks.some(subtask => subtask.name.trim());
 
   return (
-    <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-          <div className="max-w-4xl mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={onClose}
-                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-800">Set Up Your Study Plan</h1>
-                  <p className="text-gray-600">Customize tasks for: {goal.title}</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleAddTask}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Task</span>
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={isSubmitting || tasks.length === 0}
-                  className="flex items-center space-x-2 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{isSubmitting ? 'Saving...' : 'Save Goal'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
+    <div className="max-w-4xl mx-auto p-6">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <button
+          onClick={onBack}
+          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Set Up Your Study Plan</h1>
+          <p className="text-gray-600">Create tasks and subtasks for: {goal.title}</p>
         </div>
+      </div>
 
-        {/* Content */}
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          <div className="space-y-6">
-            {tasks.map((task, taskIndex) => (
-              <div key={task.id} className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1 pr-4">
+      {/* Progress Steps */}
+      <div className="flex items-center gap-4 mb-8">
+        <div className={`flex items-center gap-2 ${currentStep === 'tasks' ? 'text-blue-600' : 'text-gray-400'}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+            currentStep === 'tasks' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+          }`}>
+            1
+          </div>
+          <span className="font-medium">Define Tasks</span>
+        </div>
+        <div className="flex-1 h-px bg-gray-300" />
+        <div className={`flex items-center gap-2 ${currentStep === 'subtasks' ? 'text-blue-600' : 'text-gray-400'}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+            currentStep === 'subtasks' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+          }`}>
+            2
+          </div>
+          <span className="font-medium">Add Subtasks</span>
+        </div>
+      </div>
+
+      {currentStep === 'tasks' ? (
+        /* Task Creation Step */
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Step 1: Define Your Tasks</h2>
+            <button
+              onClick={generateTaskSchedule}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Auto-generate Schedule
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {tasks.map((task, index) => (
+              <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
                     <input
                       type="text"
                       value={task.name}
                       onChange={(e) => handleTaskNameChange(task.id, e.target.value)}
-                      className="text-lg font-medium bg-transparent border-none outline-none focus:bg-gray-50 rounded px-2 py-1 w-full"
-                      placeholder="Enter task name"
+                      placeholder={`Task ${index + 1} (e.g., Review Chapter ${index + 1})`}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
-                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="w-4 h-4" />
-                        <input
-                          type="date"
-                          value={task.scheduledDate}
-                          onChange={(e) => setTasks(prev => prev.map(t => 
-                            t.id === task.id ? { ...t, scheduledDate: e.target.value } : t
-                          ))}
-                          className="bg-transparent border-none outline-none"
-                        />
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Clock className="w-4 h-4" />
-                        <span>{task.subtasks.reduce((sum, s) => sum + s.estimatedTimeMinutes, 0)} min total</span>
-                      </div>
-                    </div>
                   </div>
-                  <button
-                    onClick={() => handleRemoveTask(task.id)}
-                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                    title="Remove task"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-gray-700">Subtasks:</h4>
-                  {task.subtasks.map((subtask, subtaskIndex) => (
-                    <div key={subtaskIndex} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                      <span className="text-sm text-gray-500 w-6">{subtaskIndex + 1}.</span>
-                      <input
-                        type="text"
-                        value={subtask.name}
-                        onChange={(e) => handleSubtaskChange(task.id, subtaskIndex, 'name', e.target.value)}
-                        className="flex-1 bg-transparent border-none outline-none"
-                        placeholder="Enter subtask name"
-                      />
-                      <select
-                        value={subtask.type}
-                        onChange={(e) => handleSubtaskChange(task.id, subtaskIndex, 'type', e.target.value)}
-                        className="text-sm border-none bg-transparent outline-none"
-                      >
-                        <option value="reading">Reading</option>
-                        <option value="practice">Practice</option>
-                        <option value="flashcard">Flashcard</option>
-                        <option value="quiz">Quiz</option>
-                        <option value="review">Review</option>
-                        <option value="other">Other</option>
-                      </select>
-                      <div className="flex items-center space-x-1">
-                        <input
-                          type="number"
-                          value={subtask.estimatedTimeMinutes}
-                          onChange={(e) => handleSubtaskChange(task.id, subtaskIndex, 'estimatedTimeMinutes', parseInt(e.target.value) || 0)}
-                          className="w-16 text-sm text-center bg-transparent border-none outline-none"
-                          min="5"
-                          max="120"
-                        />
-                        <span className="text-sm text-gray-500">min</span>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={task.scheduledDate}
+                      onChange={(e) => handleTaskDateChange(task.id, e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button
+                      onClick={() => removeTask(task.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {tasks.length === 0 && (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Calendar className="w-8 h-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-800 mb-2">No tasks generated</h3>
-              <p className="text-gray-600 mb-6">Click "Add Task" to create your first study session</p>
-            </div>
-          )}
+          <button
+            onClick={addTask}
+            className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Another Task
+          </button>
+
+          <div className="flex justify-end">
+            <button
+              onClick={generateSubtasks}
+              disabled={!canProceedToSubtasks}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Continue to Subtasks
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* Subtask Creation Step */
+        <div className="space-y-6">
+          <h2 className="text-lg font-semibold text-gray-900">Step 2: Add Subtasks</h2>
+
+          <div className="space-y-6">
+            {tasks.filter(task => task.name.trim()).map((task) => {
+              const taskSubtasks = subtasks.filter(subtask => subtask.taskId === task.id);
+              return (
+                <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <h3 className="font-medium text-gray-900">{task.name}</h3>
+                    <span className="text-sm text-gray-500">
+                      {new Date(task.scheduledDate).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {taskSubtasks.map((subtask, index) => (
+                      <div key={subtask.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={subtask.name}
+                            onChange={(e) => handleSubtaskChange(subtask.id, 'name', e.target.value)}
+                            placeholder={`Subtask ${index + 1} (e.g., Read pages 1-20)`}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <select
+                          value={subtask.type}
+                          onChange={(e) => handleSubtaskChange(subtask.id, 'type', e.target.value)}
+                          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="reading">Reading</option>
+                          <option value="flashcard">Flashcard</option>
+                          <option value="quiz">Quiz</option>
+                          <option value="practice">Practice</option>
+                          <option value="review">Review</option>
+                          <option value="other">Other</option>
+                        </select>
+                        <input
+                          type="number"
+                          value={subtask.estimatedTimeMinutes}
+                          onChange={(e) => handleSubtaskChange(subtask.id, 'estimatedTimeMinutes', parseInt(e.target.value) || 0)}
+                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          min="5"
+                          max="120"
+                        />
+                        <span className="text-sm text-gray-500">min</span>
+                        <button
+                          onClick={() => removeSubtask(subtask.id)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => addSubtask(task.id)}
+                    className="mt-3 w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Subtask
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              onClick={() => setCurrentStep('tasks')}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Back to Tasks
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!canSave}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              Save Study Plan
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

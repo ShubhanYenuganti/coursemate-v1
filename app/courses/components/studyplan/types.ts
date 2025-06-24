@@ -2,11 +2,10 @@ export interface Goal {
   id: string;
   courseId: string;
   title: string;
-  targetDate: string;
+  targetDate: string; // ISO date string
   workMinutesPerDay: number;
   frequency: 'daily' | 'weekly' | 'custom';
-  customScheduleDays?: string[]; // ['monday', 'wednesday', 'friday']
-  completed: boolean;
+  customScheduleDays?: number[]; // Array of day numbers (0-6, where 0 is Sunday)
   createdAt: string;
   updatedAt: string;
 }
@@ -15,9 +14,8 @@ export interface Task {
   id: string;
   goalId: string;
   name: string;
-  scheduledDate: string;
+  scheduledDate: string; // ISO date string
   completed: boolean;
-  order: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,10 +24,9 @@ export interface Subtask {
   id: string;
   taskId: string;
   name: string;
-  type: 'reading' | 'practice' | 'flashcard' | 'quiz' | 'review' | 'other';
+  type: 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review' | 'other';
   estimatedTimeMinutes: number;
   completed: boolean;
-  order: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,4 +41,17 @@ export interface StudyPlanStats {
   averageCompletionRate: number;
   tasksOverdue: number;
   estimatedMinutesRemaining: number;
+}
+
+export interface GoalWithProgress extends Goal {
+  progress: number; // 0-100
+  totalTasks: number;
+  completedTasks: number;
+}
+
+export interface TaskWithProgress extends Task {
+  progress: number; // 0-100
+  totalSubtasks: number;
+  completedSubtasks: number;
+  subtasks: Subtask[];
 } 

@@ -1,116 +1,105 @@
 "use client";
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Calendar, Clock, CheckCircle, Edit, Play } from 'lucide-react';
-import { Task } from './types';
+import { ChevronDown, ChevronRight, Calendar, Clock, Edit, Play } from 'lucide-react';
+import { TaskWithProgress } from './types';
 import SubtaskList from './SubtaskList';
+import TaskEditorModal from './TaskEditorModal';
 
 interface TaskCardProps {
-  task: Task;
-  onUpdate: (task: Task) => void;
+  task: TaskWithProgress;
+  onTaskUpdated?: (task: TaskWithProgress) => void;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdate }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  
-  // Mock subtask progress - replace with real data
-  const completedSubtasks = Math.floor(Math.random() * 3) + 1;
-  const totalSubtasks = 3;
-  const subtaskProgress = Math.round((completedSubtasks / totalSubtasks) * 100);
-  
-  const handleToggleComplete = () => {
-    onUpdate({ ...task, completed: !task.completed });
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+
+  const getProgressColor = (progress: number) => {
+    if (progress >= 80) return 'bg-green-500';
+    if (progress >= 50) return 'bg-yellow-500';
+    return 'bg-red-500';
   };
 
-  const handleContinueTask = () => {
-    // TODO: Navigate to focused study session for this task
-    console.log('Continue task:', task.id);
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
-  const isOverdue = new Date(task.scheduledDate) < new Date() && !task.completed;
-  const isDueToday = new Date(task.scheduledDate).toDateString() === new Date().toDateString();
-
-  const getDateColor = () => {
-    if (task.completed) return 'text-green-600';
-    if (isOverdue) return 'text-red-600';
-    if (isDueToday) return 'text-orange-600';
-    return 'text-gray-600';
+  const getDaysUntilScheduled = () => {
+    const scheduledDate = new Date(task.scheduledDate);
+    const today = new Date();
+    const diffTime = scheduledDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
   };
 
-  const getDateText = () => {
-    if (isOverdue) return 'Overdue';
-    if (isDueToday) return 'Due today';
-    return new Date(task.scheduledDate).toLocaleDateString();
+  const daysUntilScheduled = getDaysUntilScheduled();
+  const isOverdue = daysUntilScheduled < 0;
+
+  const handleTaskUpdated = (updatedTask: TaskWithProgress) => {
+    if (onTaskUpdated) {
+      onTaskUpdated(updatedTask);
+    }
   };
 
   return (
-    <div className={`bg-gray-50 rounded-lg border transition-all duration-200 ${
-      task.completed ? 'border-green-200 bg-green-50' : 'border-gray-200 hover:border-gray-300'
-    }`}>
-      <div className="p-4">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-start space-x-3 flex-1">
-            <button
-              onClick={handleToggleComplete}
-              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors mt-0.5 ${
-                task.completed 
-                  ? 'bg-green-500 border-green-500' 
-                  : 'border-gray-300 hover:border-green-400'
-              }`}
-            >
-              {task.completed && <CheckCircle className="w-3 h-3 text-white" />}
-            </button>
+    <>
+      <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <h4 className="font-medium text-gray-900">{task.name}</h4>
+              {isOverdue && (
+                <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-medium">
+                  Overdue
+                </span>
+              )}
+            </div>
             
-            <div className="flex-1 min-w-0">
-              <h4 className={`font-medium text-gray-800 ${
-                task.completed ? 'line-through' : ''
-              }`}>
-                {task.name}
-              </h4>
-              
-              {/* Task Details */}
-              <div className="flex items-center space-x-4 mt-1 text-sm">
-                <div className={`flex items-center space-x-1 ${getDateColor()}`}>
-                  <Calendar className="w-3 h-3" />
-                  <span>{getDateText()}</span>
-                </div>
-                
-                {!task.completed && (
-                  <div className="flex items-center space-x-1 text-gray-600">
-                    <Clock className="w-3 h-3" />
-                    <span>{completedSubtasks}/{totalSubtasks} subtasks</span>
-                  </div>
-                )}
+            <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
+              <div className="flex items-center gap-1">
+                <Calendar className="w-4 h-4" />
+                <span>{formatDate(task.scheduledDate)}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span>{task.completedSubtasks}/{task.totalSubtasks} subtasks</span>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between text-sm mb-1">
+                <span className="text-gray-600">Progress</span>
+                <span className="font-medium">{task.progress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(task.progress)}`}
+                  style={{ width: `${task.progress}%` }}
+                />
               </div>
             </div>
           </div>
 
-          <div className="flex items-center space-x-1">
-            {/* Continue Button */}
-            {!task.completed && (
-              <button
-                onClick={handleContinueTask}
-                className="p-2 text-blue-500 hover:bg-blue-50 rounded transition-colors"
-                title="Continue task"
-              >
-                <Play className="w-4 h-4" />
-              </button>
-            )}
-
-            {/* Edit Button */}
+          <div className="flex items-center gap-2 ml-4">
             <button
-              onClick={() => setIsEditing(true)}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-              title="Edit task"
+              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              title="Continue Task"
+            >
+              <Play className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setIsEditorOpen(true)}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+              title="Edit Task"
             >
               <Edit className="w-4 h-4" />
             </button>
-
-            {/* Expand Button */}
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
             >
               {isExpanded ? (
                 <ChevronDown className="w-4 h-4" />
@@ -121,30 +110,22 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdate }) => {
           </div>
         </div>
 
-        {/* Progress Bar (only show if not completed) */}
-        {!task.completed && (
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-gray-600">Subtask Progress</span>
-              <span className="text-xs text-gray-600">{subtaskProgress}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-1.5">
-              <div 
-                className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-                style={{ width: `${subtaskProgress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Expanded Content - Subtasks */}
+        {/* Expanded Subtasks */}
         {isExpanded && (
-          <div className="border-t border-gray-200 pt-3 mt-3">
-            <SubtaskList taskId={task.id} />
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <SubtaskList taskId={task.id} subtasks={task.subtasks} />
           </div>
         )}
       </div>
-    </div>
+
+      {/* Task Editor Modal */}
+      <TaskEditorModal
+        isOpen={isEditorOpen}
+        onClose={() => setIsEditorOpen(false)}
+        task={task}
+        onSave={handleTaskUpdated}
+      />
+    </>
   );
 };
 
