@@ -9,6 +9,11 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  webpack: (config) => {
+    // Add support for loading PDF.js worker
+    config.resolve.alias.canvas = false;
+    return config;
+  },
   async rewrites() {
     return [
       {

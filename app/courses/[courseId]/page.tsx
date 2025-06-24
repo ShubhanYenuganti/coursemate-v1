@@ -11,6 +11,7 @@ import MaterialsList from "../components/MaterialsList";
 import UploadMaterials from "../components/UploadMaterials";
 import RecommendedResources from "../components/RecommendedResources";
 import AIChatInterface from "../components/AIChatInterface";
+import { StudyPlanTab } from "../components/studyplan";
 
 // helper to map subject to icon
 const getSubjectIcon = (subject: string) => {
@@ -141,7 +142,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
       </div>
     ),
     ai: <AIChatInterface courseId={course.dbId} />,
-    study: <div className="text-center text-gray-400">[Study Plan tab coming soon]</div>,
+    study: <StudyPlanTab courseId={course.dbId} />,
     community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
     progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
   };
@@ -163,7 +164,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
         <h2 className="text-3xl font-bold text-gray-800 truncate mr-4">{course.title}</h2>
         <span className="text-xl text-gray-500 font-medium">- {tabLabel}</span>
       </div>
-      <div className={`mx-auto p-8 ${activeTab === 'ai' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+      <div className={`mx-auto p-8 pb-24 ${activeTab === 'ai' ? 'max-w-7xl' : 'max-w-5xl'}`}>
         <CourseDetailTabs activeTab={activeTab} setActiveTab={handleTabChange} />
         <div className="relative overflow-hidden min-h-[400px]">
           <div 
