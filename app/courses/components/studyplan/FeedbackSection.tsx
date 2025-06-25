@@ -133,22 +133,22 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ goals }) => {
           <h4 className="text-sm font-medium text-gray-700 mb-3">Recommendations</h4>
           <div className="space-y-2">
             {stats.overdueGoals > 0 && (
-              <div className="text-sm text-gray-600">
+              <div key="rec-overdue" className="text-sm text-gray-600">
                 • Focus on overdue goals first to get back on track
               </div>
             )}
             {stats.averageProgress < 50 && (
-              <div className="text-sm text-gray-600">
+              <div key="rec-progress" className="text-sm text-gray-600">
                 • Consider breaking down larger goals into smaller tasks
               </div>
             )}
             {stats.activeGoals > 3 && (
-              <div className="text-sm text-gray-600">
+              <div key="rec-active" className="text-sm text-gray-600">
                 • You have many active goals - consider prioritizing the most important ones
               </div>
             )}
             {stats.totalGoals === 0 && (
-              <div className="text-sm text-gray-600">
+              <div key="rec-empty" className="text-sm text-gray-600">
                 • Create your first study goal to start tracking progress
               </div>
             )}
