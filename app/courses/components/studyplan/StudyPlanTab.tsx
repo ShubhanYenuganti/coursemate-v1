@@ -1,245 +1,393 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { Plus, Target, Calendar, Clock } from 'lucide-react';
-import { Goal, StudyPlanStats } from './types';
+import { Plus, Target, TrendingUp } from 'lucide-react';
+import { getGoalsWithProgress } from './mockData';
+import { GoalWithProgress, Goal, Task, Subtask } from './types';
 import GoalCard from './GoalCard';
 import AddGoalModal from './AddGoalModal';
+import TaskScaffoldingScreen from './TaskScaffoldingScreen';
 import FeedbackSection from './FeedbackSection';
+import { toast } from 'react-hot-toast';
+import { Toaster } from 'react-hot-toast';
 
 interface StudyPlanTabProps {
   courseId: string;
 }
 
-// Mock data - replace with real API calls
-const mockGoals: Goal[] = [
-  {
-    id: '1',
-    courseId: 'course-1',
-    title: 'Final Exam Preparation',
-    targetDate: '2024-12-15',
-    workMinutesPerDay: 60,
-    frequency: 'daily',
-    completed: false,
-    createdAt: '2024-11-01',
-    updatedAt: '2024-11-01'
-  },
-  {
-    id: '2',
-    courseId: 'course-1',
-    title: 'Complete Assignment 3',
-    targetDate: '2024-11-30',
-    workMinutesPerDay: 45,
-    frequency: 'weekly',
-    customScheduleDays: ['monday', 'wednesday', 'friday'],
-    completed: true,
-    createdAt: '2024-11-01',
-    updatedAt: '2024-11-25'
-  },
-  {
-    id: '3',
-    courseId: 'course-1',
-    title: 'Master Chapter 5 Concepts',
-    targetDate: '2024-12-01',
-    workMinutesPerDay: 30,
-    frequency: 'daily',
-    completed: false,
-    createdAt: '2024-11-01',
-    updatedAt: '2024-11-01'
-  }
-];
-
 const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [stats, setStats] = useState<StudyPlanStats | null>(null);
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isScaffoldingOpen, setIsScaffoldingOpen] = useState(false);
+  const [newGoal, setNewGoal] = useState<GoalWithProgress | null>(null);
+  const [goals, setGoals] = useState<GoalWithProgress[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // Fetch goals from the backend
   useEffect(() => {
-    // Simulate API call to fetch goals
     const fetchGoals = async () => {
-      setIsLoading(true);
-      // TODO: Replace with actual API call
-      setTimeout(() => {
-        setGoals(mockGoals.filter(goal => goal.courseId === courseId));
-        setStats({
-          totalGoals: 3,
-          completedGoals: 1,
-          totalTasks: 8,
-          completedTasks: 5,
-          totalSubtasks: 24,
-          completedSubtasks: 15,
-          averageCompletionRate: 62.5,
-          tasksOverdue: 2,
-          estimatedMinutesRemaining: 450
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/courses/${courseId}/goals`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
         });
-        setIsLoading(false);
-      }, 1000);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch goals');
+        }
+
+        const data = await response.json();
+        
+        // Transform backend data to match frontend types
+        const transformedGoals: GoalWithProgress[] = data.map((goal: any) => ({
+          id: goal.id,
+          courseId: courseId,
+          title: goal.goal_descr,
+          targetDate: goal.due_date || new Date().toISOString(),
+          workMinutesPerDay: 60, // Default value
+          frequency: 'daily', // Default value
+          createdAt: goal.created_at,
+          updatedAt: goal.updated_at,
+          progress: goal.progress,
+          totalTasks: goal.total_tasks,
+          completedTasks: goal.completed_tasks
+        }));
+        
+        setGoals(transformedGoals);
+      } catch (error) {
+        console.error('Error fetching goals:', error);
+        // Fallback to mock data if API fails
+        setGoals(getGoalsWithProgress(courseId));
+        toast.error('Failed to load goals. Using sample data instead.');
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchGoals();
   }, [courseId]);
 
-  const handleAddGoal = (goalData: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newGoal: Goal = {
-      ...goalData,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setGoals(prev => [...prev, newGoal]);
-    setIsAddGoalModalOpen(false);
+  const handleGoalAdded = async (goal: GoalWithProgress) => {
+    try {
+      // Save goal to backend
+      const response = await fetch(`/api/courses/${courseId}/goals`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          goal_descr: goal.title,
+          due_date: goal.targetDate
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create goal');
+      }
+
+      const savedGoal = await response.json();
+      
+      // Transform backend response to match frontend types
+      const transformedGoal: GoalWithProgress = {
+        id: savedGoal.id,
+        courseId: courseId,
+        title: savedGoal.goal_descr,
+        targetDate: savedGoal.due_date || new Date().toISOString(),
+        workMinutesPerDay: goal.workMinutesPerDay,
+        frequency: goal.frequency,
+        customScheduleDays: goal.customScheduleDays,
+        createdAt: savedGoal.created_at,
+        updatedAt: savedGoal.updated_at,
+        progress: savedGoal.progress,
+        totalTasks: savedGoal.total_tasks,
+        completedTasks: savedGoal.completed_tasks
+      };
+      
+      setNewGoal(transformedGoal);
+      setIsAddGoalModalOpen(false);
+      setIsScaffoldingOpen(true);
+    } catch (error) {
+      console.error('Error creating goal:', error);
+      toast.error('Failed to create goal. Please try again.');
+      // Fallback to local state for demo purposes
+      setNewGoal(goal);
+      setIsAddGoalModalOpen(false);
+      setIsScaffoldingOpen(true);
+    }
   };
 
-  const handleGoalUpdate = (updatedGoal: Goal) => {
-    setGoals(prev => prev.map(goal => 
-      goal.id === updatedGoal.id ? updatedGoal : goal
-    ));
+  const handleScaffoldingSave = async (tasks: Task[], subtasks: Subtask[]) => {
+    try {
+      setIsScaffoldingOpen(false);
+      setNewGoal(null);
+      
+      // Refetch goals from the backend to ensure data consistency
+      setLoading(true);
+      const response = await fetch(`/api/courses/${courseId}/goals`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch goals after save');
+      }
+
+      const data = await response.json();
+      
+      // Transform backend data to match frontend types
+      const transformedGoals: GoalWithProgress[] = data.map((goal: any) => ({
+        id: goal.id,
+        courseId: courseId,
+        title: goal.goal_descr,
+        targetDate: goal.due_date || new Date().toISOString(),
+        workMinutesPerDay: 60, // Default value
+        frequency: 'daily', // Default value
+        createdAt: goal.created_at,
+        updatedAt: goal.updated_at,
+        progress: goal.progress,
+        totalTasks: goal.total_tasks,
+        completedTasks: goal.completed_tasks
+      }));
+      
+      setGoals(transformedGoals);
+    } catch (error) {
+      console.error('Error refetching goals after save:', error);
+      toast.error('Failed to refresh goals. Please reload the page.');
+      
+      // If refetching fails, at least update the local state as before
+      if (newGoal) {
+        const updatedGoal: GoalWithProgress = {
+          ...newGoal,
+          progress: 0,
+          totalTasks: tasks.length,
+          completedTasks: 0
+        };
+        setGoals(prev => [...prev, updatedGoal]);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const activeGoals = goals.filter(goal => !goal.completed);
-  const completedGoals = goals.filter(goal => goal.completed);
+  const handleScaffoldingBack = () => {
+    // If we have a real goal ID and the user goes back, delete the goal
+    if (newGoal && newGoal.id && !newGoal.id.startsWith('temp-')) {
+      // Delete the goal from the backend
+      fetch(`/api/goals/${newGoal.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }).catch(error => {
+        console.error('Error deleting goal:', error);
+      });
+    }
+    
+    setIsScaffoldingOpen(false);
+    setNewGoal(null);
+  };
 
-  if (isLoading) {
+  const handleGoalUpdated = async (updatedGoal: GoalWithProgress) => {
+    try {
+      // Update goal in backend
+      const response = await fetch(`/api/goals/${updatedGoal.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          goal_descr: updatedGoal.title,
+          due_date: updatedGoal.targetDate,
+          goal_completed: updatedGoal.progress === 100
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update goal');
+      }
+      
+      // Refetch goals from the backend to ensure data consistency
+      setLoading(true);
+      const fetchResponse = await fetch(`/api/courses/${courseId}/goals`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!fetchResponse.ok) {
+        throw new Error('Failed to fetch goals after update');
+      }
+
+      const data = await fetchResponse.json();
+      
+      // Transform backend data to match frontend types
+      const transformedGoals: GoalWithProgress[] = data.map((goal: any) => ({
+        id: goal.id,
+        courseId: courseId,
+        title: goal.goal_descr,
+        targetDate: goal.due_date || new Date().toISOString(),
+        workMinutesPerDay: 60, // Default value
+        frequency: 'daily', // Default value
+        createdAt: goal.created_at,
+        updatedAt: goal.updated_at,
+        progress: goal.progress,
+        totalTasks: goal.total_tasks,
+        completedTasks: goal.completed_tasks
+      }));
+      
+      setGoals(transformedGoals);
+    } catch (error) {
+      console.error('Error updating goal:', error);
+      toast.error('Failed to update goal. Please try again.');
+      // Update local state anyway for demo purposes
+      setGoals(prev => prev.map(goal => goal.id === updatedGoal.id ? updatedGoal : goal));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoalDeleted = async (goalId: string) => {
+    try {
+      // Delete goal from backend
+      const response = await fetch(`/api/goals/${goalId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete goal');
+      }
+
+      toast.success('Goal deleted successfully');
+      
+      // Refetch goals from the backend to ensure data consistency
+      setLoading(true);
+      const fetchResponse = await fetch(`/api/courses/${courseId}/goals`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!fetchResponse.ok) {
+        throw new Error('Failed to fetch goals after deletion');
+      }
+
+      const data = await fetchResponse.json();
+      
+      // Transform backend data to match frontend types
+      const transformedGoals: GoalWithProgress[] = data.map((goal: any) => ({
+        id: goal.id,
+        courseId: courseId,
+        title: goal.goal_descr,
+        targetDate: goal.due_date || new Date().toISOString(),
+        workMinutesPerDay: 60, // Default value
+        frequency: 'daily', // Default value
+        createdAt: goal.created_at,
+        updatedAt: goal.updated_at,
+        progress: goal.progress,
+        totalTasks: goal.total_tasks,
+        completedTasks: goal.completed_tasks
+      }));
+      
+      setGoals(transformedGoals);
+    } catch (error) {
+      console.error('Error deleting goal:', error);
+      toast.error('Failed to delete goal. Please try again.');
+      // Remove from local state anyway for demo purposes
+      setGoals(prev => prev.filter(goal => goal.id !== goalId));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (isScaffoldingOpen && newGoal) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <span className="ml-3 text-gray-600">Loading study plan...</span>
-      </div>
+      <>
+        <Toaster position="top-right" />
+        <TaskScaffoldingScreen
+          goal={newGoal}
+          onBack={handleScaffoldingBack}
+          onSave={handleScaffoldingSave}
+        />
+      </>
     );
   }
 
   return (
     <div className="space-y-6">
+      <Toaster position="top-right" />
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-            <Target className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">Study Plan</h2>
-            <p className="text-gray-600">Track your goals and stay on schedule</p>
-          </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Study Plan</h2>
+          <p className="text-gray-600 mt-1">
+            Track your learning goals and progress for this course
+          </p>
         </div>
         <button
           onClick={() => setIsAddGoalModalOpen(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
-          <span>Add Goal</span>
+          Add Goal
         </button>
       </div>
 
-      {/* Quick Stats */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center space-x-2">
-              <Target className="w-5 h-5 text-blue-500" />
-              <span className="text-sm font-medium text-gray-600">Active Goals</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-800 mt-1">{activeGoals.length}</p>
-          </div>
-          
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-5 h-5 text-green-500" />
-              <span className="text-sm font-medium text-gray-600">Tasks Due</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-800 mt-1">{stats.tasksOverdue}</p>
-          </div>
-          
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center space-x-2">
-              <Clock className="w-5 h-5 text-orange-500" />
-              <span className="text-sm font-medium text-gray-600">Est. Time Left</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-800 mt-1">{Math.round(stats.estimatedMinutesRemaining / 60)}h</p>
-          </div>
-          
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
-                <span className="text-xs text-white font-bold">%</span>
-              </div>
-              <span className="text-sm font-medium text-gray-600">Completion</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-800 mt-1">{Math.round(stats.averageCompletionRate)}%</p>
-          </div>
-        </div>
-      )}
-
-      {/* Active Goals */}
-      {activeGoals.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800 flex items-center space-x-2">
-            <span>Active Goals</span>
-            <span className="bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded-full">
-              {activeGoals.length}
-            </span>
-          </h3>
-          <div className="space-y-3">
-            {activeGoals.map(goal => (
-              <GoalCard 
-                key={goal.id} 
-                goal={goal} 
-                onUpdate={handleGoalUpdate}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Completed Goals */}
-      {completedGoals.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800 flex items-center space-x-2">
-            <span>Completed Goals</span>
-            <span className="bg-green-100 text-green-800 text-sm px-2 py-1 rounded-full">
-              {completedGoals.length}
-            </span>
-          </h3>
-          <div className="space-y-3">
-            {completedGoals.map(goal => (
-              <GoalCard 
-                key={goal.id} 
-                goal={goal} 
-                onUpdate={handleGoalUpdate}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {goals.length === 0 && (
+      {/* Goals List */}
+      {loading ? (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Target className="w-8 h-8 text-gray-400" />
+          <div className="animate-pulse flex flex-col items-center">
+            <div className="rounded-full bg-gray-200 h-16 w-16 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
+            <div className="h-3 bg-gray-200 rounded w-1/3 mb-6"></div>
+            <div className="h-8 bg-gray-200 rounded w-1/6"></div>
           </div>
-          <h3 className="text-lg font-medium text-gray-800 mb-2">No study goals yet</h3>
-          <p className="text-gray-600 mb-6">Create your first goal to start tracking your progress</p>
+        </div>
+      ) : goals.length === 0 ? (
+        <div className="text-center py-12">
+          <Target className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Study Goals Yet</h3>
+          <p className="text-gray-600 mb-6">
+            Create your first study goal to start tracking your progress
+          </p>
           <button
             onClick={() => setIsAddGoalModalOpen(true)}
-            className="inline-flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
           >
-            <Plus className="w-5 h-5" />
-            <span>Create Your First Goal</span>
+            <Plus className="w-4 h-4" />
+            Create Your First Goal
           </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {goals.map(goal => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              onGoalUpdated={handleGoalUpdated}
+              onGoalDeleted={handleGoalDeleted}
+            />
+          ))}
         </div>
       )}
 
       {/* Feedback Section */}
-      {stats && goals.length > 0 && (
-        <FeedbackSection stats={stats} goals={goals} />
-      )}
+      {goals.length > 0 && <FeedbackSection goals={goals} />}
 
       {/* Add Goal Modal */}
       <AddGoalModal
         isOpen={isAddGoalModalOpen}
         onClose={() => setIsAddGoalModalOpen(false)}
-        onSubmit={handleAddGoal}
         courseId={courseId}
+        onGoalAdded={handleGoalAdded}
       />
     </div>
   );

@@ -47,6 +47,9 @@ class Course(db.Model):
     # Relationship to User
     user = db.relationship('User', backref=db.backref('courses', lazy=True, cascade='all, delete-orphan'))
     
+    # Relationship to Goals
+    goals = db.relationship("Goal", back_populates="course", lazy=True, cascade='all, delete-orphan')
+    
     def to_dict(self):
         """Convert course to dictionary for JSON serialization"""
         

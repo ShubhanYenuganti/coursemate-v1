@@ -1,133 +1,112 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { CheckCircle, Circle, Clock, BookOpen, Brain, FileText, HelpCircle, Edit2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle, Circle, Clock, BookOpen, Brain, Target, FileText, Zap } from 'lucide-react';
 import { Subtask } from './types';
 
 interface SubtaskListProps {
   taskId: string;
+  subtasks: Subtask[];
 }
 
-const SubtaskList: React.FC<SubtaskListProps> = ({ taskId }) => {
-  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks }) => {
+  const [localSubtasks, setLocalSubtasks] = useState<Subtask[]>(subtasks);
 
-  useEffect(() => {
-    const fetchSubtasks = async () => {
-      setIsLoading(true);
-      const mockSubtasks: Subtask[] = [
-        {
-          id: 'st1',
-          taskId: 't1',
-          name: 'Read pages 45-60',
-          type: 'reading',
-          estimatedTimeMinutes: 25,
-          completed: true,
-          order: 1,
-          createdAt: '2024-11-01',
-          updatedAt: '2024-11-01'
-        },
-        {
-          id: 'st2',
-          taskId: 't1',
-          name: 'Complete practice problems',
-          type: 'practice',
-          estimatedTimeMinutes: 20,
-          completed: false,
-          order: 2,
-          createdAt: '2024-11-01',
-          updatedAt: '2024-11-01'
-        },
-        {
-          id: 'st3',
-          taskId: 't1',
-          name: 'Create summary notes',
-          type: 'review',
-          estimatedTimeMinutes: 15,
-          completed: false,
-          order: 3,
-          createdAt: '2024-11-01',
-          updatedAt: '2024-11-01'
-        }
-      ];
-      
-      setTimeout(() => {
-        const taskSubtasks = mockSubtasks.filter(subtask => subtask.taskId === taskId);
-        setSubtasks(taskSubtasks.sort((a, b) => a.order - b.order));
-        setIsLoading(false);
-      }, 200);
-    };
-
-    fetchSubtasks();
-  }, [taskId]);
-
-  const handleSubtaskToggle = (subtaskId: string) => {
-    setSubtasks(prev => prev.map(subtask => 
-      subtask.id === subtaskId 
-        ? { ...subtask, completed: !subtask.completed }
-        : subtask
-    ));
+  const handleToggleSubtask = (subtaskId: string) => {
+    setLocalSubtasks(prev => 
+      prev.map(subtask => 
+        subtask.id === subtaskId 
+          ? { ...subtask, completed: !subtask.completed }
+          : subtask
+      )
+    );
   };
 
-  const getTypeIcon = (type: Subtask['type']) => {
+  const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'reading': return <BookOpen className="w-4 h-4 text-blue-500" />;
-      case 'practice': return <Edit2 className="w-4 h-4 text-orange-500" />;
-      case 'review': return <FileText className="w-4 h-4 text-green-500" />;
-      default: return <Circle className="w-4 h-4 text-gray-500" />;
+      case 'reading':
+        return <BookOpen className="w-4 h-4" />;
+      case 'flashcard':
+        return <Brain className="w-4 h-4" />;
+      case 'quiz':
+        return <Target className="w-4 h-4" />;
+      case 'practice':
+        return <Zap className="w-4 h-4" />;
+      case 'review':
+        return <FileText className="w-4 h-4" />;
+      default:
+        return <Circle className="w-4 h-4" />;
     }
   };
 
-  if (isLoading) {
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'reading':
+        return 'text-blue-600';
+      case 'flashcard':
+        return 'text-purple-600';
+      case 'quiz':
+        return 'text-green-600';
+      case 'practice':
+        return 'text-orange-600';
+      case 'review':
+        return 'text-gray-600';
+      default:
+        return 'text-gray-600';
+    }
+  };
+
+  if (localSubtasks.length === 0) {
     return (
-      <div className="flex items-center justify-center py-4">
-        <div className="w-5 h-5 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <span className="ml-2 text-sm text-gray-600">Loading subtasks...</span>
+      <div className="text-center py-4 text-gray-500">
+        <p>No subtasks created yet.</p>
       </div>
     );
   }
 
-  const completedCount = subtasks.filter(s => s.completed).length;
-
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h5 className="text-sm font-medium text-gray-700">
-          Subtasks ({completedCount}/{subtasks.length})
-        </h5>
-      </div>
+    <div className="space-y-2">
+      {localSubtasks.map(subtask => (
+        <div
+          key={subtask.id}
+          className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+            subtask.completed 
+              ? 'bg-green-50 border-green-200' 
+              : 'bg-white border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          <button
+            onClick={() => handleToggleSubtask(subtask.id)}
+            className={`flex-shrink-0 transition-colors ${
+              subtask.completed ? 'text-green-600' : 'text-gray-400 hover:text-green-600'
+            }`}
+          >
+            {subtask.completed ? (
+              <CheckCircle className="w-5 h-5" />
+            ) : (
+              <Circle className="w-5 h-5" />
+            )}
+          </button>
 
-      <div className="space-y-2">
-        {subtasks.map(subtask => (
-          <div key={subtask.id} className={`flex items-center space-x-3 p-3 rounded-lg border ${
-            subtask.completed ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
-          }`}>
-            <button
-              onClick={() => handleSubtaskToggle(subtask.id)}
-              className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                subtask.completed ? 'bg-green-500 border-green-500' : 'border-gray-300'
-              }`}
-            >
-              {subtask.completed && <CheckCircle className="w-3 h-3 text-white" />}
-            </button>
+          <div className={`flex-shrink-0 ${getTypeColor(subtask.type)}`}>
+            {getTypeIcon(subtask.type)}
+          </div>
 
-            <div className="flex-shrink-0">
-              {getTypeIcon(subtask.type)}
-            </div>
-
-            <div className="flex-1">
-              <p className={`text-sm font-medium ${
-                subtask.completed ? 'line-through text-gray-500' : 'text-gray-800'
-              }`}>
-                {subtask.name}
-              </p>
-              <div className="flex items-center space-x-2 mt-1">
-                <span className="text-xs text-gray-500">{subtask.type}</span>
-                <span className="text-xs text-gray-500">{subtask.estimatedTimeMinutes} min</span>
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-medium ${
+              subtask.completed ? 'text-gray-500 line-through' : 'text-gray-900'
+            }`}>
+              {subtask.name}
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <Clock className="w-3 h-3" />
+                <span>{subtask.estimatedTimeMinutes} min</span>
               </div>
+              <span className="text-xs text-gray-400 capitalize">{subtask.type}</span>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 };
