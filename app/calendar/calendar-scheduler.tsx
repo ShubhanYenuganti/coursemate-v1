@@ -668,7 +668,7 @@ useLayoutEffect(() => { … }, [currentView, currentDate]);
 
               {/* ─ row 2 : weekday labels ─ */}
               <div className="grid grid-cols-7 gap-px bg-gray-200">
-                {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
+                {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
                   <div
                     key={d}
                     className="bg-gray-50 p-3 text-center text-sm font-medium text-gray-500"
@@ -766,7 +766,7 @@ useLayoutEffect(() => { … }, [currentView, currentDate]);
                     >
                       <h3 className="text-lg font-semibold text-center mb-3">{monthName}</h3>
                       <div className="grid grid-cols-7 text-xs gap-1">
-                        {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
+                        {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
                           <div key={d} className="text-center text-gray-500">{d}</div>
                         ))}
                         {Array.from({ length: firstDow }, (_, i) => (
