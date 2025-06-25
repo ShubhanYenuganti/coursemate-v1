@@ -1,6 +1,6 @@
 "use client"
 
-import { useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   ChevronLeft,
   ChevronRight,
@@ -243,6 +243,28 @@ const allTasks = [
   },
 ]
 
+interface Goal {
+  id: string;
+  user_id: string;
+  course_id: string;
+  goal_id: string;
+  goal_descr: string | null;
+  due_date: string | null;          // ISO-8601 string (e.g. "2025-06-30T00:00:00")
+  goal_completed: boolean;
+  task_id: string | null;
+  task_title: string | null;
+  task_descr: string | null;
+  task_completed: boolean;
+  subtask_id: string | null;
+  subtask_descr: string | null;
+  subtask_type: string | null;
+  subtask_completed: boolean;
+  created_at: string | null;        // ISO
+  updated_at: string | null;        // ISO
+}
+
+type GoalsByDate = Record<string, Goal[]>
+
 export function CalendarScheduler() {
   /** Current selected date -- initialised to today */
   const [currentDate, setCurrentDate] = useState<Date>(() => startOfToday())
@@ -317,6 +339,46 @@ export function CalendarScheduler() {
     const rowHeight = currentView === "day" ? 80 : 64;      // h-20 vs h-16
     node.scrollTop = Math.max(0, hour * rowHeight - 2 * rowHeight);
   };
+
+  const [goalsByDate, setGoalsByDate] = useState<GoalsByDate>({});
+  const [sortedGoalsByDate, setSortedGoalsByDate] = useState<GoalsByDate>({});
+
+  useEffect(() => {
+    const fetchGoals = async () => {
+      try {
+        const token =
+          typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        if (!token) return console.warn("No JWT in localStorage");
+  
+        const api =
+          process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5173";
+  
+        const res = await fetch(`${api}/api/goals/user`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Request failed ${res.status}`);
+  
+        const byDate: GoalsByDate = await res.json();     // typed!
+        setGoalsByDate(byDate);
+  
+        /* build a chronologically-sorted copy */
+        const ordered: GoalsByDate = Object.entries(byDate)
+          .sort(([d1], [d2]) => +new Date(d1) - +new Date(d2))
+          .reduce((acc, [date, arr]) => {
+            acc[date] = arr;
+            return acc;
+          }, {} as GoalsByDate);
+  
+        setSortedGoalsByDate(ordered);
+      } catch (err) {
+        console.error("fetchGoals error", err);
+      }
+    };
+  
+    fetchGoals();
+  }, []);
+
+  console.log(sortedGoalsByDate)
 
   const loading = useAuthRedirect()
   if (loading) return <div>Loading...</div>

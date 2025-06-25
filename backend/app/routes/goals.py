@@ -1,5 +1,6 @@
+from collections import defaultdict
 from flask import Blueprint, request, jsonify, current_app, g
-from datetime import datetime
+from datetime import date, datetime
 import uuid
 from app.models.goal import Goal
 from app.models.course import Course
@@ -610,3 +611,43 @@ def save_tasks_and_subtasks(goal_id):
         db.session.rollback()
         current_app.logger.error(f"Error saving tasks: {str(e)}")
         return jsonify({'error': 'An error occurred while saving tasks'}), 500 
+    
+@goals_bp.route("/api/goals/user", methods=["GET"])
+@jwt_required()                               # still requires a valid JWT
+def get_goals_by_user():
+    # we ignore the real identity for test mode
+    _ = get_jwt_identity()
+
+    try:
+        goals = Goal.query.filter_by(user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
+
+        # -------- group by end_date --------
+        grouped: dict[str, list[dict]] = defaultdict(list)
+
+        for g in goals:
+            # Pick your date field here
+            end_dt = getattr(g, "due_date", None)   # <─ change if it's called due_date
+            if end_dt is None:
+                key = "unscheduled"
+            else:
+                # Ensure we serialize to plain YYYY-MM-DD
+                if isinstance(end_dt, datetime):
+                    key = end_dt.date().isoformat()
+                elif isinstance(end_dt, date):
+                    key = end_dt.isoformat()
+                else:                               # already a str or something
+                    key = str(end_dt)
+
+            grouped[key].append(g.to_dict())
+
+        # optional: sort the dict by date keys for stable output
+        grouped_sorted = dict(sorted(grouped.items()))
+
+        return jsonify(grouped_sorted), 200
+
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Database error: {e}")
+        return jsonify({"error": "Database error occurred"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error getting user goals: {e}")
+        return jsonify({"error": "An error occurred while getting user goals"}), 500
