@@ -30,7 +30,7 @@ export function Sidebar() {
       icon: '📅',
     },
     {
-      name: 'Chat',
+      name: 'Messages',
       href: '/chat',
       icon: '💬',
     },
