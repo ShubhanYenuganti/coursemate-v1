@@ -29,6 +29,10 @@ class User(db.Model):
     password_reset_token = db.Column(db.Text, unique=True, nullable=True)  # Changed to Text for unlimited length
     password_reset_sent_at = db.Column(db.DateTime, nullable=True)
     
+    # Google OAuth tokens
+    google_access_token = db.Column(db.Text, unique=True, nullable=True)  # Changed to Text for unlimited length
+    google_refresh_token = db.Column(db.Text, unique=True, nullable=True)  # Changed to Text for unlimited length
+    token_expiry = db.Column(db.DateTime(timezone=True), nullable=True)
     # Relationships
     goals = db.relationship("Goal", back_populates="user", lazy=True)
     

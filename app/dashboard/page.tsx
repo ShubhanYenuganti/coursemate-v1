@@ -8,6 +8,7 @@ import CalendarWidget from "./components/CalendarWidget";
 import CalendarChecklistWidget from "./components/CalendarChecklistWidget";
 import CommunityActivity from "./components/recent-activity";
 import AnalyticsCards from "./components/summary-cards";
+import useAuthRedirect from "@/hooks/useAuthRedirect"
 
 const Dashboard = () => {
   const [checkedTasks, setCheckedTasks] = useState<Record<number, boolean>>({});
@@ -100,6 +101,12 @@ const Dashboard = () => {
   ];
 
   const calendarDays = Array.from({ length: 14 }, (_, i) => i + 1);
+
+  const loading = useAuthRedirect()
+
+  if (loading) {
+    return <div>Loading...</div>
+  }
 
   return (
     <div className="bg-gray-50 font-sans">
