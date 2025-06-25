@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Plus, Save, Clock, Calendar, X } from 'lucide-react';
 import { GoalWithProgress, Task, Subtask } from './types';
+import { toast } from 'react-hot-toast';
 
 interface TaskScaffoldingScreenProps {
   goal: GoalWithProgress;
@@ -13,6 +14,7 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
   const [tasks, setTasks] = useState<Task[]>([]);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [currentStep, setCurrentStep] = useState<'tasks' | 'subtasks'>('tasks');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Generate initial task schedule based on goal
   const generateTaskSchedule = () => {
@@ -124,23 +126,65 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
     setSubtasks(prev => prev.filter(subtask => subtask.id !== subtaskId));
   };
 
-  const handleSave = () => {
-    const validTasks = tasks.filter(task => task.name.trim());
-    const validSubtasks = subtasks.filter(subtask => subtask.name.trim());
-    
-    // Generate real IDs
-    const finalTasks = validTasks.map((task, index) => ({
-      ...task,
-      id: `task-${Date.now()}-${index}`
-    }));
-    
-    const finalSubtasks = validSubtasks.map((subtask, index) => ({
-      ...subtask,
-      id: `subtask-${Date.now()}-${index}`,
-      taskId: finalTasks.find(task => task.id === subtask.taskId)?.id || subtask.taskId
-    }));
-    
-    onSave(finalTasks, finalSubtasks);
+  const handleSave = async () => {
+    try {
+      setIsSubmitting(true);
+      
+      const validTasks = tasks.filter(task => task.name.trim());
+      const validSubtasks = subtasks.filter(subtask => subtask.name.trim());
+      
+      // Save to backend if goal has an ID
+      if (goal.id && !goal.id.startsWith('temp-')) {
+        const tasksData = validTasks.map(task => ({
+          name: task.name,
+          scheduledDate: task.scheduledDate,
+          completed: task.completed,
+          subtasks: validSubtasks
+            .filter(subtask => subtask.taskId === task.id)
+            .map(subtask => ({
+              name: subtask.name,
+              type: subtask.type,
+              estimatedTimeMinutes: subtask.estimatedTimeMinutes,
+              completed: subtask.completed
+            }))
+        }));
+        
+        const response = await fetch(`/api/goals/${goal.id}/save-tasks`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ tasks: tasksData })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to save tasks');
+        }
+        
+        toast.success('Study plan saved successfully!');
+      }
+      
+      // Generate real IDs for local state
+      const finalTasks = validTasks.map((task, index) => ({
+        ...task,
+        id: `task-${Date.now()}-${index}`
+      }));
+      
+      const finalSubtasks = validSubtasks.map((subtask, index) => ({
+        ...subtask,
+        id: `subtask-${Date.now()}-${index}`,
+        taskId: finalTasks.find(task => task.id === subtask.taskId)?.id || subtask.taskId
+      }));
+      
+      onSave(finalTasks, finalSubtasks);
+    } catch (error) {
+      console.error('Error saving tasks:', error);
+      toast.error('Failed to save study plan. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const canProceedToSubtasks = tasks.some(task => task.name.trim());
@@ -228,28 +272,40 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
             ))}
           </div>
 
-          <button
-            onClick={addTask}
-            className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors flex items-center justify-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Another Task
-          </button>
-
-          <div className="flex justify-end">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={addTask}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Task
+            </button>
+            <div className="flex-1" />
             <button
               onClick={generateSubtasks}
               disabled={!canProceedToSubtasks}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className={`px-6 py-2 rounded-lg transition-colors ${
+                canProceedToSubtasks
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              }`}
             >
-              Continue to Subtasks
+              Next: Add Subtasks
             </button>
           </div>
         </div>
       ) : (
         /* Subtask Creation Step */
         <div className="space-y-6">
-          <h2 className="text-lg font-semibold text-gray-900">Step 2: Add Subtasks</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Step 2: Add Subtasks</h2>
+            <button
+              onClick={() => setCurrentStep('tasks')}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Back to Tasks
+            </button>
+          </div>
 
           <div className="space-y-6">
             {tasks.filter(task => task.name.trim()).map((task) => {
@@ -275,63 +331,64 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           />
                         </div>
-                        <select
-                          value={subtask.type}
-                          onChange={(e) => handleSubtaskChange(subtask.id, 'type', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="reading">Reading</option>
-                          <option value="flashcard">Flashcard</option>
-                          <option value="quiz">Quiz</option>
-                          <option value="practice">Practice</option>
-                          <option value="review">Review</option>
-                          <option value="other">Other</option>
-                        </select>
-                        <input
-                          type="number"
-                          value={subtask.estimatedTimeMinutes}
-                          onChange={(e) => handleSubtaskChange(subtask.id, 'estimatedTimeMinutes', parseInt(e.target.value) || 0)}
-                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          min="5"
-                          max="120"
-                        />
-                        <span className="text-sm text-gray-500">min</span>
-                        <button
-                          onClick={() => removeSubtask(subtask.id)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={subtask.type}
+                            onChange={(e) => handleSubtaskChange(subtask.id, 'type', e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="reading">Reading</option>
+                            <option value="flashcard">Flashcard</option>
+                            <option value="quiz">Quiz</option>
+                            <option value="practice">Practice</option>
+                            <option value="review">Review</option>
+                            <option value="other">Other</option>
+                          </select>
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-4 h-4 text-gray-400" />
+                            <input
+                              type="number"
+                              value={subtask.estimatedTimeMinutes}
+                              onChange={(e) => handleSubtaskChange(subtask.id, 'estimatedTimeMinutes', parseInt(e.target.value))}
+                              min="5"
+                              className="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                            <span className="text-sm text-gray-500">min</span>
+                          </div>
+                          <button
+                            onClick={() => removeSubtask(subtask.id)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
+                    <button
+                      onClick={() => addSubtask(task.id)}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors w-full justify-center"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Subtask
+                    </button>
                   </div>
-
-                  <button
-                    onClick={() => addSubtask(task.id)}
-                    className="mt-3 w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Subtask
-                  </button>
                 </div>
               );
             })}
           </div>
 
-          <div className="flex justify-between">
-            <button
-              onClick={() => setCurrentStep('tasks')}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Back to Tasks
-            </button>
+          <div className="flex justify-end">
             <button
               onClick={handleSave}
-              disabled={!canSave}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              disabled={!canSave || isSubmitting}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-colors ${
+                canSave && !isSubmitting
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              }`}
             >
               <Save className="w-4 h-4" />
-              Save Study Plan
+              {isSubmitting ? 'Saving...' : 'Save Study Plan'}
             </button>
           </div>
         </div>
