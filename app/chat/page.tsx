@@ -1,6 +1,15 @@
+"use client"
+
 import { Sidebar } from '../dashboard/components/sidebar';
+import useAuthRedirect from "@/hooks/useAuthRedirect"
 
 export default function ChatPage() {
+  const loading = useAuthRedirect()
+
+  if (loading) {
+    return <div>Loading...</div>
+  }
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
