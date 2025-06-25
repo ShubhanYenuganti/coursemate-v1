@@ -304,25 +304,19 @@ export function CalendarScheduler() {
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
 
-// one ref for both Day + Week
-const scrollRef = useRef<HTMLDivElement | null>(null);
+  // one ref for both Day + Week
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-/** Scroll-to-current-hour the moment the timeline element is in the DOM */
-const setTimelineRef = (node: HTMLDivElement | null) => {
-  if (!node) return;            // ref is being cleared
-  scrollRef.current = node;
+  /** Scroll-to-current-hour the moment the timeline element is in the DOM */
+  const setTimelineRef = (node: HTMLDivElement | null) => {
+    if (!node) return;            // ref is being cleared
+    scrollRef.current = node;
 
-  // compute where "now" should sit
-  const hour      = new Date().getHours();
-  const rowHeight = currentView === "day" ? 80 : 64;      // h-20 vs h-16
-  node.scrollTop  = Math.max(0, hour * rowHeight - 2 * rowHeight);
-};
-
-/* no need for useLayoutEffect anymore
-useLayoutEffect(() => { … }, [currentView, currentDate]);
-*/
-
-  
+    // compute where "now" should sit
+    const hour = new Date().getHours();
+    const rowHeight = currentView === "day" ? 80 : 64;      // h-20 vs h-16
+    node.scrollTop = Math.max(0, hour * rowHeight - 2 * rowHeight);
+  };
 
   const loading = useAuthRedirect()
   if (loading) return <div>Loading...</div>
@@ -332,110 +326,43 @@ useLayoutEffect(() => { … }, [currentView, currentDate]);
    **************************************/
   return (
     <div className="flex h-screen bg-[#ffffff]">
-      {/* Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-[#ffffff] border-b border-[#e5e8eb] px-6 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-[#0a80ed] rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-bold">C</span>
-              </div>
-              <span className="text-[#18181b] font-semibold text-lg">CourseHelper</span>
-            </div>
-            <div className="flex items-center gap-2 text-[#71717a]">
-              <ChevronLeft className="w-4 h-4" />
-              <span className="text-sm">Today</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <Button
-              variant={currentView === "day" ? "default" : "ghost"}
-              size="sm"
-              className={currentView === "day" ? "bg-[#0a80ed] text-white" : "text-[#71717a]"}
-              onClick={() => setCurrentView("day")}
-            >
-              Day
-            </Button>
-            <Button
-              variant={currentView === "week" ? "default" : "ghost"}
-              size="sm"
-              className={currentView === "week" ? "bg-[#0a80ed] text-white" : "text-[#71717a]"}
-              onClick={() => setCurrentView("week")}
-            >
-              Week
-            </Button>
-            <Button
-              variant={currentView === "month" ? "default" : "ghost"}
-              size="sm"
-              className={currentView === "month" ? "bg-[#0a80ed] text-white" : "text-[#71717a]"}
-              onClick={() => setCurrentView("month")}
-            >
-              Month
-            </Button>
-            <Button
-              variant={currentView === "year" ? "default" : "ghost"}
-              size="sm"
-              className={currentView === "year" ? "bg-[#0a80ed] text-white" : "text-[#71717a]"}
-              onClick={() => setCurrentView("year")}
-            >
-              Year
-            </Button>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-[#71717a]" />
-              <Input placeholder="Search..." className="pl-10 w-64" />
-            </div>
-
-            {/* Profile Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src="/placeholder.svg?height=32&width=32" alt="Profile" />
-                    <AvatarFallback className="bg-[#0a80ed] text-white">JD</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuItem onClick={() => setShowSettings(true)}>
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Bell className="mr-2 h-4 w-4" />
-                  <span>Notification Preferences</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <GraduationCap className="mr-2 h-4 w-4" />
-                  <span>Academic Information</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Shield className="mr-2 h-4 w-4" />
-                  <span>Privacy Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <HelpCircle className="mr-2 h-4 w-4" />
-                  <span>Help and Support</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setShowSettings(true)}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Logout</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-
       {/* Main Calendar - Made Smaller */}
       {/* ───────────────── Main Section ───────────────── */}
       <div className="flex-1 pt-20 flex flex-col overflow-hidden">
+        <div className="flex items-center gap-4">
+          <Button
+            variant={currentView === "day" ? "default" : "ghost"}
+            size="sm"
+            className={currentView === "day" ? "bg-[#0a80ed] text-white" : "text-[#71717a]"}
+            onClick={() => setCurrentView("day")}
+          >
+            Day
+          </Button>
+          <Button
+            variant={currentView === "week" ? "default" : "ghost"}
+            size="sm"
+            className={currentView === "week" ? "bg-[#0a80ed] text-white" : "text-[#71717a]"}
+            onClick={() => setCurrentView("week")}
+          >
+            Week
+          </Button>
+          <Button
+            variant={currentView === "month" ? "default" : "ghost"}
+            size="sm"
+            className={currentView === "month" ? "bg-[#0a80ed] text-white" : "text-[#71717a]"}
+            onClick={() => setCurrentView("month")}
+          >
+            Month
+          </Button>
+          <Button
+            variant={currentView === "year" ? "default" : "ghost"}
+            size="sm"
+            className={currentView === "year" ? "bg-[#0a80ed] text-white" : "text-[#71717a]"}
+            onClick={() => setCurrentView("year")}
+          >
+            Year
+          </Button>
+        </div>
         {/* ───────── DAY VIEW ───────── */}
         {currentView === "day" ? (
           <>
@@ -693,7 +620,7 @@ useLayoutEffect(() => { … }, [currentView, currentDate]);
                       className={`bg-white p-2 min-h-[110px] ${!inMonth ? "bg-gray-50 text-gray-400" : ""}`}
                     >
                       <div
-                            className={`text-sm font-medium mb-2 ${isToday ? "bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center" : ""}`}
+                        className={`text-sm font-medium mb-2 ${isToday ? "bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center" : ""}`}
                       >
                         {d.getDate()}
                       </div>
@@ -825,45 +752,45 @@ useLayoutEffect(() => { … }, [currentView, currentDate]);
             {/* Upcoming Tasks list */}
             <div className="space-y-4">
               {
-              // getNextNDays(7).map((d) => {
-              //   const ds = d.toISOString().split("T")[0];
-              //   const tasksForDay = getTasksForDate(ds);
-              //   const isExpanded = expandedDays[ds];
-              //   const isToday = ds === "2021-02-21";
-              //   return (
-              //     <div key={ds} className="border border-[#e5e8eb] rounded-lg">
-              //       <Collapsible open={isExpanded} onOpenChange={() => toggleDayExpansion(ds)}>
-              //         <CollapsibleTrigger asChild>
-              //           <div className={flex items-center justify-between p-4 cursor-pointer hover:bg-[#f8f9fa] rounded-t-lg ${isToday ? "bg-[#eff6ff]" : ""}}>{/* header */}
-              //             <div>
-              //               <div className={font-medium ${isToday ? "text-[#0a80ed]" : "text-[#18181b]"}}>{d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}{isToday && <span className="ml-2 text-xs">(Today)</span>}</div>
-              //               <div className="text-sm text-[#71717a]">{tasksForDay.length} task{tasksForDay.length !== 1 ? "s" : ""}</div>
-              //             </div>
-              //             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              //           </div>
-              //         </CollapsibleTrigger>
-              //         <CollapsibleContent>
-              //           <div className="px-4 pb-4 space-y-2">
-              //             {tasksForDay.length === 0 ? (
-              //               <p className="text-sm text-[#71717a] italic">No tasks for this day</p>
-              //             ) : (
-              //               tasksForDay.map((task) => (
-              //                 <div key={task.id} className="flex items-start gap-3 p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] cursor-pointer" onClick={() => setSelectedTask(task)}>
-              //                   <div className="w-3 h-3 rounded-full mt-1" style={{ backgroundColor: task.color }} />
-              //                   <div className="flex-1 min-w-0">
-              //                     <div className={text-sm font-medium truncate ${task.completed ? "line-through text-[#71717a]" : "text-[#18181b]"}}>{task.title}</div>
-              //                     <div className="text-xs text-[#71717a] truncate">{task.course}</div>
-              //                     <div className={text-xs mt-1 px-2 py-1 rounded-full inline-block ${task.priority === "high" ? "bg-red-100 text-red-700" : task.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}}>{task.priority}</div>
-              //                   </div>
-              //                 </div>
-              //               ))
-              //             )}
-              //           </div>
-              //         </CollapsibleContent>
-              //       </Collapsible>
-              //     </div>
-              //   );
-              // })
+                // getNextNDays(7).map((d) => {
+                //   const ds = d.toISOString().split("T")[0];
+                //   const tasksForDay = getTasksForDate(ds);
+                //   const isExpanded = expandedDays[ds];
+                //   const isToday = ds === "2021-02-21";
+                //   return (
+                //     <div key={ds} className="border border-[#e5e8eb] rounded-lg">
+                //       <Collapsible open={isExpanded} onOpenChange={() => toggleDayExpansion(ds)}>
+                //         <CollapsibleTrigger asChild>
+                //           <div className={flex items-center justify-between p-4 cursor-pointer hover:bg-[#f8f9fa] rounded-t-lg ${isToday ? "bg-[#eff6ff]" : ""}}>{/* header */}
+                //             <div>
+                //               <div className={font-medium ${isToday ? "text-[#0a80ed]" : "text-[#18181b]"}}>{d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}{isToday && <span className="ml-2 text-xs">(Today)</span>}</div>
+                //               <div className="text-sm text-[#71717a]">{tasksForDay.length} task{tasksForDay.length !== 1 ? "s" : ""}</div>
+                //             </div>
+                //             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                //           </div>
+                //         </CollapsibleTrigger>
+                //         <CollapsibleContent>
+                //           <div className="px-4 pb-4 space-y-2">
+                //             {tasksForDay.length === 0 ? (
+                //               <p className="text-sm text-[#71717a] italic">No tasks for this day</p>
+                //             ) : (
+                //               tasksForDay.map((task) => (
+                //                 <div key={task.id} className="flex items-start gap-3 p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] cursor-pointer" onClick={() => setSelectedTask(task)}>
+                //                   <div className="w-3 h-3 rounded-full mt-1" style={{ backgroundColor: task.color }} />
+                //                   <div className="flex-1 min-w-0">
+                //                     <div className={text-sm font-medium truncate ${task.completed ? "line-through text-[#71717a]" : "text-[#18181b]"}}>{task.title}</div>
+                //                     <div className="text-xs text-[#71717a] truncate">{task.course}</div>
+                //                     <div className={text-xs mt-1 px-2 py-1 rounded-full inline-block ${task.priority === "high" ? "bg-red-100 text-red-700" : task.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}}>{task.priority}</div>
+                //                   </div>
+                //                 </div>
+                //               ))
+                //             )}
+                //           </div>
+                //         </CollapsibleContent>
+                //       </Collapsible>
+                //     </div>
+                //   );
+                // })
               }
             </div>
           </>
