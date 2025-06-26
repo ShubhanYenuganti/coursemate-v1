@@ -182,6 +182,75 @@ const colorForCourse = (courseId: string | null) => {
   return palette[idx];
 };
 
+/** All-day bar (shared by Day & Week views) */
+const AllDayRow = ({
+  days,
+  getGoalsForDate,
+  handleTaskClick,
+}: {
+  days: Date | Date[];
+  getGoalsForDate: (d: Date) => Goal[];
+  handleTaskClick: (g: Goal) => void;
+}) => {
+  const dayList = Array.isArray(days) ? days : [days];
+
+  return (
+    <div className="flex h-9 border-b border-gray-200">
+      {/* time-label column */}
+      <div className="w-16 border-r border-gray-200 text-xs flex items-center justify-end pr-1">
+        <span className="text-gray-500">All-day</span>
+      </div>
+
+      {/* ▼ NEW: wrap the day buckets so Tailwind can draw the dividers */}
+      <div className="flex flex-1 divide-x divide-gray-200">
+        {dayList.map((d, idx) => {
+          const goals = getGoalsForDate(d).filter(g => !hasClockTime(g)); // just untimed goals
+
+          /* add a right border when we're in week-view (i.e. days is an array)
+             and this bucket is NOT the last one                              */
+          const showDivider =
+            Array.isArray(days) && idx < dayList.length - 1 ? "border-r border-gray-200" : "";
+
+          return (
+            <div
+              key={d.toISOString()}
+              className={`flex-1 flex flex-wrap items-center gap-1 px-1 ${showDivider}`}
+            >
+              {goals.map((g) => (
+                <div
+                  key={g.goal_id}
+                  className="px-2 py-[2px] rounded text-xs font-medium text-white cursor-pointer truncate"
+                  style={{ backgroundColor: colorForCourse(g.course_id) }}
+                  title={g.goal_descr ?? g.task_title ?? ""}
+                  onClick={() => handleTaskClick(g)}
+                >
+                  {g.task_title ?? "(untitled)"}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+
+      </div>
+    </div>
+  );
+};
+
+
+/** A goal is “timed” if its ISO string has a non-midnight time part */
+const hasClockTime = (g: Goal) => {
+  if (!g.due_date) return false;
+  const d = new Date(g.due_date);
+  return d.getHours() !== 0 || d.getMinutes() !== 0;
+};
+
+/** Convenience: all goals for one calendar hour on a given day */
+const goalsForHour = (date: Date, hour: number, getGoalsForDate: (d: Date) => Goal[]) =>
+  getGoalsForDate(date).filter(
+    (g) => hasClockTime(g) && new Date(g.due_date as string).getHours() === hour
+  );
+
+
 // Extracted view components to reduce cognitive complexity
 const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
   <>
@@ -215,8 +284,14 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
       </div>
     </div>
 
+    <AllDayRow
+      days={currentDate}
+      getGoalsForDate={getGoalsForDate}
+      handleTaskClick={handleTaskClick}
+    />
+
     <div className="flex-1 overflow-y-auto flex" ref={setTimelineRef}>
-      <div className="w-20 border-r border-gray-200">
+      <div className="w-16 border-r border-gray-200">
         {hours.map((h: number) => (
           <div
             key={h}
@@ -229,7 +304,7 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
 
       <div className="flex-1 relative">
         {hours.map((h: number) => {
-          const goals = h === 0 ? getGoalsForDate(currentDate) : [];
+          const goals = goalsForHour(currentDate, h, getGoalsForDate);   // ← replace old line
           const colCount = Math.max(goals.length, 1);
           const colWidth = 100 / colCount;
 
@@ -319,6 +394,12 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
       </div>
     </div>
 
+    <AllDayRow
+      days={weekDates}         // pass the whole week array
+      getGoalsForDate={getGoalsForDate}
+      handleTaskClick={handleTaskClick}
+    />
+
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
       <div className="flex">
         <div className="w-16 border-r border-gray-200">
@@ -332,7 +413,7 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
         {weekDates.map((d: Date) => (
           <div key={d.toISOString()} className="flex-1 border-r border-gray-200 relative">
             {hours.map((h: number) => {
-              const goals = h === 0 ? getGoalsForDate(d) : [];
+              const goals = goalsForHour(d, h, getGoalsForDate);             // ← replace old line
               const colCount = Math.max(goals.length, 1);
               const colWidth = 100 / colCount;
 
