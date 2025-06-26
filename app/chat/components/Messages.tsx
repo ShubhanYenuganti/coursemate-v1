@@ -22,6 +22,12 @@ interface ConversationDeletedEvent {
   conversation_id: string;
 }
 
+interface FriendRequestAcceptedEvent {
+    friend_id: string;
+    friend_name: string;
+    message: string;
+}
+
 const Messages: React.FC = () => {
   const [chats, setChats] = useState<ChatWithPreview[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | undefined>();
@@ -304,6 +310,17 @@ const Messages: React.FC = () => {
         setSelectedChatId(undefined);
         setMessages([]);
       }
+    });
+
+    socket.on('new_friend_request', (data: PendingRequest) => {
+      console.log('Received new_friend_request event:', data);
+      setPendingRequests(prev => [data, ...prev]);
+    });
+    
+    socket.on('friend_request_accepted', (data: FriendRequestAcceptedEvent) => {
+        console.log('Friend request accepted event:', data);
+        // Maybe show a toast notification here in the future
+        fetchFriendsForNewChat(); // Refresh list of friends you can chat with
     });
 
     socket.on('connect', () => {

@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.friend import Friend
 from app.models.message import Message
 from app.init import db
+from app.extensions import socketio
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 
@@ -51,6 +52,15 @@ def send_friend_request():
         db.session.rollback()
         return jsonify({'success': False, 'error': 'Friend request already sent'}), 409
 
+    # Emit WebSocket event to the receiver
+    socketio.emit('new_friend_request', {
+        'request_id': new_request.id,
+        'requester_id': new_request.requester_id,
+        'requester_name': new_request.requester.name,
+        'requester_email': new_request.requester.email,
+        'sent_at': new_request.created_at.isoformat()
+    }, room=receiver_id)
+
     return jsonify({
         'success': True, 
         'message': 'Friend request sent successfully',
@@ -86,6 +96,12 @@ def respond_to_friend_request():
     if action == 'accept':
         friend_request.status = 'accepted'
         message = 'Friend request accepted'
+        # Emit event to the original requester
+        socketio.emit('friend_request_accepted', {
+            'friend_id': friend_request.receiver_id,
+            'friend_name': friend_request.receiver.name,
+            'message': f'{friend_request.receiver.name} accepted your friend request!'
+        }, room=friend_request.requester_id)
     else: # action == 'reject'
         friend_request.status = 'rejected'
         message = 'Friend request rejected'
