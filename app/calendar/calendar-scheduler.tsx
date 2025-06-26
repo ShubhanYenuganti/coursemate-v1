@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Calendar,
   Settings,
+  GraduationCap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -237,7 +238,7 @@ const AllDayRow = ({
 };
 
 
-/** A goal is “timed” if its ISO string has a non-midnight time part */
+/** A goal is "timed" if its ISO string has a non-midnight time part */
 const hasClockTime = (g: Goal) => {
   if (!g.due_date) return false;
   const d = new Date(g.due_date);
@@ -253,7 +254,7 @@ const goalsForHour = (date: Date, hour: number, getGoalsForDate: (d: Date) => Go
 
 // Extracted view components to reduce cognitive complexity
 const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
-  <>
+  <div className="flex flex-col h-full">
     <div className="border-b border-gray-200 p-4 flex items-center justify-between">
       <h2 className="text-2xl font-semibold">
         {currentDate.toLocaleDateString("en-US", {
@@ -290,53 +291,55 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
       handleTaskClick={handleTaskClick}
     />
 
-    <div className="flex-1 overflow-y-auto flex" ref={setTimelineRef}>
-      <div className="w-16 border-r border-gray-200">
-        {hours.map((h: number) => (
-          <div
-            key={h}
-            className="h-20 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1"
-          >
-            {formatHourLabel(h)}
-          </div>
-        ))}
-      </div>
-
-      <div className="flex-1 relative">
-        {hours.map((h: number) => {
-          const goals = goalsForHour(currentDate, h, getGoalsForDate);   // ← replace old line
-          const colCount = Math.max(goals.length, 1);
-          const colWidth = 100 / colCount;
-
-          return (
-            <div key={h} className="h-20 border-b border-gray-200 relative p-1">
-              {goals.map((g: any, idx: number) => (
-                <div
-                  key={g.goal_id}
-                  className="absolute top-1 bottom-1 rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90"
-                  style={{
-                    backgroundColor: colorForCourse(g.course_id),
-                    width: `${colWidth}%`,
-                    left: `${idx * colWidth}%`,
-                  }}
-                  onClick={() => handleTaskClick(g)}
-                >
-                  <div className="font-semibold leading-tight truncate">
-                    {g.task_title ?? "(untitled)"}
-                  </div>
-                  {g.goal_descr && (
-                    <div className="text-[11px] opacity-90 truncate">
-                      {g.goal_descr}
-                    </div>
-                  )}
-                </div>
-              ))}
+    <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
+      <div className="flex">
+        <div className="w-16 border-r border-gray-200 flex-shrink-0">
+          {hours.map((h: number) => (
+            <div
+              key={h}
+              className="h-20 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1"
+            >
+              {formatHourLabel(h)}
             </div>
-          );
-        })}
+          ))}
+        </div>
+
+        <div className="flex-1 relative">
+          {hours.map((h: number) => {
+            const goals = goalsForHour(currentDate, h, getGoalsForDate);   // ← replace old line
+            const colCount = Math.max(goals.length, 1);
+            const colWidth = 100 / colCount;
+
+            return (
+              <div key={h} className="h-20 border-b border-gray-200 relative p-1">
+                {goals.map((g: any, idx: number) => (
+                  <div
+                    key={g.goal_id}
+                    className="absolute top-1 bottom-1 rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90"
+                    style={{
+                      backgroundColor: colorForCourse(g.course_id),
+                      width: `${colWidth}%`,
+                      left: `${idx * colWidth}%`,
+                    }}
+                    onClick={() => handleTaskClick(g)}
+                  >
+                    <div className="font-semibold leading-tight truncate">
+                      {g.task_title ?? "(untitled)"}
+                    </div>
+                    {g.goal_descr && (
+                      <div className="text-[11px] opacity-90 truncate">
+                        {g.goal_descr}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
-  </>
+  </div>
 );
 
 const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
@@ -404,7 +407,7 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
       <div className="flex">
         <div className="w-16 border-r border-gray-200">
           {hours.map((h: number) => (
-            <div key={h} className="h-16 border-b border-gray-200 p-2 text-xs text-gray-500">
+            <div key={h} className="h-16 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1">
               {formatHourLabel(h)}
             </div>
           ))}
@@ -657,16 +660,6 @@ export function CalendarScheduler() {
   const handleTaskClick = (task: any) => setSelectedTask((p: any) => (p?.id === task.id ? null : task))
 
   const getTasksForCourse = (courseName: string) => allTasks.filter((t) => t.course === courseName)
-
-  const getEventsForDate = (date: Date) => {
-    const weekStart = weekDates[0]
-    return calendarEvents.filter((ev) => {
-      const evDate = new Date(weekStart)
-      evDate.setDate(weekStart.getDate() + ev.day)
-      const courseVisible = courseVisibility[ev.course.toLowerCase().replace(/\s+/g, "")]
-      return courseVisible && evDate.toDateString() === date.toDateString()
-    })
-  }
 
   const handleConnectCalendar = () => {
     if (typeof window === "undefined") return;
