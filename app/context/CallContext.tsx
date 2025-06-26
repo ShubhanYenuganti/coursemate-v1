@@ -102,8 +102,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         endCall();
     });
 
-    socket.on('hang-up', () => {
-        console.log('[CallContext] Received hang-up signal from other user');
+    socket.on('hang-up', (data: any) => {
+        console.log('[CallContext] Received hang-up signal from other user:', data);
         endCall();
     });
 
@@ -129,6 +129,20 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       router.push('/call');
     }
   }, [isCallActive, isCallInitiating, router]);
+  
+  // Prevent page refresh/navigation during active calls
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isCallActive || isCallInitiating) {
+        e.preventDefault();
+        e.returnValue = 'You have an active call. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isCallActive, isCallInitiating]);
   
   const startCall = (receiverId: string) => {
     console.log(`[CallContext] Attempting to start call to receiverId: ${receiverId}`);
@@ -195,6 +209,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
   
   const endCall = () => {
+      console.log('[CallContext] Ending call...');
+      
       if (activeCall) {
         activeCall.close();
       }
@@ -207,7 +223,13 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIncomingCall(null);
       
       // Emit hang-up signal to notify the other user
-      socket.emit('hang-up');
+      // Include the other user's ID if we have it
+      const hangUpPayload = {
+        receiver_id: incomingCall?.caller_id || null,
+        caller_id: user?.id || null
+      };
+      console.log('[CallContext] Emitting hang-up signal:', hangUpPayload);
+      socket.emit('hang-up', hangUpPayload);
   };
 
   const value = {
