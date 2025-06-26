@@ -228,6 +228,18 @@ def get_friends_for_new_chat():
 
 # --- WebRTC Signaling Events ---
 
+# Store peer_id to user_id mapping
+peer_to_user_mapping = {}
+
+@socketio.on('register-peer')
+def handle_register_peer(data):
+    """Register a user's peer ID for call signaling."""
+    user_id = data.get('user_id')
+    peer_id = data.get('peer_id')
+    if user_id and peer_id:
+        peer_to_user_mapping[peer_id] = user_id
+        print(f"[SocketIO] Registered peer {peer_id} for user {user_id}")
+
 @socketio.on('start-call')
 def handle_start_call(data):
     """Relay a call invitation to the receiver."""
@@ -244,15 +256,35 @@ def handle_start_call(data):
 @socketio.on('call-accepted')
 def handle_call_accepted(data):
     """Relay that the call was accepted back to the original caller."""
-    caller_id = data.get('caller_id')
-    receiver_data = data.get('receiver_data') # Includes receiver's peer_id
+    print(f"[SocketIO] Received 'call-accepted' event with data: {data}")
+    receiver_peer_id = data.get('receiver_peer_id')
+    caller_peer_id = data.get('caller_peer_id')
     
-    if caller_id and receiver_data:
-        socketio.emit('call-accepted', receiver_data, room=caller_id)
+    if receiver_peer_id and caller_peer_id:
+        # Find the caller's user ID using the peer mapping
+        caller_user_id = peer_to_user_mapping.get(caller_peer_id)
+        if caller_user_id:
+            # Send the receiver's peer ID back to the caller
+            socketio.emit('call-accepted', { 'receiver_peer_id': receiver_peer_id }, room=caller_user_id)
+            print(f"[SocketIO] Relaying 'call-accepted' to caller user {caller_user_id} with receiver_peer_id: {receiver_peer_id}")
+        else:
+            print(f"[SocketIO] Could not find user ID for peer ID: {caller_peer_id}")
+    else:
+        print(f"[SocketIO] 'call-accepted' event failed: missing receiver_peer_id or caller_peer_id")
 
 @socketio.on('hang-up')
 def handle_hang_up(data):
     """Notify the other user that the call has ended."""
-    other_user_id = data.get('other_user_id')
-    if other_user_id:
-        socketio.emit('call-ended', {}, room=other_user_id) 
+    print(f"[SocketIO] Received 'hang-up' event with data: {data}")
+    receiver_id = data.get('receiver_id')
+    caller_id = data.get('caller_id')
+    
+    # Determine which user to notify based on who sent the hang-up
+    if receiver_id:
+        socketio.emit('hang-up', data, room=receiver_id)
+        print(f"[SocketIO] Relaying 'hang-up' to receiver: {receiver_id}")
+    elif caller_id:
+        socketio.emit('hang-up', data, room=caller_id)
+        print(f"[SocketIO] Relaying 'hang-up' to caller: {caller_id}")
+    else:
+        print(f"[SocketIO] 'hang-up' event failed: missing receiver_id or caller_id") 

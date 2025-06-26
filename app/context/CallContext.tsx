@@ -73,6 +73,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     peer.on('open', (id) => {
       setPeerId(id);
+      // Register the peer ID with the backend for call signaling
+      if (socket && user?.id) {
+        console.log('[CallContext] Registering peer ID with backend:', id);
+        socket.emit('register-peer', { user_id: user.id, peer_id: id });
+      }
     });
 
     peer.on('call', (call) => {
@@ -80,13 +85,22 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('[CallContext] Received incoming PeerJS call');
         setActiveCall(call);
         
-        // Answer the call with our local stream
-        if (localStream) {
-            console.log('[CallContext] Answering call with local stream');
-            call.answer(localStream);
-        } else {
-            console.log('[CallContext] No local stream available to answer call');
-        }
+        // Wait for local stream to be available before answering
+        let retryCount = 0;
+        const maxRetries = 50; // 5 seconds max
+        const answerCall = () => {
+            if (localStream) {
+                console.log('[CallContext] Answering call with local stream');
+                call.answer(localStream);
+            } else if (retryCount < maxRetries) {
+                retryCount++;
+                console.log('[CallContext] Local stream not ready yet, retrying...', retryCount);
+                setTimeout(answerCall, 100);
+            } else {
+                console.error('[CallContext] Failed to get local stream after timeout');
+            }
+        };
+        answerCall();
         
         call.on('stream', (remoteUserStream) => {
             console.log('[CallContext] Received remote stream from incoming call');
@@ -111,15 +125,44 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     socket.on('call-accepted', (data: { receiver_peer_id: string }) => {
+        console.log('[CallContext] Received "call-accepted" with data:', data);
         // This user started the call, and the other user accepted.
         // Now, call the receiver using their peer id.
-        if (localStream) {
-            const call = peer.call(data.receiver_peer_id, localStream);
-            setActiveCall(call);
-            call.on('stream', (remoteUserStream) => {
-                setRemoteStream(remoteUserStream);
-                setIsCallActive(true);
-            });
+        if (data.receiver_peer_id) {
+            console.log('[CallContext] Call accepted, waiting for local stream...');
+            // Wait for local stream to be available
+            let retryCount = 0;
+            const maxRetries = 50; // 5 seconds max
+            const checkLocalStream = () => {
+                if (localStream) {
+                    console.log('[CallContext] Local stream available, calling peer with ID:', data.receiver_peer_id);
+                    const call = peer.call(data.receiver_peer_id, localStream);
+                    setActiveCall(call);
+                    call.on('stream', (remoteUserStream) => {
+                        console.log('[CallContext] Received remote stream from outgoing call');
+                        setRemoteStream(remoteUserStream);
+                        setIsCallActive(true);
+                        setIsCallInitiating(false);
+                    });
+                    
+                    call.on('close', () => {
+                        console.log('[CallContext] Outgoing call closed');
+                    });
+
+                    call.on('error', (err) => {
+                        console.error('[CallContext] Outgoing call error:', err);
+                    });
+                } else if (retryCount < maxRetries) {
+                    retryCount++;
+                    console.log('[CallContext] Local stream not ready yet, retrying...', retryCount);
+                    setTimeout(checkLocalStream, 100);
+                } else {
+                    console.error('[CallContext] Failed to get local stream after timeout');
+                }
+            };
+            checkLocalStream();
+        } else {
+            console.error('[CallContext] Cannot make call: missing receiver_peer_id');
         }
     });
 
@@ -150,8 +193,13 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [peerRef.current, peerId, user, socket]);
   
   useEffect(() => {
+    console.log('[CallContext] Call state changed:', { isCallActive, isCallInitiating });
     if (isCallActive || isCallInitiating) {
-      router.push('/call');
+      // Use replace to avoid adding to history stack and triggering Fast Refresh
+      if (window.location.pathname !== '/call') {
+        console.log('[CallContext] Navigating to call page');
+        router.replace('/call');
+      }
     }
   }, [isCallActive, isCallInitiating, router]);
   
@@ -209,25 +257,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('[CallContext] Got local stream for accepting call');
             setLocalStream(stream);
             setIsCallInitiating(true);
-
-            console.log('[CallContext] Calling peer:', incomingCall.caller_peer_id);
-            const call = peerRef.current!.call(incomingCall.caller_peer_id, stream);
-            setActiveCall(call);
-            
-            call.on('stream', (remoteStream) => {
-                console.log('[CallContext] Received remote stream from outgoing call');
-                setRemoteStream(remoteStream);
-                setIsCallActive(true);
-                setIsCallInitiating(false);
-            });
-
-            call.on('close', () => {
-                console.log('[CallContext] Outgoing call closed');
-            });
-
-            call.on('error', (err) => {
-                console.error('[CallContext] Outgoing call error:', err);
-            });
 
             // Let the caller know you accepted by emitting call-accepted signal
             socket.emit('call-accepted', { 
