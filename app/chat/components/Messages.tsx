@@ -1,20 +1,36 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ChatList from './ChatList';
 import ChatWindow from './ChatWindow';
 import AddChatModal from './AddChatModal';
 import AddFriendModal from './AddFriendModal';
 import { ChatWithPreview, Message, Chat, User } from '../types';
 import { messageService, User as ApiUser, Conversation as ApiConversation, Message as ApiMessage } from '../../../lib/api/messageService';
+// @ts-ignore
+import { io, Socket } from 'socket.io-client';
+
+const socketUrl = "http://localhost:5173";
+
+interface NewMessageEvent {
+  conversation_id: string;
+  // add other fields if needed
+}
+
+interface ConversationDeletedEvent {
+  conversation_id: string;
+}
 
 const Messages: React.FC = () => {
   const [chats, setChats] = useState<ChatWithPreview[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | undefined>();
+  const selectedChatIdRef = useRef<string | undefined>(selectedChatId);
   const [isAddChatModalOpen, setIsAddChatModalOpen] = useState(false);
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const socketRef = useRef<Socket | null>(null);
+  const [localUserId, setLocalUserId] = useState<string | undefined>(undefined);
 
   // Fetch users for add chat functionality
   const fetchUsers = async () => {
@@ -197,6 +213,83 @@ const Messages: React.FC = () => {
     fetchUsers();
     fetchConversations();
   }, []);
+
+  // Ensure user_id is set in localStorage before connecting socket
+  useEffect(() => {
+    const ensureUserId = async () => {
+      let userId = localStorage.getItem('user_id');
+      if (!userId) {
+        const token = localStorage.getItem('token');
+        if (token) {
+          try {
+            const res = await fetch('/api/users/me', {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              userId = data.id;
+              if (typeof userId === 'string') {
+                localStorage.setItem('user_id', userId);
+              }
+            }
+          } catch (err) {
+            console.error('Failed to fetch user_id:', err);
+          }
+        }
+      }
+      setLocalUserId(typeof userId === 'string' ? userId : undefined);
+    };
+    ensureUserId();
+  }, []);
+
+  useEffect(() => {
+    if (!localUserId || typeof localUserId !== 'string') return; // Wait until user_id is set and is a string
+    const socket = io(socketUrl, { transports: ["websocket"] });
+    socket.emit("join", { user_id: localUserId });
+
+    socket.on("new_message", (data: NewMessageEvent) => {
+      console.log("Received new_message event:", data, "selectedChatIdRef:", selectedChatIdRef.current);
+      fetchConversations();
+      if (data.conversation_id === selectedChatIdRef.current) {
+        fetchMessages(selectedChatIdRef.current!);
+      }
+    });
+
+    socket.on("conversation_deleted", (data: ConversationDeletedEvent) => {
+      console.log("Received conversation_deleted event:", data);
+      // Remove the chat from the list
+      setChats(prevChats => prevChats.filter(chat => chat.id !== data.conversation_id));
+      
+      // If the deleted chat is the currently open one, clear the view
+      if (selectedChatIdRef.current === data.conversation_id) {
+        setSelectedChatId(undefined);
+        setMessages([]);
+      }
+    });
+
+    socket.on('connect', () => {
+      console.log('WebSocket connected!');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('WebSocket disconnected!');
+    });
+
+    socket.onAny((event: string, ...args: any[]) => {
+      console.log("[SOCKET EVENT]", event, args);
+    });
+
+    // Only disconnect on unmount
+    return () => {
+      console.log('Cleaning up WebSocket connection...');
+      socket.disconnect();
+    };
+  }, [localUserId]); // Re-run if user_id changes
+
+  // Keep the ref in sync with state
+  useEffect(() => {
+    selectedChatIdRef.current = selectedChatId;
+  }, [selectedChatId]);
 
   // Get the selected chat object
   const selectedChat = selectedChatId ? chats.find(chat => chat.id === selectedChatId) : undefined;

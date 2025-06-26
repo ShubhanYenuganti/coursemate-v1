@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
 from .config import Config
-from .extensions import db, migrate, jwt, mail
+from .extensions import db, migrate, jwt, mail, socketio
 import os
 
 def create_app(config_class=Config):
@@ -13,6 +13,7 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
     jwt.init_app(app)
     mail.init_app(app)
+    socketio.init_app(app)
     
     # Import models to ensure they're registered with SQLAlchemy
     from . import models    
