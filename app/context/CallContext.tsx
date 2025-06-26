@@ -102,11 +102,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         endCall();
     });
 
+    socket.on('hang-up', () => {
+        console.log('[CallContext] Received hang-up signal from other user');
+        endCall();
+    });
+
     return () => {
       peer.destroy();
       socket.off('incoming-call');
       socket.off('call-accepted');
       socket.off('call-ended');
+      socket.off('hang-up');
     };
   }, [socket, user]);
   
@@ -173,12 +179,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setIsCallInitiating(false);
             });
 
-            // Let the caller know you accepted
-            // Note: In a simpler model, you could just have the acceptor call the initiator.
-            // But this double-confirmation is more robust for UI state.
-            // This example simplifies by just having the acceptor initiate the `peer.call`.
-            // The `call-accepted` signal might be redundant in this simplified flow,
-            // but is kept for consistency with the backend.
+            // Let the caller know you accepted by emitting call-accepted signal
+            socket.emit('call-accepted', { 
+                receiver_peer_id: peerId,
+                caller_peer_id: incomingCall.caller_peer_id 
+            });
+            
             setIncomingCall(null);
         });
   };
@@ -199,7 +205,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setRemoteStream(null);
       setActiveCall(null);
       setIncomingCall(null);
-      // Optional: send a hang-up signal
+      
+      // Emit hang-up signal to notify the other user
+      socket.emit('hang-up');
   };
 
   const value = {
