@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import Peer from 'peerjs';
 import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
+import { useRouter } from 'next/navigation';
 
 interface CallerData {
     caller_id: string;
@@ -46,6 +47,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const { socket } = useSocket();
   const { user } = useAuth(); // Get current user info
+  const router = useRouter();
 
   useEffect(() => {
     if (!socket || !user?.id) return;
@@ -100,6 +102,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsPeerReady(false);
     }
   }, [peerRef.current, peerId, user, socket]);
+  
+  useEffect(() => {
+    if (isCallActive) {
+      router.push('/call');
+    }
+  }, [isCallActive, router]);
   
   const startCall = (receiverId: string) => {
     console.log(`[CallContext] Attempting to start call to receiverId: ${receiverId}`);
