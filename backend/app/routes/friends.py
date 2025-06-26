@@ -223,4 +223,36 @@ def get_friends_for_new_chat():
         'email': user.email
     } for user in friends_to_chat_with]
 
-    return jsonify({'success': True, 'friends': friends_data}), 200 
+    return jsonify({'success': True, 'friends': friends_data}), 200
+
+
+# --- WebRTC Signaling Events ---
+
+@socketio.on('start-call')
+def handle_start_call(data):
+    """Relay a call invitation to the receiver."""
+    print(f"[SocketIO] Received 'start-call' event with data: {data}")
+    receiver_id = data.get('receiver_id')
+    caller_data = data.get('caller_data') # Includes caller's peer_id, name, etc.
+    
+    if receiver_id and caller_data:
+        print(f"[SocketIO] Relaying 'incoming-call' to room (user_id): {receiver_id}")
+        socketio.emit('incoming-call', caller_data, room=receiver_id)
+    else:
+        print(f"[SocketIO] 'start-call' event failed: missing receiver_id or caller_data.")
+
+@socketio.on('call-accepted')
+def handle_call_accepted(data):
+    """Relay that the call was accepted back to the original caller."""
+    caller_id = data.get('caller_id')
+    receiver_data = data.get('receiver_data') # Includes receiver's peer_id
+    
+    if caller_id and receiver_data:
+        socketio.emit('call-accepted', receiver_data, room=caller_id)
+
+@socketio.on('hang-up')
+def handle_hang_up(data):
+    """Notify the other user that the call has ended."""
+    other_user_id = data.get('other_user_id')
+    if other_user_id:
+        socketio.emit('call-ended', {}, room=other_user_id) 

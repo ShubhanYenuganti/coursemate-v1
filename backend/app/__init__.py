@@ -13,7 +13,9 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
     jwt.init_app(app)
     mail.init_app(app)
-    socketio.init_app(app)
+
+    # Allow CORS for all origins on Socket.IO
+    socketio.init_app(app, cors_allowed_origins="*")
     
     # Import models to ensure they're registered with SQLAlchemy
     from . import models    
@@ -82,6 +84,11 @@ def create_app(config_class=Config):
     app.register_blueprint(messages_bp)
     app.register_blueprint(goals_bp)
     app.register_blueprint(friends_bp)
+
+    # Ensure SocketIO handlers from blueprints are recognized
+    # (This is implicitly handled by importing the blueprints before socketio runs,
+    # but let's make sure our friends blueprint is imported where socketio can see it)
+    from .routes import friends
 
     # Global error handler to return JSON errors with CORS headers
     @app.errorhandler(Exception)
