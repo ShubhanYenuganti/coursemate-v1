@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext'; // Import the useAuth hook
 
-const socketUrl = "http://localhost:5173";
+const socketUrl = process.env.BACKEND_URL;
 
 interface ISocketContext {
   socket: Socket | null;

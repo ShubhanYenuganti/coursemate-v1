@@ -49,7 +49,7 @@ class CourseService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5173';
+    this.baseUrl = process.env.BACKEND_URL || 'http://192.168.86.41:5173';
   }
 
   private getAuthHeaders() {

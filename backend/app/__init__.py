@@ -26,7 +26,8 @@ def create_app(config_class=Config):
              r"/api/*": {
                  "origins": [
                      "http://192.168.1.198:3001",
-                     "http://172.31.215.88:3001", 
+                     "http://172.31.215.88:3001",
+                     "http://192.168.86.41:3001", 
                      "http://localhost:3001",
                      "http://localhost:3000"
                  ],

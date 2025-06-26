@@ -6,7 +6,7 @@ export interface ApiResponse {
     message?: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5173/api';
+const API_BASE_URL = process.env.BACKEND_URL || 'http://192.168.86.41:5173';
 
 const apiService: AxiosInstance = axios.create({
     baseURL: API_BASE_URL,

@@ -14,9 +14,9 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks }) => {
   const handleToggleSubtask = (subtaskId: string) => {
     setLocalSubtasks(prev => 
       prev.map(subtask => 
-        subtask.id === subtaskId 
-          ? { ...subtask, completed: !subtask.completed }
-          : subtask
+      subtask.id === subtaskId 
+        ? { ...subtask, completed: !subtask.completed }
+        : subtask
       )
     );
   };
@@ -64,7 +64,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks }) => {
   }
 
   return (
-    <div className="space-y-2">
+      <div className="space-y-2">
       {localSubtasks.map(subtask => (
         <div
           key={subtask.id}
@@ -74,39 +74,39 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks }) => {
               : 'bg-white border-gray-200 hover:border-gray-300'
           }`}
         >
-          <button
+            <button
             onClick={() => handleToggleSubtask(subtask.id)}
             className={`flex-shrink-0 transition-colors ${
               subtask.completed ? 'text-green-600' : 'text-gray-400 hover:text-green-600'
-            }`}
-          >
+              }`}
+            >
             {subtask.completed ? (
               <CheckCircle className="w-5 h-5" />
             ) : (
               <Circle className="w-5 h-5" />
             )}
-          </button>
+            </button>
 
           <div className={`flex-shrink-0 ${getTypeColor(subtask.type)}`}>
-            {getTypeIcon(subtask.type)}
-          </div>
+              {getTypeIcon(subtask.type)}
+            </div>
 
           <div className="flex-1 min-w-0">
-            <p className={`text-sm font-medium ${
+              <p className={`text-sm font-medium ${
               subtask.completed ? 'text-gray-500 line-through' : 'text-gray-900'
-            }`}>
-              {subtask.name}
-            </p>
+              }`}>
+                {subtask.name}
+              </p>
             <div className="flex items-center gap-2 mt-1">
               <div className="flex items-center gap-1 text-xs text-gray-500">
                 <Clock className="w-3 h-3" />
                 <span>{subtask.estimatedTimeMinutes} min</span>
               </div>
               <span className="text-xs text-gray-400 capitalize">{subtask.type}</span>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        ))}
     </div>
   );
 };

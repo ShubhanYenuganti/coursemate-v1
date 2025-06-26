@@ -22,27 +22,27 @@ export interface UserSummary {
 }
 
 const sendFriendRequest = (receiverId: string) => {
-    return apiService.post('/friends/request', { receiver_id: receiverId });
+    return apiService.post('/api/friends/request', { receiver_id: receiverId });
 };
 
 const respondToFriendRequest = (requestId: string, action: 'accept' | 'reject') => {
-    return apiService.post('/friends/respond', { request_id: requestId, action });
+    return apiService.post('/api/friends/respond', { request_id: requestId, action });
 };
 
 const getFriends = (): Promise<Friend[]> => {
-    return apiService.get('/friends/list').then((res: AxiosResponse<ApiResponse & { friends: Friend[] }>) => res.data.friends);
+    return apiService.get('/api/friends/list').then((res: AxiosResponse<ApiResponse & { friends: Friend[] }>) => res.data.friends);
 };
 
 const getPendingRequests = (): Promise<PendingRequest[]> => {
-    return apiService.get('/friends/pending').then((res: AxiosResponse<ApiResponse & { pending_requests: PendingRequest[] }>) => res.data.pending_requests);
+    return apiService.get('/api/friends/pending').then((res: AxiosResponse<ApiResponse & { pending_requests: PendingRequest[] }>) => res.data.pending_requests);
 };
 
 const findNewFriends = (): Promise<UserSummary[]> => {
-    return apiService.get('/friends/find').then((res: AxiosResponse<ApiResponse & { users: UserSummary[] }>) => res.data.users);
+    return apiService.get('/api/friends/find').then((res: AxiosResponse<ApiResponse & { users: UserSummary[] }>) => res.data.users);
 };
 
 const getFriendsForNewChat = (): Promise<Friend[]> => {
-    return apiService.get('/friends/list-for-new-chat').then((res: AxiosResponse<ApiResponse & { friends: Friend[] }>) => res.data.friends);
+    return apiService.get('/api/friends/list-for-new-chat').then((res: AxiosResponse<ApiResponse & { friends: Friend[] }>) => res.data.friends);
 };
 
 export const friendService = {
