@@ -62,8 +62,21 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     peer.on('call', (call) => {
-        // This is an incoming call, but it's initiated by the other user's `peer.call`.
-        // We will handle this via signaling instead to show a UI first.
+        // This is an incoming call from the other user
+        console.log('[CallContext] Received incoming PeerJS call');
+        setActiveCall(call);
+        
+        // Answer the call with our local stream
+        if (localStream) {
+            call.answer(localStream);
+        }
+        
+        call.on('stream', (remoteUserStream) => {
+            console.log('[CallContext] Received remote stream from incoming call');
+            setRemoteStream(remoteUserStream);
+            setIsCallActive(true);
+            setIsCallInitiating(false);
+        });
     });
     
     // Listen for signaling events from the server
