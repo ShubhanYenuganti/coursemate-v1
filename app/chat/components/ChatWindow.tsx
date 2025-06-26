@@ -19,17 +19,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
   const inputRef = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const { startCall } = useCall();
+  const { startCall, isPeerReady } = useCall();
   const { socket } = useSocket();
-  const [isCallReady, setIsCallReady] = useState(false);
   const peerRef = React.useRef<any>(null);
   const [peerId, setPeerId] = useState<string>('');
   const { user } = useAuth();
-
-  useEffect(() => {
-    // Wait for all dependencies to be ready
-    setIsCallReady(!!peerRef.current && !!peerId && !!user && !!socket);
-  }, [peerRef.current, peerId, user, socket]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -118,8 +112,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
               }
             }}
             className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            disabled={!isCallReady}
-            title={!isCallReady ? 'Call is not ready yet' : 'Start Video Call'}
+            disabled={!isPeerReady}
+            title={!isPeerReady ? 'Call is not ready yet' : 'Start Video Call'}
           >
             <Video className="w-4 h-4" />
           </button>

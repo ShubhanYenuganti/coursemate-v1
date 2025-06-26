@@ -21,6 +21,7 @@ interface ICallContext {
   endCall: () => void;
   acceptCall: () => void;
   declineCall: () => void;
+  isPeerReady: boolean;
 }
 
 const CallContext = createContext<ICallContext | null>(null);
@@ -41,6 +42,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isCallActive, setIsCallActive] = useState(false);
   const [incomingCall, setIncomingCall] = useState<CallerData | null>(null);
   const [activeCall, setActiveCall] = useState<any>(null); // PeerJS call object
+  const [isPeerReady, setIsPeerReady] = useState(false);
 
   const { socket } = useSocket();
   const { user } = useAuth(); // Get current user info
@@ -90,6 +92,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off('call-ended');
     };
   }, [socket, user]);
+  
+  useEffect(() => {
+    if (peerRef.current && peerId && user && socket) {
+      setIsPeerReady(true);
+    } else {
+      setIsPeerReady(false);
+    }
+  }, [peerRef.current, peerId, user, socket]);
   
   const startCall = (receiverId: string) => {
     console.log(`[CallContext] Attempting to start call to receiverId: ${receiverId}`);
@@ -174,6 +184,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     endCall,
     acceptCall,
     declineCall,
+    isPeerReady,
   };
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
