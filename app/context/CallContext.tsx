@@ -17,6 +17,7 @@ interface ICallContext {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   isCallActive: boolean;
+  isCallInitiating: boolean;
   incomingCall: CallerData | null;
   startCall: (receiverId: string) => void;
   endCall: () => void;
@@ -41,6 +42,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isCallActive, setIsCallActive] = useState(false);
+  const [isCallInitiating, setIsCallInitiating] = useState(false);
   const [incomingCall, setIncomingCall] = useState<CallerData | null>(null);
   const [activeCall, setActiveCall] = useState<any>(null); // PeerJS call object
   const [isPeerReady, setIsPeerReady] = useState(false);
@@ -104,10 +106,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [peerRef.current, peerId, user, socket]);
   
   useEffect(() => {
-    if (isCallActive) {
+    if (isCallActive || isCallInitiating) {
       router.push('/call');
     }
-  }, [isCallActive, router]);
+  }, [isCallActive, isCallInitiating, router]);
   
   const startCall = (receiverId: string) => {
     console.log(`[CallContext] Attempting to start call to receiverId: ${receiverId}`);
@@ -125,6 +127,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(stream => {
         console.log('[CallContext] Got local media stream.');
         setLocalStream(stream);
+        setIsCallInitiating(true);
         
         const payload = {
             receiver_id: receiverId,
@@ -146,6 +149,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then(stream => {
             setLocalStream(stream);
+            setIsCallInitiating(true);
 
             const call = peerRef.current!.call(incomingCall.caller_peer_id, stream);
             setActiveCall(call);
@@ -153,6 +157,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
             call.on('stream', (remoteStream) => {
                 setRemoteStream(remoteStream);
                 setIsCallActive(true);
+                setIsCallInitiating(false);
             });
 
             // Let the caller know you accepted
@@ -175,6 +180,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeCall.close();
       }
       setIsCallActive(false);
+      setIsCallInitiating(false);
       localStream?.getTracks().forEach(track => track.stop());
       setLocalStream(null);
       setRemoteStream(null);
@@ -187,6 +193,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStream,
     remoteStream,
     isCallActive,
+    isCallInitiating,
     incomingCall,
     startCall,
     endCall,
