@@ -62,6 +62,7 @@ def create_app(config_class=Config):
     from .routes.health import health_bp
     from .routes.uploads import uploads_bp
     from .routes.chat import chat_bp
+    from .routes.tasks import tasks_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
@@ -69,6 +70,7 @@ def create_app(config_class=Config):
     app.register_blueprint(health_bp)
     app.register_blueprint(uploads_bp)
     app.register_blueprint(chat_bp)
+    app.register_blueprint(tasks_bp)
 
     # Global error handler to return JSON errors with CORS headers
     @app.errorhandler(Exception)
@@ -84,6 +86,7 @@ def create_app(config_class=Config):
         
     # Import models to ensure they're registered with SQLAlchemy
     from .models.course import Course
+    from .models.task import Task
     
     # Create tables if they don't exist
     with app.app_context():

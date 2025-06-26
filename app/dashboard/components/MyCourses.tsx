@@ -10,11 +10,13 @@ export interface Course {
   iconBg: string;
   iconColor: string;
   progressColor: string;
+  dbId?: string; // Database ID for navigation
+  banner?: string; // Course banner image
 }
 
 interface MyCoursesProps {
   courses?: Course[];
-  onAddCourse?: () => void;
+  onViewAllCourses?: () => void;
   onViewCourse?: (course: Course) => void;
   onContinueCourse?: (course: Course) => void;
 }
@@ -30,6 +32,7 @@ const defaultCourses: Course[] = [
     iconBg: 'bg-red-100',
     iconColor: 'text-red-600',
     progressColor: 'bg-red-600',
+    banner: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&h=200&fit=crop',
   },
   {
     id: 2,
@@ -41,12 +44,13 @@ const defaultCourses: Course[] = [
     iconBg: 'bg-blue-100',
     iconColor: 'text-blue-600',
     progressColor: 'bg-blue-600',
+    banner: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=200&fit=crop',
   },
 ];
 
 const MyCourses: React.FC<MyCoursesProps> = ({
   courses = [],
-  onAddCourse,
+  onViewAllCourses,
   onViewCourse,
   onContinueCourse,
 }) => {
@@ -66,58 +70,63 @@ const MyCourses: React.FC<MyCoursesProps> = ({
       <div className="flex justify-between items-center mb-5">
         <h2 className="text-lg font-semibold text-gray-800">My Courses</h2>
         <button
-          onClick={onAddCourse}
+          onClick={onViewAllCourses}
           className="text-indigo-500 font-medium flex items-center gap-1 hover:text-indigo-600 transition-colors"
         >
-          + Add Course
+          View All Courses →
         </button>
       </div>
 
       {/* Course Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {coursesToDisplay.map((course) => (
           <div
             key={course.id}
-            className="border border-gray-200 rounded-lg p-4 hover:border-indigo-500 hover:-translate-y-1 transition-all duration-200 hover:shadow-md"
+            className="border border-gray-200 rounded-lg hover:border-indigo-500 hover:-translate-y-1 transition-all duration-200 hover:shadow-md overflow-hidden flex flex-col min-h-[280px]"
           >
-            {/* Course Header */}
-            <div className="flex items-center mb-3">
-              <div className={`w-10 h-10 ${course.iconBg} ${course.iconColor} rounded-lg flex items-center justify-center mr-3`}>
-                {course.icon}
+            {/* Course Banner */}
+            {course.banner && (
+              <div className="w-full h-32 bg-gradient-to-r from-blue-500 to-purple-600 relative overflow-hidden">
+                <img
+                  src={course.banner}
+                  alt={`${course.name} banner`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback to gradient if image fails to load
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-800">{course.name}</h3>
-                <div className="text-xs text-gray-600">
-                  {course.professor} | {course.schedule}
+            )}
+
+            {/* Course Content */}
+            <div className="p-6 flex flex-col h-full">
+              {/* Course Header */}
+              <div className="flex items-center mb-4">
+                <div className={`w-12 h-12 ${course.iconBg} ${course.iconColor} rounded-lg flex items-center justify-center mr-4 text-lg`}>
+                  {course.icon}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-800 text-lg">{course.name}</h3>
+                  <div className="text-sm text-gray-600">
+                    {course.professor} | {course.schedule}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Progress Bar */}
-            <div className="w-full h-1.5 bg-gray-100 rounded-full mb-2 overflow-hidden">
-              <div
-                className={`h-full ${course.progressColor} rounded-full transition-all duration-300`}
-                style={{ width: `${course.progress}%` }}
-              ></div>
-            </div>
-            <div className="text-xs text-gray-600 text-right mb-3">
-              {course.progress}% complete
-            </div>
+              {/* Spacer to push button to bottom */}
+              <div className="flex-1"></div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleViewDetails(course)}
-                className="px-3 py-1.5 bg-indigo-500 text-white text-xs rounded-md hover:bg-indigo-600 transition-colors"
-              >
-                View Details
-              </button>
-              <button
-                onClick={() => handleContinue(course)}
-                className="px-3 py-1.5 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700 transition-colors"
-              >
-                Continue
-              </button>
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => handleContinue(course)}
+                  className="px-4 py-2 bg-indigo-500 text-white text-sm rounded-md hover:bg-indigo-600 transition-colors flex-1"
+                >
+                  Enter Course
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -129,10 +138,10 @@ const MyCourses: React.FC<MyCoursesProps> = ({
           <div className="text-4xl mb-2">📚</div>
           <p className="mb-4">No courses yet</p>
           <button
-            onClick={onAddCourse}
+            onClick={onViewAllCourses}
             className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
           >
-            Add Your First Course
+            View All Courses
           </button>
         </div>
       )}
