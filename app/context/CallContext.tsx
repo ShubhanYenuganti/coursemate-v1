@@ -51,6 +51,20 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { user } = useAuth(); // Get current user info
   const router = useRouter();
 
+  // Persist call state across Fast Refresh
+  useEffect(() => {
+    const savedCallState = sessionStorage.getItem('callState');
+    if (savedCallState) {
+      const { isCallActive: savedIsCallActive, isCallInitiating: savedIsCallInitiating } = JSON.parse(savedCallState);
+      setIsCallActive(savedIsCallActive);
+      setIsCallInitiating(savedIsCallInitiating);
+    }
+  }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem('callState', JSON.stringify({ isCallActive, isCallInitiating }));
+  }, [isCallActive, isCallInitiating]);
+
   useEffect(() => {
     if (!socket || !user?.id) return;
 
@@ -68,7 +82,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Answer the call with our local stream
         if (localStream) {
+            console.log('[CallContext] Answering call with local stream');
             call.answer(localStream);
+        } else {
+            console.log('[CallContext] No local stream available to answer call');
         }
         
         call.on('stream', (remoteUserStream) => {
@@ -76,6 +93,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setRemoteStream(remoteUserStream);
             setIsCallActive(true);
             setIsCallInitiating(false);
+        });
+
+        call.on('close', () => {
+            console.log('[CallContext] Incoming call closed');
+        });
+
+        call.on('error', (err) => {
+            console.error('[CallContext] Incoming call error:', err);
         });
     });
     
@@ -181,16 +206,27 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then(stream => {
+            console.log('[CallContext] Got local stream for accepting call');
             setLocalStream(stream);
             setIsCallInitiating(true);
 
+            console.log('[CallContext] Calling peer:', incomingCall.caller_peer_id);
             const call = peerRef.current!.call(incomingCall.caller_peer_id, stream);
             setActiveCall(call);
             
             call.on('stream', (remoteStream) => {
+                console.log('[CallContext] Received remote stream from outgoing call');
                 setRemoteStream(remoteStream);
                 setIsCallActive(true);
                 setIsCallInitiating(false);
+            });
+
+            call.on('close', () => {
+                console.log('[CallContext] Outgoing call closed');
+            });
+
+            call.on('error', (err) => {
+                console.error('[CallContext] Outgoing call error:', err);
             });
 
             // Let the caller know you accepted by emitting call-accepted signal

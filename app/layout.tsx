@@ -12,7 +12,10 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "CourseHelper",
   description: "Manage your college coursework with ease",
-  generator: 'v0.dev'
+  generator: 'v0.dev',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({
