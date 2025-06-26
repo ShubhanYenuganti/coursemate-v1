@@ -40,6 +40,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const peerRef = useRef<Peer | null>(null);
   const [peerId, setPeerId] = useState<string>('');
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null); // Ref to track local stream immediately
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isCallActive, setIsCallActive] = useState(false);
   const [isCallInitiating, setIsCallInitiating] = useState(false);
@@ -89,9 +90,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let retryCount = 0;
         const maxRetries = 50; // 5 seconds max
         const answerCall = () => {
-            if (localStream) {
+            if (localStreamRef.current) {
                 console.log('[CallContext] Answering call with local stream');
-                call.answer(localStream);
+                call.answer(localStreamRef.current);
             } else if (retryCount < maxRetries) {
                 retryCount++;
                 console.log('[CallContext] Local stream not ready yet, retrying...', retryCount);
@@ -129,38 +130,29 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // This user started the call, and the other user accepted.
         // Now, call the receiver using their peer id.
         if (data.receiver_peer_id) {
-            console.log('[CallContext] Call accepted, waiting for local stream...');
-            // Wait for local stream to be available
-            let retryCount = 0;
-            const maxRetries = 50; // 5 seconds max
-            const checkLocalStream = () => {
-                if (localStream) {
-                    console.log('[CallContext] Local stream available, calling peer with ID:', data.receiver_peer_id);
-                    const call = peer.call(data.receiver_peer_id, localStream);
-                    setActiveCall(call);
-                    call.on('stream', (remoteUserStream) => {
-                        console.log('[CallContext] Received remote stream from outgoing call');
-                        setRemoteStream(remoteUserStream);
-                        setIsCallActive(true);
-                        setIsCallInitiating(false);
-                    });
-                    
-                    call.on('close', () => {
-                        console.log('[CallContext] Outgoing call closed');
-                    });
+            console.log('[CallContext] Call accepted, checking for local stream...');
+            // Use ref to check for local stream immediately
+            if (localStreamRef.current) {
+                console.log('[CallContext] Local stream available, calling peer with ID:', data.receiver_peer_id);
+                const call = peer.call(data.receiver_peer_id, localStreamRef.current);
+                setActiveCall(call);
+                call.on('stream', (remoteUserStream) => {
+                    console.log('[CallContext] Received remote stream from outgoing call');
+                    setRemoteStream(remoteUserStream);
+                    setIsCallActive(true);
+                    setIsCallInitiating(false);
+                });
+                
+                call.on('close', () => {
+                    console.log('[CallContext] Outgoing call closed');
+                });
 
-                    call.on('error', (err) => {
-                        console.error('[CallContext] Outgoing call error:', err);
-                    });
-                } else if (retryCount < maxRetries) {
-                    retryCount++;
-                    console.log('[CallContext] Local stream not ready yet, retrying...', retryCount);
-                    setTimeout(checkLocalStream, 100);
-                } else {
-                    console.error('[CallContext] Failed to get local stream after timeout');
-                }
-            };
-            checkLocalStream();
+                call.on('error', (err) => {
+                    console.error('[CallContext] Outgoing call error:', err);
+                });
+            } else {
+                console.error('[CallContext] Local stream not available in ref');
+            }
         } else {
             console.error('[CallContext] Cannot make call: missing receiver_peer_id');
         }
@@ -233,6 +225,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(stream => {
         console.log('[CallContext] Got local media stream.');
         setLocalStream(stream);
+        localStreamRef.current = stream; // Set ref immediately
         setIsCallInitiating(true);
         
         const payload = {
@@ -256,6 +249,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .then(stream => {
             console.log('[CallContext] Got local stream for accepting call');
             setLocalStream(stream);
+            localStreamRef.current = stream; // Set ref immediately
             setIsCallInitiating(true);
 
             // Let the caller know you accepted by emitting call-accepted signal
@@ -283,6 +277,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsCallInitiating(false);
       localStream?.getTracks().forEach(track => track.stop());
       setLocalStream(null);
+      localStreamRef.current = null; // Clear ref
       setRemoteStream(null);
       setActiveCall(null);
       setIncomingCall(null);
