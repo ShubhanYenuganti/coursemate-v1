@@ -4,8 +4,10 @@ import ChatList from './ChatList';
 import ChatWindow from './ChatWindow';
 import AddChatModal from './AddChatModal';
 import AddFriendModal from './AddFriendModal';
+import FriendRequestsDropdown from './FriendRequestsDropdown';
 import { ChatWithPreview, Message, Chat, User } from '../types';
-import { messageService, User as ApiUser, Conversation as ApiConversation, Message as ApiMessage } from '../../../lib/api/messageService';
+import { messageService, Conversation as ApiConversation, Message as ApiMessage } from '../../../lib/api/messageService';
+import { friendService, Friend, PendingRequest } from '../../../lib/api/friendService';
 // @ts-ignore
 import { io, Socket } from 'socket.io-client';
 
@@ -26,27 +28,63 @@ const Messages: React.FC = () => {
   const selectedChatIdRef = useRef<string | undefined>(selectedChatId);
   const [isAddChatModalOpen, setIsAddChatModalOpen] = useState(false);
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
+  const [isFriendRequestsOpen, setIsFriendRequestsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [addChatUsers, setAddChatUsers] = useState<User[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const socketRef = useRef<Socket | null>(null);
   const [localUserId, setLocalUserId] = useState<string | undefined>(undefined);
 
   // Fetch users for add chat functionality
-  const fetchUsers = async () => {
+  const fetchFriendsForNewChat = async () => {
     try {
-      const apiUsers = await messageService.getUsers();
-      const transformedUsers: User[] = apiUsers.map(user => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        status: user.status,
-        avatar: user.avatar,
+      const friends = await friendService.getFriendsForNewChat();
+      const transformedUsers: User[] = friends.map((friend: Friend) => ({
+        id: friend.id,
+        name: friend.name,
+        email: friend.email,
+        status: 'online', // Default status, can be improved
+        avatar: '', // Default avatar
       }));
-      setUsers(transformedUsers);
+      setAddChatUsers(transformedUsers);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching friends for new chat:', error);
     }
+  };
+
+  const fetchPendingRequests = async () => {
+    try {
+      const requests = await friendService.getPendingRequests();
+      setPendingRequests(requests);
+    } catch (error) {
+      console.error("Failed to fetch pending requests:", error);
+    }
+  };
+
+  const handleAcceptFriendRequest = async (requestId: string) => {
+    try {
+      await friendService.respondToFriendRequest(requestId, 'accept');
+      setPendingRequests(prev => prev.filter(req => req.request_id !== requestId));
+      // Refresh the list of friends available for a new chat
+      fetchFriendsForNewChat(); 
+    } catch (error) {
+      console.error("Failed to accept friend request:", error);
+    }
+  };
+
+  const handleDeclineFriendRequest = async (requestId: string) => {
+    try {
+      await friendService.respondToFriendRequest(requestId, 'reject');
+      setPendingRequests(prev => prev.filter(req => req.request_id !== requestId));
+    } catch (error) {
+      console.error("Failed to decline friend request:", error);
+    }
+  };
+
+  const handleOpenAddChatModal = () => {
+    fetchFriendsForNewChat(); // Refetch the list of friends you can chat with
+    setIsAddChatModalOpen(true);
   };
 
   // Fetch conversations
@@ -210,8 +248,9 @@ const Messages: React.FC = () => {
 
   // Load data on component mount
   useEffect(() => {
-    fetchUsers();
+    fetchFriendsForNewChat();
     fetchConversations();
+    fetchPendingRequests();
   }, []);
 
   // Ensure user_id is set in localStorage before connecting socket
@@ -306,13 +345,15 @@ const Messages: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 relative">
       <ChatList
         chats={chats}
         selectedChatId={selectedChatId}
+        pendingRequestCount={pendingRequests.length}
         onChatSelect={handleChatSelect}
-        onAddChat={() => setIsAddChatModalOpen(true)}
+        onAddChat={handleOpenAddChatModal}
         onAddFriend={() => setIsAddFriendModalOpen(true)}
+        onToggleFriendRequests={() => setIsFriendRequestsOpen(prev => !prev)}
       />
       
       <ChatWindow
@@ -326,13 +367,24 @@ const Messages: React.FC = () => {
         isOpen={isAddChatModalOpen}
         onClose={() => setIsAddChatModalOpen(false)}
         onStartChat={handleStartChat}
-        users={users}
+        users={addChatUsers}
       />
 
       <AddFriendModal
         isOpen={isAddFriendModalOpen}
         onClose={() => setIsAddFriendModalOpen(false)}
-        onAddFriend={handleAddFriend}
+        onFriendRequestSent={(user) => {
+          console.log(`Friend request sent to ${user.name}`);
+          // You could add a toast notification here
+        }}
+      />
+
+      <FriendRequestsDropdown
+        isOpen={isFriendRequestsOpen}
+        requests={pendingRequests}
+        onAccept={handleAcceptFriendRequest}
+        onDecline={handleDeclineFriendRequest}
+        onClose={() => setIsFriendRequestsOpen(false)}
       />
     </div>
   );
