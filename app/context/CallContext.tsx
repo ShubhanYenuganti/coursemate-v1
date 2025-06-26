@@ -47,6 +47,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [incomingCall, setIncomingCall] = useState<CallerData | null>(null);
   const [activeCall, setActiveCall] = useState<any>(null); // PeerJS call object
   const [isPeerReady, setIsPeerReady] = useState(false);
+  const isEndingCallRef = useRef(false); // Ref to prevent hang-up loops
 
   const { socket } = useSocket();
   const { user } = useAuth(); // Get current user info
@@ -164,7 +165,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     socket.on('hang-up', (data: any) => {
         console.log('[CallContext] Received hang-up signal from other user:', data);
-        endCall();
+        // Only process hang-up if we're not already ending the call
+        if (!isEndingCallRef.current) {
+            endCall();
+        } else {
+            console.log('[CallContext] Ignoring hang-up signal - already ending call');
+        }
     });
 
     return () => {
@@ -270,6 +276,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const endCall = () => {
       console.log('[CallContext] Ending call...');
       
+      // Prevent duplicate endCall calls
+      if (isEndingCallRef.current) {
+          console.log('[CallContext] Call already being ended, skipping...');
+          return;
+      }
+      
+      isEndingCallRef.current = true;
+      
       if (activeCall) {
         activeCall.close();
       }
@@ -290,6 +304,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       console.log('[CallContext] Emitting hang-up signal:', hangUpPayload);
       socket.emit('hang-up', hangUpPayload);
+      
+      // Reset the ending flag after a short delay
+      setTimeout(() => {
+          isEndingCallRef.current = false;
+      }, 1000);
   };
 
   const value = {
