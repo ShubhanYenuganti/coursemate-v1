@@ -98,6 +98,10 @@ class Goal(db.Model):
         task_id = str(uuid.uuid4())
         subtask_id = str(uuid.uuid4())
         
+        # Create more meaningful default task and subtask names based on the goal
+        task_title = f"Plan for {goal_descr[:30]}" if len(goal_descr) > 30 else f"Plan for {goal_descr}"
+        subtask_descr = "First step"
+        
         return cls(
             user_id=user_id,
             course_id=course_id,
@@ -105,10 +109,10 @@ class Goal(db.Model):
             goal_descr=goal_descr,
             due_date=due_date,
             task_id=task_id,
-            task_title="Initial Task",
+            task_title=task_title,
             task_descr="",
             subtask_id=subtask_id,
-            subtask_descr="Initial Subtask",
+            subtask_descr=subtask_descr,
             subtask_type="other"
         ), goal_id, task_id
     

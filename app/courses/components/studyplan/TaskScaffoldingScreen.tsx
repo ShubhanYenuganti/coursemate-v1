@@ -133,38 +133,9 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
       const validTasks = tasks.filter(task => task.name.trim());
       const validSubtasks = subtasks.filter(subtask => subtask.name.trim());
       
-      // Save to backend if goal has an ID
-      if (goal.id && !goal.id.startsWith('temp-')) {
-        const tasksData = validTasks.map(task => ({
-          name: task.name,
-          scheduledDate: task.scheduledDate,
-          completed: task.completed,
-          subtasks: validSubtasks
-            .filter(subtask => subtask.taskId === task.id)
-            .map(subtask => ({
-              name: subtask.name,
-              type: subtask.type,
-              estimatedTimeMinutes: subtask.estimatedTimeMinutes,
-              completed: subtask.completed
-            }))
-        }));
-        
-        const response = await fetch(`/api/goals/${goal.id}/save-tasks`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({ tasks: tasksData })
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to save tasks');
-        }
-        
-        toast.success('Study plan saved successfully!');
-      }
+      console.log('Saving tasks:', validTasks);
+      console.log('Saving subtasks:', validSubtasks);
+      console.log('Goal ID:', goal.id);
       
       // Generate real IDs for local state
       const finalTasks = validTasks.map((task, index) => ({
