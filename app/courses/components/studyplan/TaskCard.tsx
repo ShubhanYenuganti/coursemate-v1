@@ -157,6 +157,47 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted 
                   onTaskUpdated(updatedTask);
                 }
               }}
+              onSubtaskAdded={(newSubtask) => {
+                // Update the local task state to reflect the added subtask
+                const updatedTask = {
+                  ...task,
+                  subtasks: [...task.subtasks, newSubtask],
+                  totalSubtasks: task.totalSubtasks + 1,
+                  completedSubtasks: task.completedSubtasks // New subtask is not completed
+                };
+                
+                // Recalculate progress
+                updatedTask.progress = updatedTask.totalSubtasks > 0
+                  ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
+                  : 0;
+                
+                // Notify parent component
+                if (onTaskUpdated) {
+                  onTaskUpdated(updatedTask);
+                }
+              }}
+              onSubtaskToggled={(subtaskId, completed) => {
+                // Update the local task state to reflect the subtask completion change
+                const updatedSubtasks = task.subtasks.map(subtask => 
+                  subtask.id === subtaskId ? { ...subtask, completed } : subtask
+                );
+                
+                const updatedTask = {
+                  ...task,
+                  subtasks: updatedSubtasks,
+                  completedSubtasks: updatedSubtasks.filter(s => s.completed).length
+                };
+                
+                // Recalculate progress
+                updatedTask.progress = updatedTask.totalSubtasks > 0
+                  ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
+                  : 0;
+                
+                // Notify parent component
+                if (onTaskUpdated) {
+                  onTaskUpdated(updatedTask);
+                }
+              }}
             />
           </div>
         )}
@@ -172,8 +213,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted 
 
       {/* Delete Confirmation Dialog */}
       {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full border border-gray-200">
             <h3 className="text-lg font-semibold mb-4">Delete Task</h3>
             <p className="mb-6">Are you sure you want to delete "{task.name}"? This will also delete all subtasks and cannot be undone.</p>
             <div className="flex justify-end gap-3">

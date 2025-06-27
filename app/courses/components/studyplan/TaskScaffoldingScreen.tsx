@@ -137,48 +137,6 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
       console.log('Saving subtasks:', validSubtasks);
       console.log('Goal ID:', goal.id);
       
-      // Save to backend if goal has an ID
-      if (goal.id && !goal.id.startsWith('temp-')) {
-        const tasksData = validTasks.map(task => ({
-          task_title: task.name,
-          task_descr: '',
-          scheduledDate: task.scheduledDate,
-          completed: task.completed,
-          subtasks: validSubtasks
-            .filter(subtask => subtask.taskId === task.id)
-            .map(subtask => ({
-              subtask_descr: subtask.name,
-              subtask_type: subtask.type,
-              estimatedTimeMinutes: subtask.estimatedTimeMinutes,
-              completed: subtask.completed
-            }))
-        }));
-        
-        console.log('Sending to backend:', { tasks: tasksData });
-        
-        const response = await fetch(`/api/goals/${goal.id}/save-tasks`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({ tasks: tasksData })
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('Error response from server:', errorData);
-          throw new Error(errorData.error || 'Failed to save tasks');
-        }
-        
-        const responseData = await response.json();
-        console.log('Server response:', responseData);
-        
-        toast.success('Study plan saved successfully!');
-      } else {
-        console.warn('No valid goal ID to save tasks to:', goal.id);
-      }
-      
       // Generate real IDs for local state
       const finalTasks = validTasks.map((task, index) => ({
         ...task,
