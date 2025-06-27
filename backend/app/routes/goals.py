@@ -25,8 +25,66 @@ def get_course_goals(course_id):
         # Get all rows for this course
         goals = Goal.query.filter_by(course_id=course_id, user_id=user_id).all()
         
-        # Return all rows directly
-        result = [goal.to_dict() for goal in goals]
+        # Group by goal_id to get only unique goals
+        unique_goals = {}
+        for goal in goals:
+            if goal.goal_id not in unique_goals:
+                unique_goals[goal.goal_id] = goal
+        
+        # Calculate progress for each goal
+        result = []
+        for goal in unique_goals.values():
+            goal_dict = goal.to_dict()
+            
+            # Get all rows for this goal to calculate progress
+            goal_rows = [g for g in goals if g.goal_id == goal.goal_id]
+            
+            # Filter out placeholder tasks
+            real_task_rows = [g for g in goal_rows if g.task_id != 'placeholder' and g.task_title]
+            
+            if real_task_rows:
+                # Calculate task and subtask counts
+                unique_tasks = {}
+                for row in real_task_rows:
+                    if row.task_id not in unique_tasks:
+                        unique_tasks[row.task_id] = {
+                            'completed': row.task_completed,
+                            'subtasks': 0,
+                            'completed_subtasks': 0
+                        }
+                    unique_tasks[row.task_id]['subtasks'] += 1
+                    if row.subtask_completed:
+                        unique_tasks[row.task_id]['completed_subtasks'] += 1
+                
+                total_tasks = len(unique_tasks)
+                completed_tasks = sum(1 for task in unique_tasks.values() if task['completed'])
+                total_subtasks = sum(task['subtasks'] for task in unique_tasks.values())
+                completed_subtasks = sum(task['completed_subtasks'] for task in unique_tasks.values())
+                
+                # Calculate progress percentage
+                progress = 0
+                if total_subtasks > 0:
+                    progress = round((completed_subtasks / total_subtasks) * 100)
+                
+                goal_dict.update({
+                    'total_tasks': total_tasks,
+                    'completed_tasks': completed_tasks,
+                    'total_subtasks': total_subtasks,
+                    'completed_subtasks': completed_subtasks,
+                    'progress': progress
+                })
+            else:
+                # No real tasks, set default values
+                goal_dict.update({
+                    'total_tasks': 0,
+                    'completed_tasks': 0,
+                    'total_subtasks': 0,
+                    'completed_subtasks': 0,
+                    'progress': 0
+                })
+            
+            result.append(goal_dict)
+        
         return jsonify(result), 200
     
     except SQLAlchemyError as e:
@@ -58,6 +116,7 @@ def create_goal(course_id):
         # Create a new goal with initial task and subtask
         goal_descr = data['goal_descr']
         due_date = datetime.fromisoformat(data['due_date']) if 'due_date' in data and data['due_date'] else None
+        skip_default_task = data.get('skip_default_task', False)
         
         # Generate IDs
         goal_id = str(uuid.uuid4())
@@ -105,8 +164,8 @@ def create_goal(course_id):
                         subtask_type='other'
                     )
                     rows_to_add.append(subtask)
-        else:
-            # Create default task and subtask if none provided
+        elif not skip_default_task:
+            # Create default task and subtask if none provided and not skipping default task
             new_goal, _, _ = Goal.create_for_goal(
                 user_id=user_id,
                 course_id=course_id,
@@ -114,6 +173,22 @@ def create_goal(course_id):
                 due_date=due_date
             )
             rows_to_add.append(new_goal)
+        else:
+            # Create a placeholder row with just the goal information
+            placeholder_goal = Goal(
+                user_id=user_id,
+                course_id=course_id,
+                goal_id=goal_id,
+                goal_descr=goal_descr,
+                due_date=due_date,
+                task_id='placeholder',
+                task_title='',
+                task_descr='',
+                subtask_id='placeholder',
+                subtask_descr='',
+                subtask_type='other'
+            )
+            rows_to_add.append(placeholder_goal)
         
         # Add all rows to the database
         for row in rows_to_add:
@@ -278,10 +353,21 @@ def update_goal(goal_id):
                         )
                         db.session.add(new_subtask)
             
-            # Delete tasks that weren't in the update
-            for g in goals:
-                if g.task_id not in updated_task_ids:
-                    db.session.delete(g)
+            # Instead of deleting tasks that weren't in the update, we'll keep them
+            # This allows for incremental additions without losing existing data
+            
+            # Check if all tasks are completed to update goal completion status
+            if updated_task_ids:
+                all_tasks_completed = True
+                for task_id in updated_task_ids:
+                    task_rows = [g for g in goals if g.task_id == task_id]
+                    if not all(g.task_completed for g in task_rows):
+                        all_tasks_completed = False
+                        break
+                
+                # Update goal completion status
+                for g in goals:
+                    g.goal_completed = all_tasks_completed
         
         db.session.commit()
         
@@ -347,8 +433,19 @@ def get_goal_tasks(goal_id):
         if not goals:
             return jsonify({'error': 'Goal not found or you do not have access'}), 404
         
-        # Return all rows directly
-        result = [goal.to_dict() for goal in goals]
+        # Filter out placeholder tasks and empty tasks
+        # Keep placeholder rows only if there are no other tasks
+        has_real_tasks = any(goal.task_id != 'placeholder' and goal.task_title for goal in goals)
+        
+        if has_real_tasks:
+            # If there are real tasks, filter out placeholders
+            filtered_goals = [goal for goal in goals if goal.task_id != 'placeholder' and goal.task_title]
+        else:
+            # If no real tasks, return empty array (placeholder will be handled by frontend)
+            filtered_goals = []
+        
+        # Return filtered rows
+        result = [goal.to_dict() for goal in filtered_goals]
         return jsonify(result), 200
         
     except SQLAlchemyError as e:
@@ -488,10 +585,8 @@ def update_goal_tasks(goal_id):
                     )
                     db.session.add(new_subtask)
         
-        # Delete tasks that weren't in the update
-        for g in goals:
-            if g.task_id not in updated_task_ids:
-                db.session.delete(g)
+        # Instead of deleting tasks that weren't in the update, we'll keep them
+        # This allows for incremental additions without losing existing data
         
         # Check if all tasks are completed to update goal completion status
         if updated_task_ids:
@@ -543,9 +638,9 @@ def save_tasks_and_subtasks(goal_id):
         if not data or 'tasks' not in data:
             return jsonify({'error': 'Tasks are required'}), 400
         
-        # Delete existing rows for this goal
-        for goal in existing_goals:
-            db.session.delete(goal)
+        # Instead of deleting existing rows, we'll keep them and just add new ones
+        # Get reference goal data from an existing row
+        reference_goal = existing_goals[0]
         
         # Create new rows for each task and subtask
         new_rows = []
@@ -568,11 +663,11 @@ def save_tasks_and_subtasks(goal_id):
                     
                     subtask = Goal(
                         user_id=user_id,
-                        course_id=existing_goals[0].course_id,
+                        course_id=reference_goal.course_id,
                         goal_id=goal_id,
-                        goal_descr=existing_goals[0].goal_descr,
-                        due_date=existing_goals[0].due_date,
-                        goal_completed=existing_goals[0].goal_completed,
+                        goal_descr=reference_goal.goal_descr,
+                        due_date=reference_goal.due_date,
+                        goal_completed=reference_goal.goal_completed,
                         task_id=task_id,
                         task_title=task_title,
                         task_descr=task_descr,
@@ -590,11 +685,11 @@ def save_tasks_and_subtasks(goal_id):
                 
                 subtask = Goal(
                     user_id=user_id,
-                    course_id=existing_goals[0].course_id,
+                    course_id=reference_goal.course_id,
                     goal_id=goal_id,
-                    goal_descr=existing_goals[0].goal_descr,
-                    due_date=existing_goals[0].due_date,
-                    goal_completed=existing_goals[0].goal_completed,
+                    goal_descr=reference_goal.goal_descr,
+                    due_date=reference_goal.due_date,
+                    goal_completed=reference_goal.goal_completed,
                     task_id=task_id,
                     task_title=task_title,
                     task_descr=task_descr,
@@ -701,4 +796,190 @@ def delete_subtask(subtask_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting subtask: {str(e)}")
-        return jsonify({'error': 'An error occurred while deleting the subtask'}), 500 
+        return jsonify({'error': 'An error occurred while deleting the subtask'}), 500
+
+
+@goals_bp.route('/api/goals/tasks/subtasks/<subtask_id>', methods=['PUT'])
+@jwt_required()
+def update_subtask(subtask_id):
+    """Update a subtask"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Get the subtask row
+        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
+        
+        if not subtask:
+            return jsonify({'error': 'Subtask not found or you do not have access'}), 404
+        
+        data = request.get_json()
+        
+        # Update subtask fields
+        if 'subtask_descr' in data:
+            subtask.subtask_descr = data['subtask_descr']
+        
+        if 'subtask_type' in data:
+            subtask.subtask_type = data['subtask_type']
+        
+        if 'subtask_completed' in data:
+            subtask.subtask_completed = data['subtask_completed']
+            
+            # Get all rows for this task
+            task_rows = Goal.query.filter_by(task_id=subtask.task_id, user_id=user_id).all()
+            
+            # Check if all subtasks are completed to update task completion status
+            all_subtasks_completed = all(row.subtask_completed for row in task_rows)
+            
+            # Update task completion status in all rows for this task
+            for row in task_rows:
+                row.task_completed = all_subtasks_completed
+            
+            # Get all rows for this goal
+            goal_rows = Goal.query.filter_by(goal_id=subtask.goal_id, user_id=user_id).all()
+            
+            # Get unique task IDs and their completion status
+            task_completion_status = {}
+            for row in goal_rows:
+                if row.task_id not in task_completion_status:
+                    task_completion_status[row.task_id] = row.task_completed
+            
+            # Check if all tasks are completed to update goal completion status
+            all_tasks_completed = all(task_completion_status.values()) if task_completion_status else False
+            
+            # Update goal completion status in all rows for this goal
+            for row in goal_rows:
+                row.goal_completed = all_tasks_completed
+        
+        subtask.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify(subtask.to_dict()), 200
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating subtask: {str(e)}")
+        return jsonify({'error': 'An error occurred while updating the subtask'}), 500
+
+
+@goals_bp.route('/api/goals/tasks/<task_id>/subtasks', methods=['POST'])
+@jwt_required()
+def create_subtask(task_id):
+    """Create a new subtask for a task"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Check if task exists and belongs to the user
+        task_rows = Goal.query.filter_by(task_id=task_id, user_id=user_id).all()
+        
+        if not task_rows:
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        data = request.get_json()
+        
+        if not data or 'subtask_descr' not in data:
+            return jsonify({'error': 'Subtask description is required'}), 400
+        
+        # Use the first row to get goal and task info
+        task_row = task_rows[0]
+        
+        # Create a new subtask
+        subtask_id = str(uuid.uuid4())
+        
+        new_subtask = Goal(
+            user_id=user_id,
+            course_id=task_row.course_id,
+            goal_id=task_row.goal_id,
+            goal_descr=task_row.goal_descr,
+            due_date=task_row.due_date,
+            goal_completed=task_row.goal_completed,
+            task_id=task_id,
+            task_title=task_row.task_title,
+            task_descr=task_row.task_descr,
+            task_completed=task_row.task_completed,
+            subtask_id=subtask_id,
+            subtask_descr=data['subtask_descr'],
+            subtask_type=data.get('subtask_type', 'other'),
+            subtask_completed=data.get('subtask_completed', False)
+        )
+        
+        db.session.add(new_subtask)
+        db.session.commit()
+        
+        # Return the created subtask
+        result = new_subtask.to_dict()
+        return jsonify(result), 201
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating subtask: {str(e)}")
+        return jsonify({'error': 'An error occurred while creating the subtask'}), 500
+
+
+@goals_bp.route('/api/goals/<goal_id>/create-empty-task', methods=['POST'])
+@jwt_required()
+def create_empty_task(goal_id):
+    """Create an empty task for a goal when there are no tasks"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Check if goal exists
+        existing_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
+        if not existing_goals:
+            return jsonify({'error': 'Goal not found or you do not have access'}), 404
+        
+        # Delete any placeholder rows
+        placeholder_rows = [goal for goal in existing_goals if goal.task_id == 'placeholder']
+        for placeholder in placeholder_rows:
+            db.session.delete(placeholder)
+        
+        # Get reference goal data from an existing row (non-placeholder)
+        reference_goal = next((goal for goal in existing_goals if goal.task_id != 'placeholder'), existing_goals[0])
+        
+        # Create a new task with a default subtask
+        task_id = str(uuid.uuid4())
+        subtask_id = str(uuid.uuid4())
+        
+        new_task = Goal(
+            user_id=user_id,
+            course_id=reference_goal.course_id,
+            goal_id=goal_id,
+            goal_descr=reference_goal.goal_descr,
+            due_date=reference_goal.due_date,
+            goal_completed=reference_goal.goal_completed,
+            task_id=task_id,
+            task_title="New Task",
+            task_descr="",
+            task_completed=False,
+            subtask_id=subtask_id,
+            subtask_descr="Default Subtask",
+            subtask_type="other",
+            subtask_completed=False
+        )
+        
+        db.session.add(new_task)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Empty task created successfully',
+            'task': new_task.to_dict()
+        }), 201
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating empty task: {str(e)}")
+        return jsonify({'error': 'An error occurred while creating empty task'}), 500 
