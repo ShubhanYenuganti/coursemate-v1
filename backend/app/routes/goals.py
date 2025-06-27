@@ -616,10 +616,10 @@ def save_tasks_and_subtasks(goal_id):
 @jwt_required()                               # still requires a valid JWT
 def get_goals_by_user():
     # we ignore the real identity for test mode
-    _ = get_jwt_identity()
+    user = get_jwt_identity()
 
     try:
-        goals = Goal.query.filter_by(user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
+        goals = Goal.query.filter_by(user_id=user).all()
 
         # -------- group by end_date --------
         grouped: dict[str, list[dict]] = defaultdict(list)

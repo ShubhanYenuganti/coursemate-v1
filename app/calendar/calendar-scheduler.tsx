@@ -17,9 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import useAuthRedirect from "@/hooks/useAuthRedirect"
 
-/**************************************
- * Utility helpers for dynamic dates  *
- **************************************/
+/*───────────────────  DATE HELPERS ───────────────────*/
+
 const startOfToday = () => {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
@@ -37,16 +36,6 @@ const getWeekDates = (ref: Date) => {
   })
 }
 
-// Generate next N days (including today)
-const getNextNDays = (n: number) => {
-  const base = startOfToday()
-  return Array.from({ length: n }, (_, i) => {
-    const d = new Date(base)
-    d.setDate(base.getDate() + i)
-    return d
-  })
-}
-
 const formatHourLabel = (h: number, withMinutes = false) => {
   const date = new Date()
   date.setHours(h, 0, 0, 0)
@@ -55,31 +44,35 @@ const formatHourLabel = (h: number, withMinutes = false) => {
   )
 }
 
-// Generate all days for a month view (including padding days)
-const getMonthDays = (date: Date) => {
-  const year = date.getFullYear()
-  const month = date.getMonth()
-  const firstDay = new Date(year, month, 1)
-  const lastDay = new Date(year, month + 1, 0)
-  const startDate = new Date(firstDay)
-  startDate.setDate(firstDay.getDate() - firstDay.getDay()) // Start from Sunday
+/*─────────────────  TYPES & CONSTANTS  ────────────────*/
 
-  const days = []
-  const current = new Date(startDate)
-
-  // Generate 42 days (6 weeks * 7 days) to ensure we cover the entire month
-  for (let i = 0; i < 42; i++) {
-    days.push(new Date(current))
-    current.setDate(current.getDate() + 1)
-  }
-
-  return days
+interface Goal {
+  id: string;
+  user_id: string;
+  course_id: string;
+  goal_id: string;
+  goal_descr: string | null;
+  due_date: string | null;          // ISO-8601 string (e.g. "2025-06-30T00:00:00")
+  goal_completed: boolean;
+  task_id: string | null;
+  task_title: string | null;
+  task_descr: string | null;
+  task_completed: boolean;
+  subtask_id: string | null;
+  subtask_descr: string | null;
+  subtask_type: string | null;
+  subtask_completed: boolean;
+  created_at: string | null;        // ISO
+  updated_at: string | null;
+  start_time: string | null;   // ISO string – NOT always midnight
+  end_time: string | null;   // ISO string – ≧ start_time       // ISO
+  google_calendar_color?: string | null;  // Hex color from Google Calendar
 }
 
+type GoalsByDate = Record<string, Goal[]>
 
-/**************************************
- * Static demo data (unchanged)       *
- **************************************/
+/*─────────────────  STATIC DATA ─────────────────*/
+
 const courses = [
   { id: "phys101", name: "PHYS 101", color: "#0ea5e9", visible: true },
   { id: "math201", name: "MATH 201", color: "#f59e0b", visible: true },
@@ -153,36 +146,57 @@ const allTasks = [
   },
 ]
 
-interface Goal {
-  id: string;
-  user_id: string;
-  course_id: string;
-  goal_id: string;
-  goal_descr: string | null;
-  due_date: string | null;          // ISO-8601 string (e.g. "2025-06-30T00:00:00")
-  goal_completed: boolean;
-  task_id: string | null;
-  task_title: string | null;
-  task_descr: string | null;
-  task_completed: boolean;
-  subtask_id: string | null;
-  subtask_descr: string | null;
-  subtask_type: string | null;
-  subtask_completed: boolean;
-  created_at: string | null;        // ISO
-  updated_at: string | null;        // ISO
-}
 
-type GoalsByDate = Record<string, Goal[]>
-
+/*────────────────  COLOR & TIME UTILITIES ─────────────*/
 /** Pick a chip color from the course code (very simple hash) */
-const colorForCourse = (courseId: string | null) => {
+const colorForCourse = (courseId: string | null, googleCalendarColor?: string | null) => {
+  // If Google Calendar color is available, use it
+  if (googleCalendarColor) {
+    return googleCalendarColor;
+  }
+  
+  // Fall back to course-based color system
   const palette = ["#0ea5e9", "#f59e0b", "#8b5cf6", "#ef4444", "#22c55e", "#ec4899"];
   if (!courseId) return "#6b7280";                // gray
   const idx = [...courseId].reduce((s, c) => s + c.charCodeAt(0), 0) % palette.length;
   return palette[idx];
 };
 
+/** True if the goal is an all-day event (no real clock component) */
+const isAllDay = (g: Goal) => {
+  if (!g.start_time || !g.end_time) return true;
+  const start = new Date(g.start_time);
+  const end = new Date(g.end_time);
+  return start.getHours() === 0 && start.getMinutes() === 0 &&
+         end.getHours() === 0 && end.getMinutes() === 0;
+};
+
+/** Height percentage the card must occupy in its hour-row grid */
+const heightPct = (g: Goal) => {
+  const start = new Date(g.start_time ?? g.due_date!);
+  const end = new Date(g.end_time ?? g.due_date!);
+  return ((end.getTime() - start.getTime()) / 3_600_000) * 100;
+};
+
+/** Minutes (plus fractional) past the hour where this goal really starts */
+const minuteOffset = (g: Goal) => {
+  const s = new Date(g.start_time ?? g.due_date!);
+  return s.getMinutes() + s.getSeconds() / 60;
+};
+
+/*────────────────  GROUPING HELPERS  ──────────────────*/
+/** YYYY-MM-DD string using the browser's *local* clock */
+function getLocalDateKey(date: Date): string {
+  return (
+    date.getFullYear() +
+    "-" +
+    String(date.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(date.getDate()).padStart(2, "0")
+  );
+}
+
+/*──────────────────   COMPONENTS   ────────────────────*/
 /** All-day bar (shared by Day & Week views) */
 const AllDayRow = ({
   days,
@@ -205,7 +219,7 @@ const AllDayRow = ({
       {/* ▼ NEW: wrap the day buckets so Tailwind can draw the dividers */}
       <div className="flex flex-1 divide-x divide-gray-200">
         {dayList.map((d, idx) => {
-          const goals = getGoalsForDate(d).filter(g => !hasClockTime(g)); // just untimed goals
+          const goals = getGoalsForDate(d).filter(isAllDay)
 
           /* add a right border when we're in week-view (i.e. days is an array)
              and this bucket is NOT the last one                              */
@@ -221,7 +235,7 @@ const AllDayRow = ({
                 <div
                   key={g.goal_id}
                   className="px-2 py-[2px] rounded text-xs font-medium text-white cursor-pointer truncate"
-                  style={{ backgroundColor: colorForCourse(g.course_id) }}
+                  style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
                   title={g.goal_descr ?? g.task_title ?? ""}
                   onClick={() => handleTaskClick(g)}
                 >
@@ -237,20 +251,229 @@ const AllDayRow = ({
   );
 };
 
+// ── One hour row's events for Day / Week ───────────────
+const HourEvents = ({
+  date,
+  hour,
+  colWidth,
+  goals,
+  handleTaskClick,
+}: {
+  date: Date;
+  hour: number;
+  colWidth: number;
+  goals: Goal[];
+  handleTaskClick: (g: Goal) => void;
+}) => (
+  <>
+    {goals.map((g, idx) => (
+      <div
+        key={g.goal_id}
+        className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90"
+        style={{
+          backgroundColor: colorForCourse(g.course_id, g.google_calendar_color),
+          width: `${colWidth}%`,
+          left: `${idx * colWidth}%`,
+          top: `${minuteOffset(g)}%`,
+          height: `${heightPct(g)}%`,
+        }}
+        onClick={() => handleTaskClick(g)}
+      >
+        <div className="font-semibold truncate">{g.task_title ?? "(untitled)"}</div>
+      </div>
+    ))}
+  </>
+);
 
-/** A goal is "timed" if its ISO string has a non-midnight time part */
-const hasClockTime = (g: Goal) => {
-  if (!g.due_date) return false;
-  const d = new Date(g.due_date);
-  return d.getHours() !== 0 || d.getMinutes() !== 0;
+
+// Generate all days for a month view (including padding days)
+const getMonthDays = (date: Date) => {
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const startDate = new Date(firstDay)
+  startDate.setDate(firstDay.getDate() - firstDay.getDay()) // Start from Sunday
+
+  const days = []
+  const current = new Date(startDate)
+
+  // Generate 42 days (6 weeks * 7 days) to ensure we cover the entire month
+  for (let i = 0; i < 42; i++) {
+    days.push(new Date(current))
+    current.setDate(current.getDate() + 1)
+  }
+
+  return days
+}
+
+/** Return "timed" goals whose hour-block **intersects** the supplied hour */
+/** Timed goals that START in this exact hour */
+const goalsStartingAtHour = (
+  date: Date,
+  hour: number,
+  getGoalsForDate: (d: Date) => Goal[]
+) =>
+  getGoalsForDate(date).filter((g) => {
+    if (isAllDay(g)) return false;
+    // Convert UTC time to local time for comparison
+    const start = new Date(g.start_time ?? g.due_date!);
+    const end = new Date(g.end_time ?? g.due_date!);
+    
+    // Check if the event intersects with this hour
+    const hourStart = new Date(date);
+    hourStart.setHours(hour, 0, 0, 0);
+    const hourEnd = new Date(date);
+    hourEnd.setHours(hour + 1, 0, 0, 0);
+    
+    // Event intersects if it starts before the hour ends AND ends after the hour starts
+    return start < hourEnd && end > hourStart;
+  });
+
+
+/** Returns the Date objects for this goal's explicit start / end */
+const startEnd = (g: Goal) => ({
+  start: new Date(g.start_time as string),
+  end: new Date(g.end_time as string),
+});
+
+/** Calculate overlapping event positions */
+const calculateEventPositions = (goals: Goal[], hourHeight: number, currentHour: number, currentDate: Date) => {
+  if (goals.length === 0) return [];
+  
+  console.log(`🔍 Processing ${goals.length} events for overlapping detection in hour ${currentHour}`);
+  
+  // Sort goals by start time
+  const sortedGoals = [...goals].sort((a, b) => {
+    const aStart = new Date(a.start_time ?? a.due_date!);
+    const bStart = new Date(b.start_time ?? b.due_date!);
+    return aStart.getTime() - bStart.getTime();
+  });
+  
+  const positions: Array<{
+    goal: Goal;
+    left: number;
+    width: number;
+    top: number;
+    height: number;
+    zIndex: number;
+    showTitle: boolean;
+  }> = [];
+  
+  const columns: Goal[][] = [];
+  
+  for (const goal of sortedGoals) {
+    const start = new Date(goal.start_time ?? goal.due_date!);
+    const end = new Date(goal.end_time ?? goal.due_date!);
+    const goalStart = start.getTime();
+    const goalEnd = end.getTime();
+    
+    // Calculate hour boundaries
+    const hourStart = new Date(currentDate);
+    hourStart.setHours(currentHour, 0, 0, 0);
+    const hourEnd = new Date(currentDate);
+    hourEnd.setHours(currentHour + 1, 0, 0, 0);
+    
+    // Calculate position relative to this hour
+    const eventStartInHour = Math.max(goalStart, hourStart.getTime());
+    const eventEndInHour = Math.min(goalEnd, hourEnd.getTime());
+    
+    // Calculate top position (minutes from start of hour)
+    const topMinutes = (eventStartInHour - hourStart.getTime()) / (1000 * 60);
+    const top = (topMinutes / 60) * 100;
+    
+    // Calculate height - allow events to extend beyond hour boundaries
+    let height: number;
+    if (goalStart < hourStart.getTime()) {
+      // Event started before this hour - extend from top
+      const eventEndInHour = Math.min(goalEnd, hourEnd.getTime());
+      const heightMinutes = (eventEndInHour - hourStart.getTime()) / (1000 * 60);
+      height = (heightMinutes / 60) * 100;
+    } else if (goalEnd > hourEnd.getTime()) {
+      // Event ends after this hour - extend to bottom and beyond
+      const eventStartInHour = Math.max(goalStart, hourStart.getTime());
+      const heightMinutes = (goalEnd - eventStartInHour) / (1000 * 60);
+      height = (heightMinutes / 60) * 100;
+      // Ensure it extends beyond the hour boundary
+      height = Math.max(height, 120); // Extend 20% beyond the hour
+    } else {
+      // Event is contained within this hour
+      const heightMinutes = (eventEndInHour - eventStartInHour) / (1000 * 60);
+      height = (heightMinutes / 60) * 100;
+    }
+    
+    // Show title only if event starts in this hour
+    const showTitle = start.getHours() === currentHour;
+    
+    console.log(`📅 Event: "${goal.task_title}" (${start.toLocaleTimeString()} - ${end.toLocaleTimeString()})`);
+    console.log(`  📏 In hour ${currentHour}: top=${top.toFixed(1)}%, height=${height.toFixed(1)}%, showTitle=${showTitle}`);
+    console.log(`  🔍 Event spans: ${goalStart < hourStart.getTime() ? 'starts before' : 'starts in'} this hour, ${goalEnd > hourEnd.getTime() ? 'ends after' : 'ends in'} this hour`);
+    
+    // Find the first column where this goal doesn't overlap
+    let columnIndex = 0;
+    while (columnIndex < columns.length) {
+      const column = columns[columnIndex];
+      const hasOverlap = column.some(existingGoal => {
+        const existingStart = new Date(existingGoal.start_time ?? existingGoal.due_date!);
+        const existingEnd = new Date(existingGoal.end_time ?? existingGoal.due_date!);
+        const existingStartTime = existingStart.getTime();
+        const existingEndTime = existingEnd.getTime();
+        
+        const overlaps = !(goalEnd <= existingStartTime || goalStart >= existingEndTime);
+        
+        if (overlaps) {
+          console.log(`  ⚠️  OVERLAPS with "${existingGoal.task_title}" (${existingStart.toLocaleTimeString()} - ${existingEnd.toLocaleTimeString()}) in column ${columnIndex}`);
+        }
+        
+        return overlaps;
+      });
+      
+      if (!hasOverlap) {
+        console.log(`  ✅ No overlap in column ${columnIndex}`);
+        break;
+      }
+      columnIndex++;
+    }
+    
+    // Add to the appropriate column
+    if (columnIndex >= columns.length) {
+      columns.push([]);
+      console.log(`  ➕ Created new column ${columnIndex}`);
+    }
+    columns[columnIndex].push(goal);
+    
+    // Calculate position
+    const totalColumns = Math.max(columns.length, 1);
+    const left = (columnIndex / totalColumns) * 100;
+    const width = (1 / totalColumns) * 100;
+    
+    // Increase width for overlapped events but ensure they stay within column boundaries
+    const columnWidth = 100 / totalColumns;
+    const maxWidth = columnWidth * 0.9; // Use 90% of column width to leave some margin
+    const adjustedWidth = Math.min(width * 1.2, maxWidth); // Make events 20% wider, but respect column boundaries
+    const adjustedLeft = left + (columnWidth - adjustedWidth) / 2; // Center within the column
+    
+    // Shorter events get higher z-index (appear on top)
+    const duration = goalEnd - goalStart;
+    const zIndex = Math.max(1000 - Math.floor(duration / (1000 * 60)), 1); // Inverse of duration
+    
+    console.log(`  📍 Positioned in column ${columnIndex} (left: ${adjustedLeft.toFixed(1)}%, width: ${adjustedWidth.toFixed(1)}%, z-index: ${zIndex})`);
+    console.log(`  📏 Width adjustment: original=${width.toFixed(1)}%, adjusted=${adjustedWidth.toFixed(1)}%, columnWidth=${columnWidth.toFixed(1)}%, maxWidth=${maxWidth.toFixed(1)}%`);
+    
+    positions.push({
+      goal,
+      left: adjustedLeft,
+      width: adjustedWidth,
+      top,
+      height,
+      zIndex,
+      showTitle
+    });
+  }
+  
+  console.log(`🎯 Final layout: ${columns.length} columns, ${positions.length} positioned events`);
+  return positions;
 };
-
-/** Convenience: all goals for one calendar hour on a given day */
-const goalsForHour = (date: Date, hour: number, getGoalsForDate: (d: Date) => Goal[]) =>
-  getGoalsForDate(date).filter(
-    (g) => hasClockTime(g) && new Date(g.due_date as string).getHours() === hour
-  );
-
 
 // Extracted view components to reduce cognitive complexity
 const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
@@ -304,31 +527,36 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
           ))}
         </div>
 
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-visible">
           {hours.map((h: number) => {
-            const goals = goalsForHour(currentDate, h, getGoalsForDate);   // ← replace old line
-            const colCount = Math.max(goals.length, 1);
-            const colWidth = 100 / colCount;
+            const goals = goalsStartingAtHour(currentDate, h, getGoalsForDate);
+            const eventPositions = calculateEventPositions(goals, 80, h, currentDate);
 
             return (
-              <div key={h} className="h-20 border-b border-gray-200 relative p-1">
-                {goals.map((g: any, idx: number) => (
+              <div key={h} className="h-20 border-b border-gray-200 relative p-1 overflow-visible">
+                {eventPositions.map((pos) => (
                   <div
-                    key={g.goal_id}
-                    className="absolute top-1 bottom-1 rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90"
+                    key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
+                    className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90 shadow-sm"
                     style={{
-                      backgroundColor: colorForCourse(g.course_id),
-                      width: `${colWidth}%`,
-                      left: `${idx * colWidth}%`,
+                      backgroundColor: colorForCourse(pos.goal.course_id, pos.goal.google_calendar_color),
+                      width: `${pos.width}%`,
+                      left: `${pos.left}%`,
+                      top: `${pos.top}%`,
+                      height: `${pos.height}%`,
+                      zIndex: pos.zIndex,
+                      minHeight: '20px', // Ensure minimum height for visibility
                     }}
-                    onClick={() => handleTaskClick(g)}
+                    onClick={() => handleTaskClick(pos.goal)}
                   >
-                    <div className="font-semibold leading-tight truncate">
-                      {g.task_title ?? "(untitled)"}
-                    </div>
-                    {g.goal_descr && (
+                    {pos.showTitle && (
+                      <div className="font-semibold leading-tight truncate">
+                        {pos.goal.task_title ?? "(untitled)"}
+                      </div>
+                    )}
+                    {pos.showTitle && pos.goal.goal_descr && (
                       <div className="text-[11px] opacity-90 truncate">
-                        {g.goal_descr}
+                        {pos.goal.goal_descr}
                       </div>
                     )}
                   </div>
@@ -414,31 +642,36 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
         </div>
 
         {weekDates.map((d: Date) => (
-          <div key={d.toISOString()} className="flex-1 border-r border-gray-200 relative">
+          <div key={d.toISOString()} className="flex-1 border-r border-gray-200 relative overflow-visible">
             {hours.map((h: number) => {
-              const goals = goalsForHour(d, h, getGoalsForDate);             // ← replace old line
-              const colCount = Math.max(goals.length, 1);
-              const colWidth = 100 / colCount;
+              const goals = goalsStartingAtHour(d, h, getGoalsForDate);
+              const eventPositions = calculateEventPositions(goals, 64, h, d);
 
               return (
-                <div key={h} className="h-16 border-b border-gray-200 p-1 relative">
-                  {goals.map((g: any, idx: number) => (
+                <div key={h} className="h-16 border-b border-gray-200 p-1 relative overflow-visible">
+                  {eventPositions.map((pos) => (
                     <div
-                      key={g.goal_id}
-                      className="absolute top-1 bottom-1 rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90"
+                      key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
+                      className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90 shadow-sm"
                       style={{
-                        backgroundColor: colorForCourse(g.course_id),
-                        width: `${colWidth}%`,
-                        left: `${idx * colWidth}%`,
+                        backgroundColor: colorForCourse(pos.goal.course_id, pos.goal.google_calendar_color),
+                        width: `${pos.width}%`,
+                        left: `${pos.left}%`,
+                        top: `${pos.top}%`,
+                        height: `${pos.height}%`,
+                        zIndex: pos.zIndex,
+                        minHeight: '16px', // Ensure minimum height for visibility
                       }}
-                      onClick={() => handleTaskClick(g)}
+                      onClick={() => handleTaskClick(pos.goal)}
                     >
-                      <div className="font-semibold leading-tight truncate">
-                        {g.task_title ?? "(untitled)"}
-                      </div>
-                      {g.goal_descr && (
+                      {pos.showTitle && (
+                        <div className="font-semibold leading-tight truncate">
+                          {pos.goal.task_title ?? "(untitled)"}
+                        </div>
+                      )}
+                      {pos.showTitle && pos.goal.goal_descr && (
                         <div className="text-[11px] opacity-90 truncate">
-                          {g.goal_descr}
+                          {pos.goal.goal_descr}
                         </div>
                       )}
                     </div>
@@ -526,7 +759,7 @@ const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskCli
                 <div
                   key={g.goal_id}
                   className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
-                  style={{ backgroundColor: colorForCourse(g.course_id) }}
+                  style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
                   onClick={() => handleTaskClick(g)}
                 >
                   {g.task_title ?? "(untitled)"}
@@ -694,25 +927,30 @@ export function CalendarScheduler() {
           typeof window !== "undefined" ? localStorage.getItem("token") : null;
         if (!token) return console.warn("No JWT in localStorage");
 
-        const api =
-          process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
         const res = await fetch(`${api}/api/goals/user`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error(`Request failed ${res.status}`);
 
-        const byDate: GoalsByDate = await res.json();     // typed!
-        setGoalsByDate(byDate);
+        // 1️⃣ flatten everything we got from the server
+        const raw: GoalsByDate = await res.json();
+        const all: Goal[] = Object.values(raw).flat();
 
-        /* build a chronologically-sorted copy */
-        const ordered: GoalsByDate = Object.entries(byDate)
-          .sort(([d1], [d2]) => +new Date(d1) - +new Date(d2))
-          .reduce((acc, [date, arr]) => {
-            acc[date] = arr;
-            return acc;
-          }, {} as GoalsByDate);
+        // 2️⃣ regroup by *local* YYYY-MM-DD
+        const grouped: GoalsByDate = {};
+        for (const g of all) {
+          // Convert UTC time to local time for grouping
+          const when = new Date(g.start_time ?? g.due_date!);
+          const key = getLocalDateKey(when);
+          (grouped[key] ??= []).push(g);
+        }
+        setGoalsByDate(grouped);
 
+        // 3️⃣ optional chronological copy you already had
+        const ordered: GoalsByDate = Object.entries(grouped)
+          .sort(([a], [b]) => +new Date(a) - +new Date(b))
+          .reduce((acc, [k, v]) => ((acc[k] = v), acc), {} as GoalsByDate);
         setSortedGoalsByDate(ordered);
       } catch (err) {
         console.error("fetchGoals error", err);
@@ -725,9 +963,10 @@ export function CalendarScheduler() {
   console.log(sortedGoalsByDate)
   /** Return the list of goals whose due-date === that calendar day */
   const getGoalsForDate = (date: Date): Goal[] => {
-    const key = date.toISOString().split("T")[0];   // "YYYY-MM-DD"
+    const key = getLocalDateKey(date);
     return goalsByDate[key] ?? [];
   };
+
 
   const loading = useAuthRedirect()
   if (loading) return <div>Loading...</div>
