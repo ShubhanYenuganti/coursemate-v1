@@ -899,7 +899,7 @@ export function CalendarScheduler() {
     const token = localStorage.getItem("token");
     if (!token) return alert("Please log in first.");
 
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+    const apiBase = process.env.BACKEND_URL;
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
 
