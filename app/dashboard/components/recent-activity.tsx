@@ -10,6 +10,7 @@ export interface Activity {
   time: string;
   type: 'post' | 'resource' | 'video';
   title?: string;
+  resources?: Array<{ type: 'link' | 'image' | 'file'; url: string; name?: string }>;
 }
 
 interface CommunityActivityProps {
@@ -19,8 +20,8 @@ interface CommunityActivityProps {
 }
 
 const defaultActivities: Activity[] = [
-  {
-    id: 1,
+    {
+      id: 1,
     user: 'Priya Patel',
     avatar: 'PP',
     action: 'posted in',
@@ -28,24 +29,35 @@ const defaultActivities: Activity[] = [
     content: '"Anyone else stuck on problem 5 of the latest assignment? Would love some hints!"',
     time: '25 min ago',
     type: 'post',
-  },
-  {
-    id: 2,
+    resources: [
+      { type: 'link', url: 'https://example.com/resource1', name: 'Assignment PDF' },
+      { type: 'image', url: 'https://placekitten.com/300/200', name: 'Screenshot' },
+      { type: 'file', url: '/files/notes.pdf', name: 'Notes.pdf' },
+    ],
+    },
+    {
+      id: 2,
     user: 'David Lee',
     avatar: 'DL',
     action: 'shared a resource in',
     target: 'Physics Help Forum',
     time: '1 hour ago',
     type: 'resource',
-  },
-  {
-    id: 3,
+    resources: [
+      { type: 'link', url: 'https://example.com/physics', name: 'Physics Resource' },
+    ],
+    },
+    {
+      id: 3,
     user: 'Video Resource',
     avatar: '📺',
     title: 'Useful Video on Thermodynamics',
     action: 'Watch Video',
     time: '2 hours ago',
     type: 'video',
+    resources: [
+      { type: 'link', url: 'https://youtube.com', name: 'Watch on YouTube' },
+    ],
   },
 ];
 
@@ -54,19 +66,16 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   onFilterChange,
   onActivityClick,
 }) => {
-  const [selectedFilter, setSelectedFilter] = useState('All Activity');
+  const [modalActivity, setModalActivity] = useState<Activity | null>(null);
 
   const activitiesToDisplay = activities.length > 0 ? activities : defaultActivities;
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    setSelectedFilter(value);
-    onFilterChange && onFilterChange(value);
-  };
-
   const handleActivityClick = (activity: Activity) => {
+    setModalActivity(activity);
     onActivityClick && onActivityClick(activity);
   };
+
+  const handleCloseModal = () => setModalActivity(null);
 
   const getAvatarColor = (avatar: string) => {
     if (avatar === '📺') return 'bg-indigo-500';
@@ -75,20 +84,10 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm">
+    <div className="bg-white rounded-xl p-5 shadow-sm relative">
       {/* Header */}
       <div className="flex justify-between items-center mb-5">
-        <h2 className="text-lg font-semibold text-gray-800">Community Activity</h2>
-        <select
-          value={selectedFilter}
-          onChange={handleFilterChange}
-          className="border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-        >
-          <option value="All Activity">All Activity</option>
-          <option value="Posts">Posts</option>
-          <option value="Resources">Resources</option>
-          <option value="Videos">Videos</option>
-        </select>
+        <h2 className="text-lg font-semibold text-gray-800">Notifications</h2>
       </div>
       {/* Activity List */}
       {activitiesToDisplay.map(activity => (
@@ -138,6 +137,70 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
           <p className="mb-2">No community activity yet</p>
           <p className="text-xs">Join a study group to see activity here</p>
         </div>
+      )}
+      {/* Modal for Activity Details */}
+      {modalActivity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg relative">
+            <button
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={handleCloseModal}
+              aria-label="Close"
+            >
+              &times;
+            </button>
+            <div className="flex items-center mb-4">
+              <div className={`w-10 h-10 ${getAvatarColor(modalActivity.avatar)} rounded-full flex items-center justify-center text-white text-lg font-bold mr-4`}>
+                {modalActivity.avatar}
+              </div>
+              <div>
+                <div className="font-semibold text-gray-800 text-lg">
+                  {modalActivity.user || modalActivity.title}
+                </div>
+                <div className="text-xs text-gray-500">{modalActivity.time}</div>
+              </div>
+            </div>
+            <div className="mb-4">
+              {modalActivity.content && (
+                <div className="text-gray-700 text-base mb-2 whitespace-pre-line">
+                  {modalActivity.content}
+                </div>
+              )}
+              {modalActivity.type === 'video' && (
+                <div className="text-indigo-500 text-base mb-2">{modalActivity.title}</div>
+              )}
+              <div className="text-xs text-gray-500 mb-2">{modalActivity.action} {modalActivity.target && <span className="text-indigo-500">{modalActivity.target}</span>}</div>
+            </div>
+            {/* Resources */}
+            {modalActivity.resources && modalActivity.resources.length > 0 && (
+              <div className="mb-4">
+                <div className="font-semibold text-gray-700 mb-2">Resources:</div>
+                <ul className="space-y-2">
+                  {modalActivity.resources.map((res, idx) => (
+                    <li key={idx}>
+                      {res.type === 'link' && (
+                        <a href={res.url} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">
+                          🔗 {res.name || res.url}
+                        </a>
+                      )}
+                      {res.type === 'image' && (
+                        <div>
+                          <img src={res.url} alt={res.name || 'Resource Image'} className="rounded-lg max-h-48 mb-1" />
+                          <div className="text-xs text-gray-500">{res.name}</div>
+                        </div>
+                      )}
+                      {res.type === 'file' && (
+                        <a href={res.url} download className="text-green-600 hover:underline">
+                          📄 {res.name || 'Download file'}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+      </div>
       )}
     </div>
   );
