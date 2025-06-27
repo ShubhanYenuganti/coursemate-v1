@@ -74,6 +74,7 @@ def create_app(config_class=Config):
     from .routes.messages import messages_bp
     from .routes.goals import goals_bp
     from .routes.friends import friends_bp
+    from .routes.calendar import calendar_bp, register_calendar_oauth
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
@@ -93,6 +94,9 @@ def create_app(config_class=Config):
     # but let's make sure our friends blueprint is imported where socketio can see it)
     from .routes import friends
 
+    app.register_blueprint(calendar_bp)
+    register_calendar_oauth(app)
+    
     # Global error handler to return JSON errors with CORS headers
     @app.errorhandler(Exception)
     def handle_exception(e):

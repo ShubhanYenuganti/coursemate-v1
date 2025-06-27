@@ -1,40 +1,24 @@
 "use client"
 
-import { useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   ChevronLeft,
   ChevronRight,
-  Search,
   Calendar,
   Settings,
-  ChevronDown,
-  ChevronUp,
   GraduationCap,
-  Eye,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { User, Bell, Shield, HelpCircle, LogOut } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import useAuthRedirect from "@/hooks/useAuthRedirect"
 
-/**************************************
- * Utility helpers for dynamic dates  *
- **************************************/
+/*───────────────────  DATE HELPERS ───────────────────*/
+
 const startOfToday = () => {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
@@ -52,16 +36,6 @@ const getWeekDates = (ref: Date) => {
   })
 }
 
-// Generate next N days (including today)
-const getNextNDays = (n: number) => {
-  const base = startOfToday()
-  return Array.from({ length: n }, (_, i) => {
-    const d = new Date(base)
-    d.setDate(base.getDate() + i)
-    return d
-  })
-}
-
 const formatHourLabel = (h: number, withMinutes = false) => {
   const date = new Date()
   date.setHours(h, 0, 0, 0)
@@ -70,105 +44,34 @@ const formatHourLabel = (h: number, withMinutes = false) => {
   )
 }
 
-// Generate all days for a month view (including padding days)
-const getMonthDays = (date: Date) => {
-  const year = date.getFullYear()
-  const month = date.getMonth()
-  const firstDay = new Date(year, month, 1)
-  const lastDay = new Date(year, month + 1, 0)
-  const startDate = new Date(firstDay)
-  startDate.setDate(firstDay.getDate() - firstDay.getDay()) // Start from Sunday
+/*─────────────────  TYPES & CONSTANTS  ────────────────*/
 
-  const days = []
-  const current = new Date(startDate)
-
-  // Generate 42 days (6 weeks * 7 days) to ensure we cover the entire month
-  for (let i = 0; i < 42; i++) {
-    days.push(new Date(current))
-    current.setDate(current.getDate() + 1)
-  }
-
-  return days
+interface Goal {
+  id: string;
+  user_id: string;
+  course_id: string;
+  goal_id: string;
+  goal_descr: string | null;
+  due_date: string | null;          // ISO-8601 string (e.g. "2025-06-30T00:00:00")
+  goal_completed: boolean;
+  task_id: string | null;
+  task_title: string | null;
+  task_descr: string | null;
+  task_completed: boolean;
+  subtask_id: string | null;
+  subtask_descr: string | null;
+  subtask_type: string | null;
+  subtask_completed: boolean;
+  created_at: string | null;        // ISO
+  updated_at: string | null;
+  start_time: string | null;   // ISO string – NOT always midnight
+  end_time: string | null;   // ISO string – ≧ start_time       // ISO
+  google_calendar_color?: string | null;  // Hex color from Google Calendar
 }
 
-/** Convert a 12-hour time like "3:00 PM" → 15 (24-hour clock). */
-const to24Hour = (time: string): number => {
-  const [timePart, period] = time.trim().split(" ");      // "3:00", "PM"
-  const [hourStr] = timePart.split(":");                  // "3"
-  let hour = parseInt(hourStr, 10);
+type GoalsByDate = Record<string, Goal[]>
 
-  if (period === "PM" && hour !== 12) hour += 12; // 1-11 PM → +12
-  if (period === "AM" && hour === 12) hour = 0;   // 12 AM  → 0
-
-  return hour;           // minutes ignored; add Math.floor(min/60) if needed
-};
-
-const addDays = (iso: string, n = 0) =>
-  new Date(new Date(iso).getTime() + n * 86_400_000)
-    .toISOString()
-    .split("T")[0];
-
-
-/**************************************
- * Static demo data (unchanged)       *
- **************************************/
-const calendarEvents = [
-  {
-    id: 1,
-    title: "PHYS 101",
-    subtitle: "Physics Lecture",
-    time: "8:00 AM",
-    color: "#0ea5e9",
-    day: 1,
-    course: "PHYS 101",
-  },
-  {
-    id: 2,
-    title: "MATH 201",
-    subtitle: "Calculus Tutorial",
-    time: "9:00 AM",
-    color: "#f59e0b",
-    day: 2,
-    course: "MATH 201",
-  },
-  {
-    id: 3,
-    title: "CHEM 101",
-    subtitle: "Chemistry Lab",
-    time: "10:00 AM",
-    color: "#8b5cf6",
-    day: 3,
-    course: "CHEM 101",
-  },
-  {
-    id: 4,
-    title: "ENG 101",
-    subtitle: "English Literature",
-    time: "11:00 AM",
-    color: "#ef4444",
-    day: 4,
-    course: "ENG 101",
-  },
-  {
-    id: 5,
-    title: "HIST 201",
-    subtitle: "World History",
-    time: "1:00 PM",
-    color: "#22c55e",
-    day: 5,
-    course: "HIST 201",
-  },
-  {
-    id: 6,
-    title: "BIO 101",
-    subtitle: "Biology Lecture",
-    time: "2:00 PM",
-    color: "#ec4899",
-    day: 6,
-    course: "BIO 101",
-  },
-  { id: 7, title: "CS 101", subtitle: "Programming", time: "3:00 PM", color: "#0ea5e9", day: 0, course: "CS 101" },
-]
+/*─────────────────  STATIC DATA ─────────────────*/
 
 const courses = [
   { id: "phys101", name: "PHYS 101", color: "#0ea5e9", visible: true },
@@ -243,6 +146,712 @@ const allTasks = [
   },
 ]
 
+
+/*────────────────  COLOR & TIME UTILITIES ─────────────*/
+/** Pick a chip color from the course code (very simple hash) */
+const colorForCourse = (courseId: string | null, googleCalendarColor?: string | null) => {
+  // If Google Calendar color is available, use it
+  if (googleCalendarColor) {
+    return googleCalendarColor;
+  }
+  
+  // Fall back to course-based color system
+  const palette = ["#0ea5e9", "#f59e0b", "#8b5cf6", "#ef4444", "#22c55e", "#ec4899"];
+  if (!courseId) return "#6b7280";                // gray
+  const idx = [...courseId].reduce((s, c) => s + c.charCodeAt(0), 0) % palette.length;
+  return palette[idx];
+};
+
+/** True if the goal is an all-day event (no real clock component) */
+const isAllDay = (g: Goal) => {
+  if (!g.start_time || !g.end_time) return true;
+  const start = new Date(g.start_time);
+  const end = new Date(g.end_time);
+  return start.getHours() === 0 && start.getMinutes() === 0 &&
+         end.getHours() === 0 && end.getMinutes() === 0;
+};
+
+/** Height percentage the card must occupy in its hour-row grid */
+const heightPct = (g: Goal) => {
+  const start = new Date(g.start_time ?? g.due_date!);
+  const end = new Date(g.end_time ?? g.due_date!);
+  return ((end.getTime() - start.getTime()) / 3_600_000) * 100;
+};
+
+/** Minutes (plus fractional) past the hour where this goal really starts */
+const minuteOffset = (g: Goal) => {
+  const s = new Date(g.start_time ?? g.due_date!);
+  return s.getMinutes() + s.getSeconds() / 60;
+};
+
+/*────────────────  GROUPING HELPERS  ──────────────────*/
+/** YYYY-MM-DD string using the browser's *local* clock */
+function getLocalDateKey(date: Date): string {
+  return (
+    date.getFullYear() +
+    "-" +
+    String(date.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(date.getDate()).padStart(2, "0")
+  );
+}
+
+/*──────────────────   COMPONENTS   ────────────────────*/
+/** All-day bar (shared by Day & Week views) */
+const AllDayRow = ({
+  days,
+  getGoalsForDate,
+  handleTaskClick,
+}: {
+  days: Date | Date[];
+  getGoalsForDate: (d: Date) => Goal[];
+  handleTaskClick: (g: Goal) => void;
+}) => {
+  const dayList = Array.isArray(days) ? days : [days];
+
+  return (
+    <div className="flex h-9 border-b border-gray-200">
+      {/* time-label column */}
+      <div className="w-16 border-r border-gray-200 text-xs flex items-center justify-end pr-1">
+        <span className="text-gray-500">All-day</span>
+      </div>
+
+      {/* ▼ NEW: wrap the day buckets so Tailwind can draw the dividers */}
+      <div className="flex flex-1 divide-x divide-gray-200">
+        {dayList.map((d, idx) => {
+          const goals = getGoalsForDate(d).filter(isAllDay)
+
+          /* add a right border when we're in week-view (i.e. days is an array)
+             and this bucket is NOT the last one                              */
+          const showDivider =
+            Array.isArray(days) && idx < dayList.length - 1 ? "border-r border-gray-200" : "";
+
+          return (
+            <div
+              key={d.toISOString()}
+              className={`flex-1 flex flex-wrap items-center gap-1 px-1 ${showDivider}`}
+            >
+              {goals.map((g) => (
+                <div
+                  key={g.goal_id}
+                  className="px-2 py-[2px] rounded text-xs font-medium text-white cursor-pointer truncate"
+                  style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                  title={g.goal_descr ?? g.task_title ?? ""}
+                  onClick={() => handleTaskClick(g)}
+                >
+                  {g.task_title ?? "(untitled)"}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+
+      </div>
+    </div>
+  );
+};
+
+// ── One hour row's events for Day / Week ───────────────
+const HourEvents = ({
+  date,
+  hour,
+  colWidth,
+  goals,
+  handleTaskClick,
+}: {
+  date: Date;
+  hour: number;
+  colWidth: number;
+  goals: Goal[];
+  handleTaskClick: (g: Goal) => void;
+}) => (
+  <>
+    {goals.map((g, idx) => (
+      <div
+        key={g.goal_id}
+        className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90"
+        style={{
+          backgroundColor: colorForCourse(g.course_id, g.google_calendar_color),
+          width: `${colWidth}%`,
+          left: `${idx * colWidth}%`,
+          top: `${minuteOffset(g)}%`,
+          height: `${heightPct(g)}%`,
+        }}
+        onClick={() => handleTaskClick(g)}
+      >
+        <div className="font-semibold truncate">{g.task_title ?? "(untitled)"}</div>
+      </div>
+    ))}
+  </>
+);
+
+
+// Generate all days for a month view (including padding days)
+const getMonthDays = (date: Date) => {
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const startDate = new Date(firstDay)
+  startDate.setDate(firstDay.getDate() - firstDay.getDay()) // Start from Sunday
+
+  const days = []
+  const current = new Date(startDate)
+
+  // Generate 42 days (6 weeks * 7 days) to ensure we cover the entire month
+  for (let i = 0; i < 42; i++) {
+    days.push(new Date(current))
+    current.setDate(current.getDate() + 1)
+  }
+
+  return days
+}
+
+/** Return "timed" goals whose hour-block **intersects** the supplied hour */
+/** Timed goals that START in this exact hour */
+const goalsStartingAtHour = (
+  date: Date,
+  hour: number,
+  getGoalsForDate: (d: Date) => Goal[]
+) =>
+  getGoalsForDate(date).filter((g) => {
+    if (isAllDay(g)) return false;
+    // Convert UTC time to local time for comparison
+    const start = new Date(g.start_time ?? g.due_date!);
+    const end = new Date(g.end_time ?? g.due_date!);
+    
+    // Check if the event intersects with this hour
+    const hourStart = new Date(date);
+    hourStart.setHours(hour, 0, 0, 0);
+    const hourEnd = new Date(date);
+    hourEnd.setHours(hour + 1, 0, 0, 0);
+    
+    // Event intersects if it starts before the hour ends AND ends after the hour starts
+    return start < hourEnd && end > hourStart;
+  });
+
+
+/** Returns the Date objects for this goal's explicit start / end */
+const startEnd = (g: Goal) => ({
+  start: new Date(g.start_time as string),
+  end: new Date(g.end_time as string),
+});
+
+/** Calculate overlapping event positions */
+const calculateEventPositions = (goals: Goal[], hourHeight: number, currentHour: number, currentDate: Date) => {
+  if (goals.length === 0) return [];
+  
+  console.log(`🔍 Processing ${goals.length} events for overlapping detection in hour ${currentHour}`);
+  
+  // Sort goals by start time
+  const sortedGoals = [...goals].sort((a, b) => {
+    const aStart = new Date(a.start_time ?? a.due_date!);
+    const bStart = new Date(b.start_time ?? b.due_date!);
+    return aStart.getTime() - bStart.getTime();
+  });
+  
+  const positions: Array<{
+    goal: Goal;
+    left: number;
+    width: number;
+    top: number;
+    height: number;
+    zIndex: number;
+    showTitle: boolean;
+  }> = [];
+  
+  const columns: Goal[][] = [];
+  
+  for (const goal of sortedGoals) {
+    const start = new Date(goal.start_time ?? goal.due_date!);
+    const end = new Date(goal.end_time ?? goal.due_date!);
+    const goalStart = start.getTime();
+    const goalEnd = end.getTime();
+    
+    // Calculate hour boundaries
+    const hourStart = new Date(currentDate);
+    hourStart.setHours(currentHour, 0, 0, 0);
+    const hourEnd = new Date(currentDate);
+    hourEnd.setHours(currentHour + 1, 0, 0, 0);
+    
+    // Calculate position relative to this hour
+    const eventStartInHour = Math.max(goalStart, hourStart.getTime());
+    const eventEndInHour = Math.min(goalEnd, hourEnd.getTime());
+    
+    // Calculate top position (minutes from start of hour)
+    const topMinutes = (eventStartInHour - hourStart.getTime()) / (1000 * 60);
+    const top = (topMinutes / 60) * 100;
+    
+    // Calculate height - allow events to extend beyond hour boundaries
+    let height: number;
+    if (goalStart < hourStart.getTime()) {
+      // Event started before this hour - extend from top
+      const eventEndInHour = Math.min(goalEnd, hourEnd.getTime());
+      const heightMinutes = (eventEndInHour - hourStart.getTime()) / (1000 * 60);
+      height = (heightMinutes / 60) * 100;
+    } else if (goalEnd > hourEnd.getTime()) {
+      // Event ends after this hour - extend to bottom and beyond
+      const eventStartInHour = Math.max(goalStart, hourStart.getTime());
+      const heightMinutes = (goalEnd - eventStartInHour) / (1000 * 60);
+      height = (heightMinutes / 60) * 100;
+      // Ensure it extends beyond the hour boundary
+      height = Math.max(height, 120); // Extend 20% beyond the hour
+    } else {
+      // Event is contained within this hour
+      const heightMinutes = (eventEndInHour - eventStartInHour) / (1000 * 60);
+      height = (heightMinutes / 60) * 100;
+    }
+    
+    // Show title only if event starts in this hour
+    const showTitle = start.getHours() === currentHour;
+    
+    console.log(`📅 Event: "${goal.task_title}" (${start.toLocaleTimeString()} - ${end.toLocaleTimeString()})`);
+    console.log(`  📏 In hour ${currentHour}: top=${top.toFixed(1)}%, height=${height.toFixed(1)}%, showTitle=${showTitle}`);
+    console.log(`  🔍 Event spans: ${goalStart < hourStart.getTime() ? 'starts before' : 'starts in'} this hour, ${goalEnd > hourEnd.getTime() ? 'ends after' : 'ends in'} this hour`);
+    
+    // Find the first column where this goal doesn't overlap
+    let columnIndex = 0;
+    while (columnIndex < columns.length) {
+      const column = columns[columnIndex];
+      const hasOverlap = column.some(existingGoal => {
+        const existingStart = new Date(existingGoal.start_time ?? existingGoal.due_date!);
+        const existingEnd = new Date(existingGoal.end_time ?? existingGoal.due_date!);
+        const existingStartTime = existingStart.getTime();
+        const existingEndTime = existingEnd.getTime();
+        
+        const overlaps = !(goalEnd <= existingStartTime || goalStart >= existingEndTime);
+        
+        if (overlaps) {
+          console.log(`  ⚠️  OVERLAPS with "${existingGoal.task_title}" (${existingStart.toLocaleTimeString()} - ${existingEnd.toLocaleTimeString()}) in column ${columnIndex}`);
+        }
+        
+        return overlaps;
+      });
+      
+      if (!hasOverlap) {
+        console.log(`  ✅ No overlap in column ${columnIndex}`);
+        break;
+      }
+      columnIndex++;
+    }
+    
+    // Add to the appropriate column
+    if (columnIndex >= columns.length) {
+      columns.push([]);
+      console.log(`  ➕ Created new column ${columnIndex}`);
+    }
+    columns[columnIndex].push(goal);
+    
+    // Calculate position
+    const totalColumns = Math.max(columns.length, 1);
+    const left = (columnIndex / totalColumns) * 100;
+    const width = (1 / totalColumns) * 100;
+    
+    // Increase width for overlapped events but ensure they stay within column boundaries
+    const columnWidth = 100 / totalColumns;
+    const maxWidth = columnWidth * 0.9; // Use 90% of column width to leave some margin
+    const adjustedWidth = Math.min(width * 1.2, maxWidth); // Make events 20% wider, but respect column boundaries
+    const adjustedLeft = left + (columnWidth - adjustedWidth) / 2; // Center within the column
+    
+    // Shorter events get higher z-index (appear on top)
+    const duration = goalEnd - goalStart;
+    const zIndex = Math.max(1000 - Math.floor(duration / (1000 * 60)), 1); // Inverse of duration
+    
+    console.log(`  📍 Positioned in column ${columnIndex} (left: ${adjustedLeft.toFixed(1)}%, width: ${adjustedWidth.toFixed(1)}%, z-index: ${zIndex})`);
+    console.log(`  📏 Width adjustment: original=${width.toFixed(1)}%, adjusted=${adjustedWidth.toFixed(1)}%, columnWidth=${columnWidth.toFixed(1)}%, maxWidth=${maxWidth.toFixed(1)}%`);
+    
+    positions.push({
+      goal,
+      left: adjustedLeft,
+      width: adjustedWidth,
+      top,
+      height,
+      zIndex,
+      showTitle
+    });
+  }
+  
+  console.log(`🎯 Final layout: ${columns.length} columns, ${positions.length} positioned events`);
+  return positions;
+};
+
+// Extracted view components to reduce cognitive complexity
+const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
+  <div className="flex flex-col h-full">
+    <div className="border-b border-gray-200 p-4 flex items-center justify-between">
+      <h2 className="text-2xl font-semibold">
+        {currentDate.toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        })}
+      </h2>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+          Today
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentDate(new Date(currentDate.getTime() - 86_400_000))}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentDate(new Date(currentDate.getTime() + 86_400_000))}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+      </div>
+    </div>
+
+    <AllDayRow
+      days={currentDate}
+      getGoalsForDate={getGoalsForDate}
+      handleTaskClick={handleTaskClick}
+    />
+
+    <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
+      <div className="flex">
+        <div className="w-16 border-r border-gray-200 flex-shrink-0">
+          {hours.map((h: number) => (
+            <div
+              key={h}
+              className="h-20 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1"
+            >
+              {formatHourLabel(h)}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex-1 relative overflow-visible">
+          {hours.map((h: number) => {
+            const goals = goalsStartingAtHour(currentDate, h, getGoalsForDate);
+            const eventPositions = calculateEventPositions(goals, 80, h, currentDate);
+
+            return (
+              <div key={h} className="h-20 border-b border-gray-200 relative p-1 overflow-visible">
+                {eventPositions.map((pos) => (
+                  <div
+                    key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
+                    className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90 shadow-sm"
+                    style={{
+                      backgroundColor: colorForCourse(pos.goal.course_id, pos.goal.google_calendar_color),
+                      width: `${pos.width}%`,
+                      left: `${pos.left}%`,
+                      top: `${pos.top}%`,
+                      height: `${pos.height}%`,
+                      zIndex: pos.zIndex,
+                      minHeight: '20px', // Ensure minimum height for visibility
+                    }}
+                    onClick={() => handleTaskClick(pos.goal)}
+                  >
+                    {pos.showTitle && (
+                      <div className="font-semibold leading-tight truncate">
+                        {pos.goal.task_title ?? "(untitled)"}
+                      </div>
+                    )}
+                    {pos.showTitle && pos.goal.goal_descr && (
+                      <div className="text-[11px] opacity-90 truncate">
+                        {pos.goal.goal_descr}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
+  <>
+    <div className="flex flex-col border-b border-gray-200">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setCurrentDate((p: Date) => new Date(p.getFullYear(), p.getMonth(), p.getDate() - 7))
+            }
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+            This Week
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setCurrentDate((p: Date) => new Date(p.getFullYear(), p.getMonth(), p.getDate() + 7))
+            }
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <h2 className="text-lg font-semibold text-gray-900">
+          {weekDates[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
+          {weekDates[6].toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+        </h2>
+      </div>
+
+      <div className="flex">
+        <div className="w-16 border-r border-gray-200 p-4 text-xs text-gray-500 flex-shrink-0" />
+        {weekDates.map((d: Date) => {
+          const isToday = d.toDateString() === startOfToday().toDateString();
+          return (
+            <div
+              key={d.toISOString()}
+              className="flex-1 border-r border-gray-200 p-4 text-center min-w-0"
+            >
+              <div className="text-xs text-gray-500 mb-1">
+                {d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
+              </div>
+              <div className={`text-2xl font-semibold ${isToday ? "text-blue-600" : "text-gray-900"}`}>
+                {d.getDate()}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    <AllDayRow
+      days={weekDates}         // pass the whole week array
+      getGoalsForDate={getGoalsForDate}
+      handleTaskClick={handleTaskClick}
+    />
+
+    <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
+      <div className="flex">
+        <div className="w-16 border-r border-gray-200">
+          {hours.map((h: number) => (
+            <div key={h} className="h-16 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1">
+              {formatHourLabel(h)}
+            </div>
+          ))}
+        </div>
+
+        {weekDates.map((d: Date) => (
+          <div key={d.toISOString()} className="flex-1 border-r border-gray-200 relative overflow-visible">
+            {hours.map((h: number) => {
+              const goals = goalsStartingAtHour(d, h, getGoalsForDate);
+              const eventPositions = calculateEventPositions(goals, 64, h, d);
+
+              return (
+                <div key={h} className="h-16 border-b border-gray-200 p-1 relative overflow-visible">
+                  {eventPositions.map((pos) => (
+                    <div
+                      key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
+                      className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90 shadow-sm"
+                      style={{
+                        backgroundColor: colorForCourse(pos.goal.course_id, pos.goal.google_calendar_color),
+                        width: `${pos.width}%`,
+                        left: `${pos.left}%`,
+                        top: `${pos.top}%`,
+                        height: `${pos.height}%`,
+                        zIndex: pos.zIndex,
+                        minHeight: '16px', // Ensure minimum height for visibility
+                      }}
+                      onClick={() => handleTaskClick(pos.goal)}
+                    >
+                      {pos.showTitle && (
+                        <div className="font-semibold leading-tight truncate">
+                          {pos.goal.task_title ?? "(untitled)"}
+                        </div>
+                      )}
+                      {pos.showTitle && pos.goal.goal_descr && (
+                        <div className="text-[11px] opacity-90 truncate">
+                          {pos.goal.goal_descr}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  </>
+);
+
+const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskClick }: any) => (
+  <>
+    <div className="flex flex-col border-b border-gray-200">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <h2 className="text-2xl font-semibold">
+          {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+        </h2>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setCurrentDate(
+                new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+              )
+            }
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+
+          <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+            This Month
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setCurrentDate(
+                new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+              )
+            }
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-px bg-gray-200">
+        {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
+          <div key={d} className="bg-gray-50 p-3 text-center text-sm font-medium text-gray-500">
+            {d}
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="flex-1 overflow-y-auto">
+      <div className="grid grid-cols-7 gap-px bg-gray-200 h-full">
+        {getMonthDays(currentDate).map((d: Date) => {
+          const inMonth = d.getMonth() === currentDate.getMonth();
+          const isToday = d.toDateString() === startOfToday().toDateString();
+          const evs = getGoalsForDate(d);
+
+          return (
+            <div
+              key={d.toISOString()}
+              className={`bg-white p-2 min-h-[110px] ${!inMonth ? "bg-gray-50 text-gray-400" : ""}`}
+            >
+              <div
+                className={`text-sm font-medium mb-2 ${isToday
+                  ? "bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center"
+                  : ""
+                  }`}
+              >
+                {d.getDate()}
+              </div>
+
+              {evs.slice(0, 3).map((g: any) => (
+                <div
+                  key={g.goal_id}
+                  className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
+                  style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                  onClick={() => handleTaskClick(g)}
+                >
+                  {g.task_title ?? "(untitled)"}
+                </div>
+              ))}
+
+              {evs.length > 3 && (
+                <div className="text-xs text-gray-500 font-medium">
+                  +{evs.length - 3} more
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </>
+);
+
+const YearView = ({ currentDate, setCurrentDate }: any) => (
+  <>
+    <div className="border-b border-gray-200 p-4 flex items-center justify-between">
+      <h2 className="text-2xl font-semibold">{currentDate.getFullYear()}</h2>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentDate(new Date(currentDate.getFullYear() - 1, 0, 1))}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+          Today
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentDate(new Date(currentDate.getFullYear() + 1, 0, 1))}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+      </div>
+    </div>
+
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="grid grid-cols-3 gap-6">
+        {Array.from({ length: 12 }, (_, m) => {
+          const monthDate = new Date(currentDate.getFullYear(), m, 1);
+          const monthName = monthDate.toLocaleDateString("en-US", { month: "long" });
+          const daysInMonth = new Date(currentDate.getFullYear(), m + 1, 0).getDate();
+          const firstDow = monthDate.getDay();
+          return (
+            <div
+              key={m}
+              className="border border-gray-200 rounded-lg p-4 hover:shadow cursor-pointer"
+              onClick={() => {
+                setCurrentDate(new Date(currentDate.getFullYear(), m, 1));
+                // setCurrentView("month"); // You'll need to pass this as a prop
+              }}
+            >
+              <h3 className="text-lg font-semibold text-center mb-3">{monthName}</h3>
+              <div className="grid grid-cols-7 text-xs gap-1">
+                {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
+                  <div key={d} className="text-center text-gray-500">{d}</div>
+                ))}
+                {Array.from({ length: firstDow }, (_, i) => (
+                  <div key={i} className="h-5"></div>
+                ))}
+                {Array.from({ length: daysInMonth }, (_, dayIdx) => {
+                  const d = dayIdx + 1;
+                  const full = new Date(currentDate.getFullYear(), m, d);
+                  const isToday =
+                    full.toDateString() === startOfToday().toDateString() &&
+                    full.getFullYear() === startOfToday().getFullYear();
+                  return (
+                    <div
+                      key={d}
+                      className={`h-5 flex items-center justify-center ${isToday ? "bg-blue-600 text-white rounded-full" : "text-gray-900 hover:bg-gray-100 rounded"}`}
+                    >
+                      {d}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </>
+);
+
 export function CalendarScheduler() {
   /** Current selected date -- initialised to today */
   const [currentDate, setCurrentDate] = useState<Date>(() => startOfToday())
@@ -285,16 +894,6 @@ export function CalendarScheduler() {
 
   const getTasksForCourse = (courseName: string) => allTasks.filter((t) => t.course === courseName)
 
-  const getEventsForDate = (date: Date) => {
-    const weekStart = weekDates[0]
-    return calendarEvents.filter((ev) => {
-      const evDate = new Date(weekStart)
-      evDate.setDate(weekStart.getDate() + ev.day)
-      const courseVisible = courseVisibility[ev.course.toLowerCase().replace(/\s+/g, "")]
-      return courseVisible && evDate.toDateString() === date.toDateString()
-    })
-  }
-
   const handleConnectCalendar = () => {
     if (typeof window === "undefined") return;
     const token = localStorage.getItem("token");
@@ -317,6 +916,57 @@ export function CalendarScheduler() {
     const rowHeight = currentView === "day" ? 80 : 64;      // h-20 vs h-16
     node.scrollTop = Math.max(0, hour * rowHeight - 2 * rowHeight);
   };
+
+  const [goalsByDate, setGoalsByDate] = useState<GoalsByDate>({});
+  const [sortedGoalsByDate, setSortedGoalsByDate] = useState<GoalsByDate>({});
+
+  useEffect(() => {
+    const fetchGoals = async () => {
+      try {
+        const token =
+          typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        if (!token) return console.warn("No JWT in localStorage");
+
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const res = await fetch(`${api}/api/goals/user`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Request failed ${res.status}`);
+
+        // 1️⃣ flatten everything we got from the server
+        const raw: GoalsByDate = await res.json();
+        const all: Goal[] = Object.values(raw).flat();
+
+        // 2️⃣ regroup by *local* YYYY-MM-DD
+        const grouped: GoalsByDate = {};
+        for (const g of all) {
+          // Convert UTC time to local time for grouping
+          const when = new Date(g.start_time ?? g.due_date!);
+          const key = getLocalDateKey(when);
+          (grouped[key] ??= []).push(g);
+        }
+        setGoalsByDate(grouped);
+
+        // 3️⃣ optional chronological copy you already had
+        const ordered: GoalsByDate = Object.entries(grouped)
+          .sort(([a], [b]) => +new Date(a) - +new Date(b))
+          .reduce((acc, [k, v]) => ((acc[k] = v), acc), {} as GoalsByDate);
+        setSortedGoalsByDate(ordered);
+      } catch (err) {
+        console.error("fetchGoals error", err);
+      }
+    };
+
+    fetchGoals();
+  }, []);
+
+  console.log(sortedGoalsByDate)
+  /** Return the list of goals whose due-date === that calendar day */
+  const getGoalsForDate = (date: Date): Goal[] => {
+    const key = getLocalDateKey(date);
+    return goalsByDate[key] ?? [];
+  };
+
 
   const loading = useAuthRedirect()
   if (loading) return <div>Loading...</div>
@@ -365,362 +1015,14 @@ export function CalendarScheduler() {
         </div>
         {/* ───────── DAY VIEW ───────── */}
         {currentView === "day" ? (
-          <>
-            {/* top nav */}
-            <div className="border-b border-gray-200 p-4 flex items-center justify-between">
-              <h2 className="text-2xl font-semibold">
-                {currentDate.toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </h2>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-                  Today
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentDate(new Date(currentDate.getTime() - 86_400_000))}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentDate(new Date(currentDate.getTime() + 86_400_000))}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* 24-hour grid */}
-            <div className="flex-1 overflow-y-auto flex" ref={setTimelineRef}>
-              {/* time column */}
-              <div className="w-20 border-r border-gray-200">
-                {hours.map((h) => (
-                  <div
-                    key={h}
-                    className="h-20 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1"
-                  >
-                    {formatHourLabel(h)}
-                  </div>
-                ))}
-              </div>
-
-              {/* events */}
-              <div className="flex-1 relative">
-                {hours.map((h) => (
-                  <div key={h} className="h-20 border-b border-gray-200 relative">
-                    {calendarEvents
-                      .filter((e) => {
-                        const visible = courseVisibility[e.course.toLowerCase().replace(/\s+/g, "")];
-                        return (
-                          visible &&
-                          e.day === currentDate.getDay() && to24Hour(e.time) === h
-                        );
-                      })
-                      .map((e) => (
-                        <div
-                          key={e.id}
-                          className="absolute inset-1 rounded text-white text-sm p-2 cursor-pointer"
-                          style={{ backgroundColor: e.color }}
-                          onClick={() => handleTaskClick(e)}
-                        >
-                          {e.title}
-                        </div>
-                      ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
+          <DayView currentDate={currentDate} setCurrentDate={setCurrentDate} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
         ) : /* ───────── WEEK VIEW ───────── */ currentView === "week" ? (
-          <>
-            {/* ───────── WEEK HEADER (wrapper) ───────── */}
-            <div className="flex flex-col border-b border-gray-200">
-              {/* ─ row 1 : nav bar ─ */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentDate((p) => new Date(p.getFullYear(), p.getMonth(), p.getDate() - 7))
-                    }
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-                    This Week
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentDate((p) => new Date(p.getFullYear(), p.getMonth(), p.getDate() + 7))
-                    }
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {weekDates[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
-                  {weekDates[6].toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </h2>
-              </div>
-
-              {/* ─ row 2 : day headers + TZ cell ─ */}
-              <div className="flex">
-                {/* TZ label  */}
-                <div className="w-16 border-r border-gray-200 p-4 text-xs text-gray-500 flex-shrink-0">
-                </div>
-
-                {/* weekdays */}
-                {weekDates.map((d) => {
-                  const isToday = d.toDateString() === startOfToday().toDateString();
-                  return (
-                    <div
-                      key={d.toISOString()}
-                      className="flex-1 border-r border-gray-200 p-4 text-center min-w-0"
-                    >
-                      <div className="text-xs text-gray-500 mb-1">
-                        {d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
-                      </div>
-                      <div className={`text-2xl font-semibold ${isToday ? "text-blue-600" : "text-gray-900"}`}>
-                        {d.getDate()}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* week grid */}
-            <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
-              <div className="flex">
-                {/* time column */}
-                <div className="w-16 border-r border-gray-200">
-                  {hours.map((h) => (
-                    <div
-                      key={h}
-                      className="h-16 border-b border-gray-200 p-2 text-xs text-gray-500"
-                    >
-                      {formatHourLabel(h)}
-                    </div>
-                  ))}
-                </div>
-
-                {/* days */}
-                {weekDates.map((d, dayIdx) => (
-                  <div key={d.toISOString()} className="flex-1 border-r border-gray-200">
-                    {hours.map((h) => (
-                      <div key={h} className="h-16 border-b border-gray-200 relative p-1">
-                        {calendarEvents
-                          .filter((e) => {
-                            const visible = courseVisibility[e.course.toLowerCase().replace(/\s+/g, "")];
-                            return (
-                              visible && e.day === dayIdx && to24Hour(e.time) == h
-                            );
-                          })
-                          .map((e) => (
-                            <div
-                              key={e.id}
-                              className="absolute inset-1 rounded p-2 text-xs text-white font-medium cursor-pointer"
-                              style={{ backgroundColor: e.color }}
-                              onClick={() => handleTaskClick(e)}
-                            >
-                              <div className="font-semibold">{e.title}</div>
-                              <div className="text-xs opacity-90">{e.subtitle}</div>
-                            </div>
-                          ))}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
+          <WeekView currentDate={currentDate} setCurrentDate={setCurrentDate} weekDates={weekDates} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
         ) : /* ───────── MONTH VIEW ───────── */ currentView === "month" ? (
-          <>
-            {/* ───────── MONTH HEADER (wrapper) ───────── */}
-            {/* ───────── MONTH HEADER (keyed wrapper) ───────── */}
-            <div
-              key={`month-header-${currentDate.getFullYear()}-${currentDate.getMonth()}`}
-              className="flex flex-col border-b border-gray-200"
-            >
-              {/* ─ row 1 : navigation bar ─ */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <h2 className="text-2xl font-semibold">
-                  {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                </h2>
-
-                <div className="flex gap-2">
-                  {/* Previous month */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentDate(
-                        new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
-                      )
-                    }
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-
-                  {/* Today (optional) */}
-                  <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-                    This Month
-                  </Button>
-
-                  {/* Next month */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentDate(
-                        new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
-                      )
-                    }
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* ─ row 2 : weekday labels ─ */}
-              <div className="grid grid-cols-7 gap-px bg-gray-200">
-                {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
-                  <div
-                    key={d}
-                    className="bg-gray-50 p-3 text-center text-sm font-medium text-gray-500"
-                  >
-                    {d}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-
-            {/* month grid */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="grid grid-cols-7 gap-px bg-gray-200 h-full">
-                {getMonthDays(currentDate).map((d) => {
-                  const inMonth = d.getMonth() === currentDate.getMonth();
-                  const isToday = d.toDateString() === startOfToday().toDateString();
-                  const evs = getEventsForDate(d);
-                  return (
-                    <div
-                      key={d.toISOString()}
-                      className={`bg-white p-2 min-h-[110px] ${!inMonth ? "bg-gray-50 text-gray-400" : ""}`}
-                    >
-                      <div
-                        className={`text-sm font-medium mb-2 ${isToday ? "bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center" : ""}`}
-                      >
-                        {d.getDate()}
-                      </div>
-                      {evs.slice(0, 3).map((e) => (
-                        <div
-                          key={e.id}
-                          className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
-                          style={{ backgroundColor: e.color }}
-                          onClick={() => handleTaskClick(e)}
-                        >
-                          {e.title}
-                        </div>
-                      ))}
-                      {evs.length > 3 && (
-                        <div className="text-xs text-gray-500 font-medium">+{evs.length - 3} more</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </>
+          <MonthView currentDate={currentDate} setCurrentDate={setCurrentDate} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} />
         ) : (
           /* ───────── YEAR VIEW ───────── */
-          <>
-            {/* year nav */}
-            <div className="border-b border-gray-200 p-4 flex items-center justify-between">
-              <h2 className="text-2xl font-semibold">{currentDate.getFullYear()}</h2>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentDate(new Date(currentDate.getFullYear() - 1, 0, 1))}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentDate(startOfToday())}
-                >
-                  Today
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentDate(new Date(currentDate.getFullYear() + 1, 0, 1))}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* mini-month grid */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="grid grid-cols-3 gap-6">
-                {Array.from({ length: 12 }, (_, m) => {
-                  const monthDate = new Date(currentDate.getFullYear(), m, 1);
-                  const monthName = monthDate.toLocaleDateString("en-US", { month: "long" });
-                  const daysInMonth = new Date(currentDate.getFullYear(), m + 1, 0).getDate();
-                  const firstDow = monthDate.getDay();
-                  return (
-                    <div
-                      key={m}
-                      className="border border-gray-200 rounded-lg p-4 hover:shadow cursor-pointer"
-                      onClick={() => {
-                        setCurrentDate(new Date(currentDate.getFullYear(), m, 1));
-                        setCurrentView("month");
-                      }}
-                    >
-                      <h3 className="text-lg font-semibold text-center mb-3">{monthName}</h3>
-                      <div className="grid grid-cols-7 text-xs gap-1">
-                        {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
-                          <div key={d} className="text-center text-gray-500">{d}</div>
-                        ))}
-                        {Array.from({ length: firstDow }, (_, i) => (
-                          <div key={i} className="h-5"></div>
-                        ))}
-                        {Array.from({ length: daysInMonth }, (_, dayIdx) => {
-                          const d = dayIdx + 1;
-                          const full = new Date(currentDate.getFullYear(), m, d);
-                          const isToday =
-                            full.toDateString() === startOfToday().toDateString() &&
-                            full.getFullYear() === startOfToday().getFullYear();
-                          return (
-                            <div
-                              key={d}
-                              className={`h-5 flex items-center justify-center ${isToday ? "bg-blue-600 text-white rounded-full" : "text-gray-900 hover:bg-gray-100 rounded"}`}
-                            >
-                              {d}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </>
+          <YearView currentDate={currentDate} setCurrentDate={setCurrentDate} />
         )}
       </div>
 

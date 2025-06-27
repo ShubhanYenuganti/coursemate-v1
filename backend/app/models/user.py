@@ -34,6 +34,7 @@ class User(db.Model):
     google_access_token = db.Column(db.Text, unique=True, nullable=True)  # Changed to Text for unlimited length
     google_refresh_token = db.Column(db.Text, unique=True, nullable=True)  # Changed to Text for unlimited length
     token_expiry = db.Column(db.DateTime(timezone=True), nullable=True)
+    google_sync_tokens = db.Column(db.JSON, default=dict)
     # Relationships
     goals = db.relationship("Goal", back_populates="user", lazy=True)
     
