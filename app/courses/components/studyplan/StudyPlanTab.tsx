@@ -91,18 +91,18 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       
       // Transform backend response to match frontend types
       const transformedGoal: GoalWithProgress = {
-        id: savedGoal.id,
+        id: savedGoal[0].goal_id, // Use goal_id instead of id
         courseId: courseId,
-        title: savedGoal.goal_descr,
-        targetDate: savedGoal.due_date || new Date().toISOString(),
+        title: savedGoal[0].goal_descr,
+        targetDate: savedGoal[0].due_date || new Date().toISOString(),
         workMinutesPerDay: goal.workMinutesPerDay,
         frequency: goal.frequency,
         customScheduleDays: goal.customScheduleDays,
-        createdAt: savedGoal.created_at,
-        updatedAt: savedGoal.updated_at,
-        progress: savedGoal.progress,
-        totalTasks: savedGoal.total_tasks,
-        completedTasks: savedGoal.completed_tasks
+        createdAt: savedGoal[0].created_at,
+        updatedAt: savedGoal[0].updated_at,
+        progress: 0,
+        totalTasks: 0,
+        completedTasks: 0
       };
       
       setNewGoal(transformedGoal);
@@ -120,6 +120,9 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
 
   const handleScaffoldingSave = async (tasks: Task[], subtasks: Subtask[]) => {
     try {
+      console.log('Tasks saved from scaffolding:', tasks);
+      console.log('Subtasks saved from scaffolding:', subtasks);
+      
       setIsScaffoldingOpen(false);
       setNewGoal(null);
       
@@ -136,10 +139,11 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       }
 
       const data = await response.json();
+      console.log('Goals data after save:', data);
       
       // Transform backend data to match frontend types
       const transformedGoals: GoalWithProgress[] = data.map((goal: any) => ({
-        id: goal.id,
+        id: goal.goal_id,
         courseId: courseId,
         title: goal.goal_descr,
         targetDate: goal.due_date || new Date().toISOString(),
@@ -147,12 +151,13 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         frequency: 'daily', // Default value
         createdAt: goal.created_at,
         updatedAt: goal.updated_at,
-        progress: goal.progress,
-        totalTasks: goal.total_tasks,
-        completedTasks: goal.completed_tasks
+        progress: goal.progress || 0,
+        totalTasks: goal.total_tasks || tasks.length,
+        completedTasks: goal.completed_tasks || 0
       }));
       
       setGoals(transformedGoals);
+      toast.success('Study plan created successfully!');
     } catch (error) {
       console.error('Error refetching goals after save:', error);
       toast.error('Failed to refresh goals. Please reload the page.');

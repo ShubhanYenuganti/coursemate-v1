@@ -538,6 +538,7 @@ def save_tasks_and_subtasks(goal_id):
             return jsonify({'error': 'Goal not found or you do not have access'}), 404
         
         data = request.get_json()
+        current_app.logger.info(f"Received data for goal {goal_id}: {data}")
         
         if not data or 'tasks' not in data:
             return jsonify({'error': 'Tasks are required'}), 400
@@ -550,13 +551,21 @@ def save_tasks_and_subtasks(goal_id):
         new_rows = []
         
         for task_data in data['tasks']:
-            task_id = task_data.get('task_id', str(uuid.uuid4()))
+            task_id = str(uuid.uuid4())
             task_title = task_data.get('task_title', 'New Task')
             task_descr = task_data.get('task_descr', '')
-            task_completed = task_data.get('task_completed', False)
+            task_completed = task_data.get('completed', False)
+            
+            current_app.logger.info(f"Processing task: {task_title}")
             
             if 'subtasks' in task_data and task_data['subtasks']:
                 for subtask_data in task_data['subtasks']:
+                    subtask_descr = subtask_data.get('subtask_descr', 'New Subtask')
+                    subtask_type = subtask_data.get('subtask_type', 'other')
+                    subtask_completed = subtask_data.get('completed', False)
+                    
+                    current_app.logger.info(f"Adding subtask: {subtask_descr} for task: {task_title}")
+                    
                     subtask = Goal(
                         user_id=user_id,
                         course_id=existing_goals[0].course_id,
@@ -568,15 +577,17 @@ def save_tasks_and_subtasks(goal_id):
                         task_title=task_title,
                         task_descr=task_descr,
                         task_completed=task_completed,
-                        subtask_id=subtask_data.get('subtask_id', str(uuid.uuid4())),
-                        subtask_descr=subtask_data.get('subtask_descr', 'New Subtask'),
-                        subtask_type=subtask_data.get('subtask_type', 'other'),
-                        subtask_completed=subtask_data.get('subtask_completed', False)
+                        subtask_id=str(uuid.uuid4()),
+                        subtask_descr=subtask_descr,
+                        subtask_type=subtask_type,
+                        subtask_completed=subtask_completed
                     )
                     db.session.add(subtask)
                     new_rows.append(subtask)
             else:
                 # Create a default subtask if none provided
+                current_app.logger.info(f"No subtasks provided for task: {task_title}, creating default")
+                
                 subtask = Goal(
                     user_id=user_id,
                     course_id=existing_goals[0].course_id,
@@ -600,6 +611,7 @@ def save_tasks_and_subtasks(goal_id):
         
         # Return the created rows
         result = [row.to_dict() for row in new_rows]
+        current_app.logger.info(f"Created {len(new_rows)} rows for goal {goal_id}")
         return jsonify(result), 201
         
     except SQLAlchemyError as e:
@@ -609,4 +621,84 @@ def save_tasks_and_subtasks(goal_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error saving tasks: {str(e)}")
-        return jsonify({'error': 'An error occurred while saving tasks'}), 500 
+        return jsonify({'error': 'An error occurred while saving tasks'}), 500
+
+
+@goals_bp.route('/api/goals/<goal_id>/tasks/<task_id>', methods=['DELETE'])
+@jwt_required()
+def delete_task(goal_id, task_id):
+    """Delete a task and all its subtasks"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Check if goal exists
+        goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
+        if not goals:
+            return jsonify({'error': 'Goal not found or you do not have access'}), 404
+        
+        # Get all rows for this task
+        task_rows = Goal.query.filter_by(goal_id=goal_id, task_id=task_id, user_id=user_id).all()
+        if not task_rows:
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        # Delete all rows for this task
+        deleted_count = 0
+        for row in task_rows:
+            db.session.delete(row)
+            deleted_count += 1
+        
+        db.session.commit()
+        
+        current_app.logger.info(f"Deleted task {task_id} with {deleted_count} subtasks from goal {goal_id}")
+        return jsonify({'message': f'Task deleted successfully with {deleted_count} subtasks'}), 200
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting task: {str(e)}")
+        return jsonify({'error': 'An error occurred while deleting the task'}), 500
+
+
+@goals_bp.route('/api/goals/tasks/subtasks/<subtask_id>', methods=['DELETE'])
+@jwt_required()
+def delete_subtask(subtask_id):
+    """Delete a specific subtask"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Find the subtask
+        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
+        if not subtask:
+            return jsonify({'error': 'Subtask not found or you do not have access'}), 404
+        
+        # Store goal_id and task_id for reference
+        goal_id = subtask.goal_id
+        task_id = subtask.task_id
+        
+        # Delete the subtask
+        db.session.delete(subtask)
+        db.session.commit()
+        
+        # Check if this was the last subtask for the task
+        remaining_subtasks = Goal.query.filter_by(goal_id=goal_id, task_id=task_id).count()
+        
+        current_app.logger.info(f"Deleted subtask {subtask_id} from task {task_id}, remaining subtasks: {remaining_subtasks}")
+        
+        return jsonify({
+            'message': 'Subtask deleted successfully',
+            'remaining_subtasks': remaining_subtasks
+        }), 200
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting subtask: {str(e)}")
+        return jsonify({'error': 'An error occurred while deleting the subtask'}), 500 

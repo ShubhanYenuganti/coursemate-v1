@@ -28,15 +28,30 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ColorSchemeSelector } from "@/components/color-scheme-selector"
 import { CalendarModal } from "./calendar-modal"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export function DashboardHeader() {
   const { selectCourse } = useCourses()
   const router = useRouter()
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false)
 
   const handleLogoClick = () => {
     // Deselect any selected course to return to the dashboard home
     selectCourse(null)
+  }
+
+  const handleLogoutClick = () => {
+    setIsLogoutDialogOpen(true)
   }
 
   const handleLogout = () => {
@@ -127,7 +142,7 @@ export function DashboardHeader() {
                   <span>Settings</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
+                <DropdownMenuItem className="text-red-600" onClick={handleLogoutClick}>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>
                 </DropdownMenuItem>
@@ -139,6 +154,24 @@ export function DashboardHeader() {
 
       {/* Calendar Modal */}
       <CalendarModal isOpen={isCalendarOpen} onClose={() => setIsCalendarOpen(false)} />
+
+      {/* Logout Confirmation Dialog */}
+      <AlertDialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out? You will need to sign in again to access your account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout} className="bg-red-500 hover:bg-red-600">
+              Log out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

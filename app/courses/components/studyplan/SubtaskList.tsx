@@ -1,15 +1,18 @@
 "use client";
 import React, { useState } from 'react';
-import { CheckCircle, Circle, Clock, BookOpen, Brain, Target, FileText, Zap } from 'lucide-react';
+import { CheckCircle, Circle, Clock, BookOpen, Brain, Target, FileText, Zap, Trash2 } from 'lucide-react';
 import { Subtask } from './types';
+import { toast } from 'react-hot-toast';
 
 interface SubtaskListProps {
   taskId: string;
   subtasks: Subtask[];
+  onSubtaskDeleted?: (subtaskId: string) => void;
 }
 
-const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks }) => {
+const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDeleted }) => {
   const [localSubtasks, setLocalSubtasks] = useState<Subtask[]>(subtasks);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const handleToggleSubtask = (subtaskId: string) => {
     setLocalSubtasks(prev => 
@@ -19,6 +22,44 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks }) => {
         : subtask
       )
     );
+  };
+
+  const handleDeleteClick = (subtaskId: string) => {
+    setDeleteConfirmId(subtaskId);
+  };
+
+  const handleDeleteConfirm = async (subtaskId: string) => {
+    try {
+      const response = await fetch(`/api/goals/tasks/subtasks/${subtaskId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete subtask');
+      }
+
+      // Remove the subtask from local state
+      setLocalSubtasks(prev => prev.filter(subtask => subtask.id !== subtaskId));
+      
+      // Call the parent callback if provided
+      if (onSubtaskDeleted) {
+        onSubtaskDeleted(subtaskId);
+      }
+      
+      toast.success('Subtask deleted successfully');
+    } catch (error) {
+      console.error('Error deleting subtask:', error);
+      toast.error('Failed to delete subtask. Please try again.');
+    } finally {
+      setDeleteConfirmId(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmId(null);
   };
 
   const getTypeIcon = (type: string) => {
@@ -106,7 +147,35 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks }) => {
               </div>
             </div>
           </div>
-        ))}
+          
+          {deleteConfirmId === subtask.id ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleDeleteConfirm(subtask.id)}
+                className="p-1 text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                title="Confirm Delete"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleCancelDelete}
+                className="p-1 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+                title="Cancel"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleDeleteClick(subtask.id)}
+              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+              title="Delete Subtask"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   );
 };
