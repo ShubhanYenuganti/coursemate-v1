@@ -167,7 +167,7 @@ export function CalendarScheduler() {
   const [showAddTask, setShowAddTask] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date(2021, 1, 21)) // February 21, 2021
   const [currentView, setCurrentView] = useState<"day" | "week" | "month" | "year">("week")
-  const [courseVisibility, setCourseVisibility] = useState(
+  const [courseVisibility, setCourseVisibility] = useState<Record<string, boolean>>(
     courses.reduce((acc, course) => ({ ...acc, [course.id]: course.visible }), {}),
   )
   const [selectedTask, setSelectedTask] = useState<any>(null)
