@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from app.init import db
 from itsdangerous import URLSafeTimedSerializer as Serializer
 from flask import current_app
-from sqlalchemy.orm import relationship
 
 
 class User(db.Model):
@@ -38,10 +37,6 @@ class User(db.Model):
     # Relationships
     goals = db.relationship("Goal", back_populates="user", lazy=True)
     
-    # Friend relationships
-    sent_friend_requests = relationship('Friend', foreign_keys='Friend.requester_id', back_populates='requester', lazy='dynamic')
-    received_friend_requests = relationship('Friend', foreign_keys='Friend.receiver_id', back_populates='receiver', lazy='dynamic')
-
     def generate_token(self, token_type='email_verification'):
         s = Serializer(current_app.config['SECRET_KEY'])
         token = s.dumps({'user_id': self.id, 'type': token_type})

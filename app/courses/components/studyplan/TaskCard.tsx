@@ -21,7 +21,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted 
     if (progress >= 50) return 'bg-yellow-500';
     return 'bg-red-500';
   };
-  
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -70,7 +70,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted 
                 </span>
               )}
             </div>
-              
+            
             <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
               <div className="flex items-center gap-1">
                 <Calendar className="w-4 h-4" />
@@ -79,14 +79,14 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted 
               <div className="flex items-center gap-1">
                 <span>{task.completedSubtasks}/{task.totalSubtasks} subtasks</span>
               </div>
-                </div>
-                
+            </div>
+
             {/* Progress Bar */}
             <div className="mb-3">
               <div className="flex items-center justify-between text-sm mb-1">
                 <span className="text-gray-600">Progress</span>
                 <span className="font-medium">{task.progress}%</span>
-                  </div>
+              </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(task.progress)}`}
@@ -97,12 +97,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted 
           </div>
 
           <div className="flex items-center gap-2 ml-4">
-              <button
+            <button
               className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
               title="Continue Task"
-              >
-                <Play className="w-4 h-4" />
-              </button>
+            >
+              <Play className="w-4 h-4" />
+            </button>
             <button
               onClick={() => setIsEditorOpen(true)}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"

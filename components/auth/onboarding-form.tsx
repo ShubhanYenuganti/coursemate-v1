@@ -54,7 +54,7 @@ export function OnboardingForm() {
       }
         console.log("Token retrieved from localStorage:", token);  // Add this for debugging
 
-      const response = await fetch(`${process.env.BACKEND_URL}/api/users/profile`, {
+      const response = await fetch('http://localhost:5173/api/users/profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

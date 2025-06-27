@@ -49,8 +49,7 @@ class CourseService {
   private baseUrl: string;
 
   constructor() {
-    // Use 'http://localhost:5173' as the default fallback for local development.
-    this.baseUrl = process.env.BACKEND_URL || 'http://localhost:5173';
+    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5173';
   }
 
   private getAuthHeaders() {

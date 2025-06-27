@@ -64,7 +64,7 @@ def login():
     expires = timedelta(hours=1)
     token = create_access_token(
         identity=user.id,
-        additional_claims={"role": user.role, "name": user.name},
+        additional_claims={"role": user.role},
         expires_delta=expires
     )
     
