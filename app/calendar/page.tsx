@@ -1,5 +1,5 @@
 import { Sidebar } from '../dashboard/components/sidebar';
-import { CalendarScheduler } from './calendar-scheduler';
+import  { CalendarScheduler } from './calendar-scheduler';
 
 export default function CalendarPage() {
   return (

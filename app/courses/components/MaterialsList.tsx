@@ -1,4 +1,13 @@
+"use client";
 import React, { useState, useEffect } from "react";
+import { Portal } from '../../../components/Portal';
+import dynamic from 'next/dynamic';
+
+// Dynamically import the AnnotatablePDFViewer to avoid SSR issues with PDF.js
+const AnnotatablePDFViewer = dynamic(
+  () => import('@/components/courses/AnnotatablePDFViewer'),
+  { ssr: false, loading: () => <div className="flex items-center justify-center p-8">Loading PDF viewer...</div> }
+);
 
 interface Material {
   id: string;
@@ -94,34 +103,54 @@ const MaterialsList: React.FC<MaterialsListProps> = ({ courseId, refreshTrigger,
   const PreviewModal: React.FC<{ url: string | null; onClose: () => void }> = ({ url, onClose }) => {
     if (!url) return null;
     return (
-      <div className="preview-modal-overlay" onClick={onClose}>
-        <div className="preview-modal-content" onClick={e => e.stopPropagation()}>
-          <button className="close-btn" onClick={onClose}>✖️</button>
-          {isImage(url) ? (
-            <img src={url} alt="Preview" style={{ maxWidth: '100%', maxHeight: '80vh' }} />
-          ) : isPDF(url) ? (
-            <iframe src={url} style={{ width: '80vw', height: '80vh' }} title="PDF Preview" />
-          ) : (
-            <div>
-              <p>Preview not available for this file type.</p>
-              <a href={url} target="_blank" rel="noopener noreferrer">Open in new tab</a>
+      <Portal>
+        <div 
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-[9999]"
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+          onClick={onClose}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl relative overflow-hidden"
+            style={{ 
+              width: isPDF(url) ? '95vw' : 'auto',
+              height: isPDF(url) ? '90vh' : 'auto',
+              maxWidth: isPDF(url) ? '1600px' : '90vw',
+              maxHeight: '90vh'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button 
+              className="absolute top-4 right-4 bg-white/80 hover:bg-white rounded-full p-2 text-gray-700 hover:text-gray-900 z-10"
+              onClick={onClose}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            <div className="flex-1 overflow-auto h-full">
+              {isImage(url) ? (
+                <img src={url} alt="Preview" className="max-w-full max-h-[85vh] object-contain" />
+              ) : isPDF(url) ? (
+                <div className="w-full h-full" style={{ minHeight: '800px' }}>
+                  <AnnotatablePDFViewer url={url} />
+                </div>
+              ) : (
+                <div className="p-8 text-center">
+                  <p className="text-lg mb-4">Preview not available for this file type.</p>
+                  <a 
+                    href={url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-block px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                  >
+                    Open in new tab
+                  </a>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-        <style jsx>{`
-          .preview-modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
-            z-index: 1000;
-          }
-          .preview-modal-content {
-            background: #fff; padding: 1.5rem; border-radius: 8px; position: relative;
-          }
-          .close-btn {
-            position: absolute; top: 8px; right: 8px; background: none; border: none; font-size: 1.5rem;
-          }
-        `}</style>
-      </div>
+      </Portal>
     );
   };
 
