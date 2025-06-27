@@ -4,8 +4,6 @@ from app.models.user import User
 from app.models.message import Message
 from app.init import db
 from datetime import datetime
-from app.extensions import socketio
-from flask_socketio import join_room
 
 messages_bp = Blueprint('messages', __name__, url_prefix='/api/messages')
 
@@ -145,21 +143,6 @@ def create_conversation():
         db.session.add(new_message)
         db.session.commit()
         
-        # Emit WebSocket event to receiver and sender with the correct conversation_id
-        # The conversation_id should be the ID of the *other* user in the chat
-        
-        # Emit to receiver (their conversation is with the current user)
-        socketio.emit('new_message', {
-            'conversation_id': current_user_id,
-            'message': new_message.to_dict()
-        }, room=receiver_id)
-        
-        # Emit to sender (their conversation is with the receiver)
-        socketio.emit('new_message', {
-            'conversation_id': receiver_id,
-            'message': new_message.to_dict()
-        }, room=current_user_id)
-        
         return jsonify({
             'success': True,
             'message': new_message.to_dict(),
@@ -252,21 +235,6 @@ def send_message():
         db.session.add(new_message)
         db.session.commit()
         
-        # Emit WebSocket event to receiver and sender with the correct conversation_id
-        # The conversation_id should be the ID of the *other* user in the chat
-        
-        # Emit to receiver (their conversation is with the current user)
-        socketio.emit('new_message', {
-            'conversation_id': current_user_id,
-            'message': new_message.to_dict()
-        }, room=receiver_id)
-        
-        # Emit to sender (their conversation is with the receiver)
-        socketio.emit('new_message', {
-            'conversation_id': receiver_id,
-            'message': new_message.to_dict()
-        }, room=current_user_id)
-        
         return jsonify({
             'success': True,
             'message': new_message.to_dict()
@@ -292,22 +260,7 @@ def delete_conversation(other_user_id):
             ((Message.sender_id == other_user_id) & (Message.receiver_id == current_user_id))
         ).delete(synchronize_session=False)
         db.session.commit()
-
-        # Emit socket event to both users to notify them of deletion
-        # Emit to the user who initiated the delete
-        socketio.emit('conversation_deleted', {'conversation_id': other_user_id}, room=current_user_id)
-        # Emit to the other user in the chat
-        socketio.emit('conversation_deleted', {'conversation_id': current_user_id}, room=other_user_id)
-
         return jsonify({'success': True, 'message': 'Conversation deleted'}), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# Add a join room event handler
-@socketio.on('join')
-def on_join(data):
-    user_id = data.get('user_id')
-    if user_id:
-        join_room(user_id) 
+        return jsonify({'success': False, 'error': str(e)}), 500 

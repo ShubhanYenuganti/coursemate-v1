@@ -20,7 +20,7 @@ export function LoginForm() {
       const password = (document.getElementById("password") as HTMLInputElement).value;
 
       try {
-        const response = await fetch(`${process.env.BACKEND_URL}/api/login`, {
+        const response = await fetch('http://localhost:5173/api/login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -50,7 +50,7 @@ export function LoginForm() {
         setIsLoading(false);
       }
     } else if (provider = "google") {
-      window.location.href = `${process.env.BACKEND_URL}/api/auth/google`;
+      window.location.href = "http://localhost:5173/api/auth/google";
     } else {
       // Handle OAuth providers (Google, Apple, etc.)
       console.log(`OAuth login with ${provider} - Not implemented yet`);

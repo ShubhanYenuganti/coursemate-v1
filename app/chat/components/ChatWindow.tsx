@@ -2,9 +2,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, MoreVertical, Phone, Video } from 'lucide-react';
 import { Chat, Message, User } from '../types';
-import { useCall } from '@/app/context/CallContext';
-import { useSocket } from '@/app/context/SocketContext';
-import { useAuth } from '@/app/context/AuthContext';
 
 interface ChatWindowProps {
   chat?: Chat;
@@ -19,11 +16,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
   const inputRef = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const { startCall, isPeerReady } = useCall();
-  const { socket } = useSocket();
-  const peerRef = React.useRef<any>(null);
-  const [peerId, setPeerId] = useState<string>('');
-  const { user } = useAuth();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -105,16 +97,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
         </div>
         
         <div className="flex items-center space-x-2">
-          <button 
-            onClick={() => {
-              if (otherParticipant) {
-                startCall(otherParticipant.id);
-              }
-            }}
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            disabled={!isPeerReady}
-            title={!isPeerReady ? 'Call is not ready yet' : 'Start Video Call'}
-          >
+          <button className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+            <Phone className="w-4 h-4" />
+          </button>
+          <button className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
             <Video className="w-4 h-4" />
           </button>
           <div className="relative">

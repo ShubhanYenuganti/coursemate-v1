@@ -19,7 +19,7 @@ export default function VerifyEmail() {
       }
       
       try {
-        const response = await fetch(`${process.env.BACKEND_URL}/api/verify-email`, {
+        const response = await fetch('http://localhost:5173/api/verify-email', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

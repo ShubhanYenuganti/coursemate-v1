@@ -1,8 +1,4 @@
 /** @type {import('next').NextConfig} */
-const backendUrl = process.env.BACKEND_URL || 'http://localhost:5173';
-console.log("RUNNING ON:", backendUrl)
-
-
 const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
@@ -22,13 +18,10 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: `${backendUrl}/api/:path*`,
+        destination: 'http://localhost:5173/api/:path*',
       },
     ]
-  },
-  env: {
-    BACKEND_URL: backendUrl,
-  },
+  }
 }
 
 export default nextConfig

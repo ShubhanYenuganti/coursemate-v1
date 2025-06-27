@@ -1,150 +1,117 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { X, UserPlus, Search, Send, UserCheck } from 'lucide-react';
-import { friendService, UserSummary } from '../../../lib/api/friendService';
+import React, { useState } from 'react';
+import { X, UserPlus, Mail, User } from 'lucide-react';
 
 interface AddFriendModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onFriendRequestSent: (user: UserSummary) => void;
+  onAddFriend: (email: string) => void;
 }
 
-const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onFriendRequestSent }) => {
-  const [users, setUsers] = useState<UserSummary[]>([]);
-  const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onAddFriend }) => {
+  const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      const fetchUsers = async () => {
-        setIsLoading(true);
-        try {
-          const findableUsers = await friendService.findNewFriends();
-          setUsers(findableUsers);
-        } catch (error) {
-          console.error("Failed to fetch users:", error);
-          setUsers([]);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      fetchUsers();
-    }
-  }, [isOpen]);
-
-  const handleSendRequest = async (user: UserSummary) => {
-    setSentRequests(prev => new Set(prev).add(user.id));
-    try {
-      await friendService.sendFriendRequest(user.id);
-      onFriendRequestSent(user);
-    } catch (error) {
-      console.error(`Failed to send friend request to ${user.name}:`, error);
-      // Optionally revert the button state on error
-      setSentRequests(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(user.id);
-        return newSet;
-      });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email.trim()) {
+      setIsLoading(true);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      onAddFriend(email.trim());
+      setEmail('');
+      setIsLoading(false);
+      onClose();
     }
   };
-  
-  const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 flex flex-col" style={{height: '70vh'}}>
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
               <UserPlus className="w-4 h-4 text-green-600" />
             </div>
-            <h2 className="text-lg font-semibold text-gray-800">Find New Friends</h2>
+            <h2 className="text-xl font-semibold text-gray-800">Add Friend</h2>
           </div>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Search Bar */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name or email..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            />
-          </div>
-        </div>
-
-        {/* User List */}
-        <div className="flex-grow overflow-y-auto p-4">
-          {isLoading ? (
-            <div className="text-center py-8">
-              <div className="w-6 h-6 border-2 border-gray-300 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-              <p className="text-sm text-gray-500">Loading users...</p>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6">
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Friend's Email Address
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter email address..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                required
+              />
             </div>
-          ) : filteredUsers.length > 0 ? (
-            <ul className="space-y-2">
-              {filteredUsers.map(user => (
-                <li key={user.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-800">{user.name}</p>
-                      <p className="text-xs text-gray-500">{user.email}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleSendRequest(user)}
-                    disabled={sentRequests.has(user.id)}
-                    className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center disabled:opacity-70 disabled:cursor-not-allowed
-                               bg-green-100 text-green-700 hover:bg-green-200
-                               disabled:bg-gray-200 disabled:text-gray-500"
-                  >
-                    {sentRequests.has(user.id) ? (
-                      <>
-                        <UserCheck className="w-4 h-4 mr-1.5" />
-                        Sent
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4 mr-1.5" />
-                        Add
-                      </>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-             <div className="text-center py-8">
-                <p className="text-sm text-gray-600">No users found.</p>
-             </div>
-          )}
-        </div>
-        
-        {/* Footer */}
-        <div className="p-4 bg-gray-50 border-t border-gray-200">
+            <p className="text-xs text-gray-500 mt-1">
+              We'll send them a friend request. They'll need to accept it to start chatting.
+            </p>
+          </div>
+
+          {/* Info Box */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-start space-x-3">
+              <User className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-medium text-blue-900 mb-1">How it works</h4>
+                <ul className="text-xs text-blue-800 space-y-1">
+                  <li>• Enter your friend's email address</li>
+                  <li>• We'll send them a friend request</li>
+                  <li>• Once they accept, you can start chatting</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              Close
+              Cancel
             </button>
-        </div>
+            <button
+              type="submit"
+              disabled={!isValidEmail(email) || isLoading}
+              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Sending...
+                </>
+              ) : (
+                'Send Friend Request'
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
