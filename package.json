@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
-    "backend": "cd backend && python3 run.py",
-    "dev:all": "cd backend && pip3 install -r requirements.txt && cd .. && concurrently \"npm run dev\" \"npm run backend\"",
+    "backend": "cd backend && python run.py",
+    "dev:all": "cd backend && pip install -r requirements.txt && cd .. && concurrently \"npm run dev\" \"npm run backend\"",
     "start": "next start -p 3001"
   },
   "dependencies": {

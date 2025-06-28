@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text
+from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text, TIMESTAMP
 from sqlalchemy.orm import relationship
+from datetime import datetime, timezone
 
 from app.init import db
 
@@ -19,7 +20,7 @@ class Goal(db.Model):
     # Goal fields
     goal_id = Column(String, nullable=False)  # ID of the goal this row belongs to
     goal_descr = Column(Text, nullable=False)
-    due_date = Column(DateTime, nullable=True)
+    due_date = Column(DateTime(timezone=True), nullable=True)
     goal_completed = Column(Boolean, default=False)
     
     # Task fields
@@ -34,8 +35,20 @@ class Goal(db.Model):
     subtask_type = Column(String(50), nullable=False, default="other")
     subtask_completed = Column(Boolean, default=False)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True),
+                    default=lambda: datetime.now(timezone.utc))   
+    updated_at = Column(DateTime(timezone=True),
+                    default=lambda: datetime.now(timezone.utc),
+                    onupdate =lambda: datetime.now(timezone.utc))    
+    start_time = Column(TIMESTAMP(timezone=True))   # timestamptz in Postgres
+    end_time   = Column(TIMESTAMP(timezone=True))
+    
+    # Google Calendar Fields
+    google_event_id = Column(String, nullable=True)
+    google_etag = Column(String(40), nullable=True)
+    google_source = Column(String(255), nullable=True)
+    google_calendar_color = Column(String(7), nullable=True)  # Hex color code (e.g., "#4285f4")
+    is_external = Column(Boolean, default=False)
 
     # Relationships
     user = relationship("User", back_populates="goals")
@@ -44,7 +57,7 @@ class Goal(db.Model):
     def __init__(self, user_id, course_id, goal_id, goal_descr, task_id, task_title, 
                  subtask_id, subtask_descr, due_date=None, goal_completed=False, 
                  task_descr=None, task_completed=False, subtask_type="other", 
-                 subtask_completed=False):
+                 subtask_completed=False, google_event_id=None, google_etag=None, google_source=None, google_calendar_color=None, is_external=False, start_time=None, end_time=None):
         self.id = str(uuid.uuid4())
         self.user_id = user_id
         self.course_id = course_id
@@ -67,7 +80,15 @@ class Goal(db.Model):
         self.subtask_type = subtask_type
         self.subtask_completed = subtask_completed
         
-        self.created_at = datetime.utcnow()
+        # Google Calendar Fields
+        self.google_event_id = google_event_id
+        self.google_etag = google_etag
+        self.google_source = google_source
+        self.google_calendar_color = google_calendar_color
+        self.is_external = is_external
+        self.start_time = start_time
+        self.end_time = end_time
+        self.created_at = datetime.now(timezone.utc)
         self.updated_at = self.created_at
 
     @classmethod
@@ -94,6 +115,12 @@ class Goal(db.Model):
             subtask_descr=subtask_descr,
             subtask_type="other"
         ), goal_id, task_id
+    
+    def _fmt(self, dt):
+        if not dt:
+            return None
+        
+        return dt.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
 
     def to_dict(self):
         """Convert the model to a dictionary"""
@@ -103,7 +130,7 @@ class Goal(db.Model):
             'course_id': self.course_id,
             'goal_id': self.goal_id,
             'goal_descr': self.goal_descr,
-            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'due_date': self._fmt(self.due_date),
             'goal_completed': self.goal_completed,
             'task_id': self.task_id,
             'task_title': self.task_title,
@@ -113,6 +140,13 @@ class Goal(db.Model):
             'subtask_descr': self.subtask_descr,
             'subtask_type': self.subtask_type,
             'subtask_completed': self.subtask_completed,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'created_at': self._fmt(self.created_at),
+            'updated_at': self._fmt(self.updated_at),
+            'google_event_id': self.google_event_id,
+            'google_etag': self.google_etag,
+            'google_source': self.google_source,
+            'google_calendar_color': self.google_calendar_color,
+            'is_external': self.is_external,
+            'start_time': self._fmt(self.start_time),
+            'end_time': self._fmt(self.end_time)
         } 
