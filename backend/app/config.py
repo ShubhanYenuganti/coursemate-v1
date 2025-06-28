@@ -36,6 +36,11 @@ class Config:
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD', '')
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@example.com')
     
+    # Google Configuration
+    GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+    GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
+    GOOGLE_DISCOVERY_URL = os.getenv('GOOGLE_DISCOVERY_URL')    
+    
     # Frontend URL
     FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
     

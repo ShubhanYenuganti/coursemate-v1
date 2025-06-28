@@ -10,6 +10,7 @@ import EmptyState from "./components/EmptyState";
 import { Course } from "./components/CourseCard";
 import CreateCourseModal from "./components/CreateCourseModal";
 import Link from "next/link";
+import useAuthRedirect from "@/hooks/useAuthRedirect"
 
 // Helper function to get icon based on subject
 const getSubjectIcon = (subject: string) => {
@@ -190,6 +191,12 @@ const CoursesPage = () => {
 
     return filtered;
   }, [courses, searchTerm, selectedSemester, filterChips, showArchived, sortBy]);
+
+  const loading = useAuthRedirect()
+
+  if (loading) {
+    return <div>Loading...</div>
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8 relative">

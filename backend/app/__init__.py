@@ -14,6 +14,9 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     mail.init_app(app)
     
+    # Import models to ensure they're registered with SQLAlchemy
+    from . import models    
+        
     # Configure CORS with specific origins like in init.py
     CORS(app,
          resources={
@@ -63,6 +66,9 @@ def create_app(config_class=Config):
     from .routes.uploads import uploads_bp
     from .routes.chat import chat_bp
     from .routes.tasks import tasks_bp
+    from .routes.oauth import oauth_bp, register_oauth
+    from .routes.messages import messages_bp
+    from .routes.goals import goals_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
@@ -71,6 +77,10 @@ def create_app(config_class=Config):
     app.register_blueprint(uploads_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(tasks_bp)
+    register_oauth(app)
+    app.register_blueprint(oauth_bp)
+    app.register_blueprint(messages_bp)
+    app.register_blueprint(goals_bp)
 
     # Global error handler to return JSON errors with CORS headers
     @app.errorhandler(Exception)
@@ -83,7 +93,7 @@ def create_app(config_class=Config):
     @app.route("/")
     def index():
         return "Flask backend is working!"
-        
+
     # Import models to ensure they're registered with SQLAlchemy
     from .models.course import Course
     from .models.task import Task

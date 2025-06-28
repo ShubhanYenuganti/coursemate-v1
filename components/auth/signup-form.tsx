@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Github, Apple } from "lucide-react"
@@ -73,6 +73,8 @@ export function SignUpForm() {
       } finally {
         setIsLoading(false);
       }
+    } else if (provider === "google") {
+      window.location.href = "http://localhost:5173/api/auth/google";
     } else {
       // For social logins
       console.log(`Signing up with ${provider} (not implemented)`)
