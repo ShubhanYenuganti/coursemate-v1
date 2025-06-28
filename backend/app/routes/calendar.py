@@ -82,7 +82,7 @@ def calendar_callback():
         db.session.rollback()
         current_app.logger.exception("initial Google Calendar sync failed")
         return jsonify({"error": str(e)}), 500
-    
+
     return redirect("http://localhost:3001/calendar")
 
 # Helper: Refresh token if expired
@@ -116,16 +116,16 @@ def refresh_google_token(user: User):
 def sync_google_events(user: User, full_sync: bool = True):
     refresh_google_token(user)
     if not user.google_access_token:
-        raise ValueError("No access token found")   
+        raise ValueError("No access token found")    
     
     course_id = ensure_google_calendar_course(user)
     
     credentials = Credentials(
-        token=user.google_access_token,
-        refresh_token=user.google_refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=current_app.config["GOOGLE_CLIENT_ID"],
-        client_secret=current_app.config["GOOGLE_CLIENT_SECRET"],
+                        token=user.google_access_token,
+                        refresh_token=user.google_refresh_token,
+                        token_uri="https://oauth2.googleapis.com/token",
+                        client_id=current_app.config["GOOGLE_CLIENT_ID"],
+                        client_secret=current_app.config["GOOGLE_CLIENT_SECRET"],
         scopes=["https://www.googleapis.com/auth/calendar"]
     )
     

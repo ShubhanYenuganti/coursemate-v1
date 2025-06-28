@@ -8,6 +8,8 @@ import {
   Settings,
   GraduationCap,
   X,
+  ChevronDown,
+  GripVertical,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -68,6 +70,13 @@ interface Goal {
   start_time: string | null;   // ISO string – NOT always midnight
   end_time: string | null;   // ISO string – ≧ start_time       // ISO
   google_calendar_color?: string | null;  // Hex color from Google Calendar
+  // Progress tracking for grouped tasks
+  progress?: number;
+  totalSubtasks?: number;
+  completedSubtasks?: number;
+  subtasks?: Goal[];
+  // Status field
+  status?: "Overdue" | "In Progress" | "Completed" | null;
 }
 
 type GoalsByDate = Record<string, Goal[]>
@@ -266,6 +275,23 @@ const AllDayRow = ({
       <div className="flex flex-1">
         {dayList.map((d, idx) => {
           const goals = getGoalsForDate(d).filter(isAllDay)
+          const groupedTasks = groupTasksByTaskId(goals)
+          const groupedGoals = Object.values(groupedTasks).map(group => ({
+            ...group.subtasks[0], // Use first subtask as representative
+            task_title: group.taskTitle,
+            task_descr: group.taskDescr,
+            start_time: group.startTime,
+            end_time: group.endTime,
+            course_id: group.courseId,
+            google_calendar_color: group.googleCalendarColor,
+            // Add progress information
+            progress: group.progress,
+            totalSubtasks: group.totalSubtasks,
+            completedSubtasks: group.completedSubtasks,
+            subtasks: group.subtasks,
+            // Calculate status
+            status: calculateStatus(group.subtasks[0])
+          }))
 
           /* add a right border when we're in week-view (i.e. days is an array)
              and this bucket is NOT the last one                              */
@@ -279,23 +305,27 @@ const AllDayRow = ({
             >
               {/* Google Calendar-style all-day container */}
               <div className="min-h-[32px] p-1">
-                {goals.length === 0 ? (
+                {groupedGoals.length === 0 ? (
                   // Empty state - minimal height
                   <div className="h-6"></div>
-                ) : goals.length === 1 ? (
+                ) : groupedGoals.length === 1 ? (
                   // Single event - full width
                   <div
                     className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center"
-                    style={{ backgroundColor: colorForCourse(goals[0].course_id, goals[0].google_calendar_color) }}
-                    title={goals[0].goal_descr ?? goals[0].task_title ?? ""}
-                    onClick={(e) => handleGoalClick(goals[0], e)}
+                    style={{ backgroundColor: colorForCourse(groupedGoals[0].course_id, groupedGoals[0].google_calendar_color) }}
+                    title={groupedGoals[0].goal_descr ?? groupedGoals[0].task_title ?? ""}
+                    onClick={(e) => handleGoalClick(groupedGoals[0], e)}
                   >
-                    {goals[0].task_title ?? "(untitled)"}
+                    {groupedGoals[0].task_title ?? "(untitled)"}
+                    {/* Show progress indicator for grouped tasks */}
+                    {groupedGoals[0].totalSubtasks && groupedGoals[0].totalSubtasks > 1 && (
+                      <span className="ml-1 opacity-75">({groupedGoals[0].completedSubtasks}/{groupedGoals[0].totalSubtasks})</span>
+                    )}
                   </div>
-                ) : goals.length <= 3 ? (
+                ) : groupedGoals.length <= 3 ? (
                   // 2-3 events - stacked vertically
                   <div className="space-y-1">
-                    {goals.map((g) => (
+                    {groupedGoals.map((g) => (
                       <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
                         className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center"
@@ -304,13 +334,17 @@ const AllDayRow = ({
                         onClick={(e) => handleGoalClick(g, e)}
                       >
                         {g.task_title ?? "(untitled)"}
+                        {/* Show progress indicator for grouped tasks */}
+                        {g.totalSubtasks && g.totalSubtasks > 1 && (
+                          <span className="ml-1 opacity-75">({g.completedSubtasks}/{g.totalSubtasks})</span>
+                        )}
                       </div>
                     ))}
                   </div>
                 ) : (
                   // 4+ events - show first 3 + count indicator
                   <div className="space-y-1">
-                    {goals.slice(0, 3).map((g) => (
+                    {groupedGoals.slice(0, 3).map((g) => (
                       <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
                         className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center"
@@ -319,18 +353,22 @@ const AllDayRow = ({
                         onClick={(e) => handleGoalClick(g, e)}
                       >
                         {g.task_title ?? "(untitled)"}
+                        {/* Show progress indicator for grouped tasks */}
+                        {g.totalSubtasks && g.totalSubtasks > 1 && (
+                          <span className="ml-1 opacity-75">({g.completedSubtasks}/{g.totalSubtasks})</span>
+                        )}
                       </div>
                     ))}
                     {/* Count indicator for additional events */}
                     <div 
                       className="h-6 px-2 rounded text-xs font-medium text-gray-600 bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors flex items-center"
-                      title={`${goals.length - 3} more events`}
+                      title={`${groupedGoals.length - 3} more events`}
                       onClick={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
-                        onOverflowClick(goals, { x: rect.left, y: rect.bottom }, d);
+                        onOverflowClick(groupedGoals, { x: rect.left, y: rect.bottom }, d);
                       }}
                     >
-                      +{goals.length - 3} more
+                      +{groupedGoals.length - 3} more
                     </div>
                   </div>
                 )}
@@ -567,6 +605,75 @@ const calculateEventPositions = (goals: Goal[], hourHeight: number, currentHour:
   return positions;
 };
 
+/** Group tasks by task_id for non-Google Calendar goals and calculate subtask progress */
+const groupTasksByTaskId = (goals: Goal[]) => {
+  const groupedTasks: Record<string, {
+    taskId: string;
+    taskTitle: string;
+    taskDescr: string;
+    subtasks: Goal[];
+    completedSubtasks: number;
+    totalSubtasks: number;
+    progress: number;
+    startTime: string | null;
+    endTime: string | null;
+    courseId: string;
+    googleCalendarColor: string | null;
+  }> = {};
+
+  goals.forEach(goal => {
+    // Only group non-Google Calendar goals
+    if (goal.goal_id === "Google Calendar") {
+      // For Google Calendar events, treat each as individual
+      const key = `${goal.goal_id}-${goal.task_id}-${goal.subtask_id}`;
+      groupedTasks[key] = {
+        taskId: goal.task_id || '',
+        taskTitle: goal.task_title || '',
+        taskDescr: goal.task_descr || '',
+        subtasks: [goal],
+        completedSubtasks: goal.subtask_completed ? 1 : 0,
+        totalSubtasks: 1,
+        progress: goal.subtask_completed ? 100 : 0,
+        startTime: goal.start_time || null,
+        endTime: goal.end_time || null,
+        courseId: goal.course_id,
+        googleCalendarColor: goal.google_calendar_color ?? null
+      };
+    } else {
+      // Group by task_id for regular goals
+      const taskId = goal.task_id || '';
+      if (!groupedTasks[taskId]) {
+        groupedTasks[taskId] = {
+          taskId,
+          taskTitle: goal.task_title || '',
+          taskDescr: goal.task_descr || '',
+          subtasks: [],
+          completedSubtasks: 0,
+          totalSubtasks: 0,
+          progress: 0,
+          startTime: goal.start_time || null,
+          endTime: goal.end_time || null,
+          courseId: goal.course_id,
+          googleCalendarColor: goal.google_calendar_color ?? null
+        };
+      }
+      
+      groupedTasks[taskId].subtasks.push(goal);
+      if (goal.subtask_completed) {
+        groupedTasks[taskId].completedSubtasks++;
+      }
+    }
+  });
+
+  // Calculate progress for each group
+  Object.values(groupedTasks).forEach(group => {
+    group.totalSubtasks = group.subtasks.length;
+    group.progress = group.totalSubtasks > 0 ? Math.round((group.completedSubtasks / group.totalSubtasks) * 100) : 0;
+  });
+
+  return groupedTasks;
+};
+
 // Extracted view components to reduce cognitive complexity
 const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel, handleOverflowClick }: any) => (
   <div className="flex flex-col h-full">
@@ -623,7 +730,24 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleGo
         <div className="flex-1 relative overflow-visible">
           {hours.map((h: number) => {
             const goals = goalsStartingAtHour(currentDate, h, getGoalsForDate);
-            const eventPositions = calculateEventPositions(goals, 80, h, currentDate);
+            const groupedTasks = groupTasksByTaskId(goals);
+            const groupedGoals = Object.values(groupedTasks).map(group => ({
+              ...group.subtasks[0], // Use first subtask as representative
+              task_title: group.taskTitle,
+              task_descr: group.taskDescr,
+              start_time: group.startTime,
+              end_time: group.endTime,
+              course_id: group.courseId,
+              google_calendar_color: group.googleCalendarColor,
+              // Add progress information
+              progress: group.progress,
+              totalSubtasks: group.totalSubtasks,
+              completedSubtasks: group.completedSubtasks,
+              subtasks: group.subtasks,
+              // Calculate status
+              status: calculateStatus(group.subtasks[0])
+            }));
+            const eventPositions = calculateEventPositions(groupedGoals, 80, h, currentDate);
 
             return (
               <div key={h} className="h-20 border-b border-gray-200 relative p-1 overflow-visible">
@@ -650,6 +774,23 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleGo
                     {pos.showTitle && pos.goal.goal_descr && (
                       <div className="text-[11px] opacity-90 truncate">
                         {pos.goal.goal_descr}
+                      </div>
+                    )}
+                    {/* Show status indicator for non-Google Calendar events */}
+                    {pos.showTitle && pos.goal.status && pos.goal.goal_id !== "Google Calendar" && (
+                      <div className="text-[10px] mt-1 flex items-center gap-1">
+                        <div className={`w-2 h-2 rounded-full ${
+                          pos.goal.status === "Overdue" ? "bg-red-400" :
+                          pos.goal.status === "In Progress" ? "bg-yellow-400" :
+                          "bg-green-400"
+                        }`} />
+                        <span className="opacity-90">{pos.goal.status}</span>
+                      </div>
+                    )}
+                    {/* Show progress for grouped tasks */}
+                    {pos.showTitle && pos.goal.progress !== undefined && pos.goal.totalSubtasks && pos.goal.totalSubtasks > 1 && (
+                      <div className="text-[10px] opacity-90 mt-1">
+                        {pos.goal.completedSubtasks}/{pos.goal.totalSubtasks} subtasks
                       </div>
                     )}
                   </div>
@@ -739,7 +880,24 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
           <div key={d.toISOString()} className="flex-1 border-r border-gray-200 relative overflow-visible">
             {hours.map((h: number) => {
               const goals = goalsStartingAtHour(d, h, getGoalsForDate);
-              const eventPositions = calculateEventPositions(goals, 64, h, d);
+              const groupedTasks = groupTasksByTaskId(goals);
+              const groupedGoals = Object.values(groupedTasks).map(group => ({
+                ...group.subtasks[0], // Use first subtask as representative
+                task_title: group.taskTitle,
+                task_descr: group.taskDescr,
+                start_time: group.startTime,
+                end_time: group.endTime,
+                course_id: group.courseId,
+                google_calendar_color: group.googleCalendarColor,
+                // Add progress information
+                progress: group.progress,
+                totalSubtasks: group.totalSubtasks,
+                completedSubtasks: group.completedSubtasks,
+                subtasks: group.subtasks,
+                // Calculate status
+                status: calculateStatus(group.subtasks[0])
+              }));
+              const eventPositions = calculateEventPositions(groupedGoals, 64, h, d);
 
               return (
                 <div key={h} className="h-16 border-b border-gray-200 p-1 relative overflow-visible">
@@ -766,6 +924,23 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
                       {pos.showTitle && pos.goal.goal_descr && (
                         <div className="text-[11px] opacity-90 truncate">
                           {pos.goal.goal_descr}
+                        </div>
+                      )}
+                      {/* Show status indicator for non-Google Calendar events */}
+                      {pos.showTitle && pos.goal.status && pos.goal.goal_id !== "Google Calendar" && (
+                        <div className="text-[10px] mt-1 flex items-center gap-1">
+                          <div className={`w-2 h-2 rounded-full ${
+                            pos.goal.status === "Overdue" ? "bg-red-400" :
+                            pos.goal.status === "In Progress" ? "bg-yellow-400" :
+                            "bg-green-400"
+                          }`} />
+                          <span className="opacity-90">{pos.goal.status}</span>
+                        </div>
+                      )}
+                      {/* Show progress for grouped tasks */}
+                      {pos.showTitle && pos.goal.progress !== undefined && pos.goal.totalSubtasks && pos.goal.totalSubtasks > 1 && (
+                        <div className="text-[10px] opacity-90 mt-1">
+                          {pos.goal.completedSubtasks}/{pos.goal.totalSubtasks} subtasks
                         </div>
                       )}
                     </div>
@@ -946,6 +1121,47 @@ const YearView = ({ currentDate, setCurrentDate }: any) => (
   </>
 );
 
+/** Calculate status based on completion and due date */
+const calculateStatus = (goal: Goal): "Overdue" | "In Progress" | "Completed" | null => {
+  // Return null if it's a Google Calendar entry
+  if (goal.goal_id === "Google Calendar") {
+    return null;
+  }
+  
+  // If task is completed, status is "Completed"
+  if (goal.task_completed) {
+    return "Completed";
+  }
+  
+  // If task is not completed, check if it's overdue
+  if (goal.due_date) {
+    const dueDate = new Date(goal.due_date);
+    const currentDate = new Date();
+    
+    // If due date is in the past, it's overdue
+    if (dueDate < currentDate) {
+      return "Overdue";
+    }
+  }
+  
+  // If not completed and not overdue, it's in progress
+  return "In Progress";
+};
+
+/** Get color class based on status */
+const getStatusColor = (status: "Overdue" | "In Progress" | "Completed" | null): string => {
+  switch (status) {
+    case "Overdue":
+      return "text-red-600";
+    case "In Progress":
+      return "text-yellow-600";
+    case "Completed":
+      return "text-green-600";
+    default:
+      return "text-gray-600";
+  }
+};
+
 export function CalendarScheduler() {
   /** Current selected date -- initialised to today */
   const [currentDate, setCurrentDate] = useState<Date>(() => startOfToday())
@@ -964,6 +1180,9 @@ export function CalendarScheduler() {
   const [sidebarTab, setSidebarTab] = useState<"courses" | "tasks">("tasks");
   const [goalDisplayPosition, setGoalDisplayPosition] = useState<{ x: number; y: number } | null>(null)
   const [overflowEvents, setOverflowEvents] = useState<{ events: Goal[]; position: { x: number; y: number }; day: Date } | null>(null)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
 
   /** Hours array for timeline */
   const hours = Array.from({ length: 24 }, (_, i) => i) // 12 AM (0) to 11 PM (23)
@@ -990,11 +1209,47 @@ export function CalendarScheduler() {
     if (clickEvent) {
       setGoalDisplayPosition({ x: clickEvent.clientX, y: clickEvent.clientY })
     }
+    // Reset expanded task if clicking on a different task
+    if (selectedGoal?.task_id !== event.task_id) {
+      setExpandedTaskId(null)
+    }
     setSelectedGoal((p: Goal | null) => (p?.id === event.id ? null : event))
   }
 
   const handleOverflowClick = (events: Goal[], position: { x: number; y: number }, day: Date) => {
     setOverflowEvents({ events, position, day })
+  }
+
+  const handleMouseDown = (e: React.MouseEvent, isOverflow = false) => {
+    e.preventDefault()
+    setIsDragging(true)
+    const rect = e.currentTarget.getBoundingClientRect()
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    })
+  }
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return
+    
+    const newX = e.clientX - dragOffset.x
+    const newY = e.clientY - dragOffset.y
+    
+    if (selectedGoal && goalDisplayPosition) {
+      setGoalDisplayPosition({ x: newX + 320, y: newY + 200 })
+    }
+    
+    if (overflowEvents) {
+      setOverflowEvents(prev => prev ? {
+        ...prev,
+        position: { x: newX, y: newY + 300 }
+      } : null)
+    }
+  }
+
+  const handleMouseUp = () => {
+    setIsDragging(false)
   }
 
   const getTasksForCourse = (courseName: string) => allTasks.filter((t) => t.course === courseName)
@@ -1080,6 +1335,45 @@ export function CalendarScheduler() {
 
     fetchGoals();
   }, []);
+
+  // Handle clicking outside to close floating goal display
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (selectedGoal && goalDisplayPosition) {
+        const target = event.target as Element;
+        if (!target.closest('.floating-goal-display')) {
+          setSelectedGoal(null);
+          setGoalDisplayPosition(null);
+          setExpandedTaskId(null);
+        }
+      }
+      
+      if (overflowEvents) {
+        const target = event.target as Element;
+        if (!target.closest('.floating-goal-display')) {
+          setOverflowEvents(null);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [selectedGoal, goalDisplayPosition, overflowEvents]);
+
+  // Handle mouse events for dragging
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, dragOffset, selectedGoal, goalDisplayPosition, overflowEvents]);
 
   console.log(sortedGoalsByDate)
   /** Return the list of goals whose due-date === that calendar day */
@@ -1271,7 +1565,7 @@ export function CalendarScheduler() {
       {/* Floating Goal Display */}
       {selectedGoal && goalDisplayPosition && (
         <div 
-          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg"
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg floating-goal-display"
           style={{
             left: Math.max(10, goalDisplayPosition.x - 320),
             top: Math.max(10, goalDisplayPosition.y - 200),
@@ -1281,25 +1575,34 @@ export function CalendarScheduler() {
         >
           <Card className="border-0 shadow-none h-full">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg truncate">
-                  {selectedGoal.goal_id === "Google Calendar" ? "Google Calendar Event" : "Task Details"}
-                </CardTitle>
+              <div 
+                className="flex items-center justify-between cursor-move"
+                onMouseDown={(e) => handleMouseDown(e)}
+                style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+              >
+                <div className="flex items-center gap-2">
+                  <GripVertical className="w-4 h-4 text-gray-400" />
+                  <CardTitle className="text-lg truncate">
+                    {selectedGoal.goal_id === "Google Calendar" ? "Google Calendar Event" : "Task Details"}
+                  </CardTitle>
+                </div>
                 <button
                   onClick={() => {
                     setSelectedGoal(null)
                     setGoalDisplayPosition(null)
+                    setExpandedTaskId(null)
                   }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-2"
+                  className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-2 p-1 hover:bg-gray-100 rounded"
+                  style={{ cursor: 'pointer' }}
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </CardHeader>
             <CardContent className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: selectedGoal.google_calendar_color ?? "#0a80ed" }}></div>
+                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: colorForCourse(selectedGoal.course_id, selectedGoal.google_calendar_color) }}></div>
                   <h3 className="font-semibold text-[#18181b] truncate">{selectedGoal.task_title}</h3>
                 </div>
                 
@@ -1338,9 +1641,101 @@ export function CalendarScheduler() {
                 ) : (
                   // Regular Task Display
                   <div className="space-y-3">
-                    <div className="text-sm text-[#71717a]">
-                      Regular task details will be displayed here
+                    {selectedGoal.goal_descr && (
+                      <div>
+                        <span className="text-[#71717a] text-sm">Goal Description:</span>
+                        <p className="mt-1 text-sm text-[#18181b] break-words">{selectedGoal.goal_descr}</p>
+                      </div>
+                    )}
+                    {selectedGoal.task_descr && (
+                      <div>
+                        <span className="text-[#71717a] text-sm">Task Description:</span>
+                        <p className="mt-1 text-sm text-[#18181b] break-words">{selectedGoal.task_descr}</p>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Task Status:</span>
+                      <span className={`font-medium ${getStatusColor(calculateStatus(selectedGoal))}`}>
+                        {calculateStatus(selectedGoal)}
+                      </span>
                     </div>
+                    {/* Show subtask progress for grouped tasks */}
+                    {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks > 1 && (
+                      <div>
+                        <span className="text-[#71717a] text-sm">Progress:</span>
+                        <div className="mt-1 space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Subtasks completed:</span>
+                            <span className="font-medium">{selectedGoal.completedSubtasks || 0}/{selectedGoal.totalSubtasks}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${selectedGoal.progress || 0}%` }}
+                            ></div>
+                          </div>
+                          <div className="text-xs text-[#71717a] text-center">
+                            {selectedGoal.progress || 0}% complete
+                          </div>
+                        </div>
+                        
+                        {/* Subtasks List */}
+                        <div className="mt-3">
+                          <button
+                            onClick={() => setExpandedTaskId(expandedTaskId === selectedGoal.task_id ? null : selectedGoal.task_id)}
+                            className="flex items-center gap-2 text-sm text-[#0a80ed] hover:text-[#0369a1] transition-colors"
+                          >
+                            {expandedTaskId === selectedGoal.task_id ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                            View Subtasks ({selectedGoal.totalSubtasks})
+                          </button>
+                          
+                          {expandedTaskId === selectedGoal.task_id && (
+                            <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                              {selectedGoal.subtasks?.map((subtask, index) => (
+                                <div
+                                  key={subtask.subtask_id || index}
+                                  className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs"
+                                >
+                                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                    subtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'
+                                  }`} />
+                                  <span className={`flex-1 ${
+                                    subtask.subtask_completed ? 'line-through text-gray-500' : 'text-gray-700'
+                                  }`}>
+                                    {subtask.subtask_descr || `Subtask ${index + 1}`}
+                                  </span>
+                                  {subtask.subtask_type && subtask.subtask_type !== 'other' && (
+                                    <span className="text-xs px-1 py-0.5 bg-gray-200 rounded text-gray-600">
+                                      {subtask.subtask_type}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {selectedGoal.updated_at && selectedGoal.due_date && (
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="text-[#71717a]">Assigned:</span>
+                          <span className="ml-2 font-medium break-words">
+                            {new Date(selectedGoal.updated_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[#71717a]">Due:</span>
+                          <span className="ml-2 font-medium break-words">
+                            {new Date(selectedGoal.due_date).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1352,7 +1747,7 @@ export function CalendarScheduler() {
       {/* Overflow Events Modal */}
       {overflowEvents && (
         <div 
-          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg"
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg floating-goal-display"
           style={{
             left: Math.max(10, overflowEvents.position.x),
             top: Math.max(10, overflowEvents.position.y - 300), // Position higher up
@@ -1362,15 +1757,23 @@ export function CalendarScheduler() {
         >
           <Card className="border-0 shadow-none h-full">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg truncate">
-                  All Events - {overflowEvents.day.toLocaleDateString()}
-                </CardTitle>
+              <div 
+                className="flex items-center justify-between cursor-move"
+                onMouseDown={(e) => handleMouseDown(e, true)}
+                style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+              >
+                <div className="flex items-center gap-2">
+                  <GripVertical className="w-4 h-4 text-gray-400" />
+                  <CardTitle className="text-lg truncate">
+                    All Events - {overflowEvents.day.toLocaleDateString()}
+                  </CardTitle>
+                </div>
                 <button
                   onClick={() => setOverflowEvents(null)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-2"
+                  className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-2 p-1 hover:bg-gray-100 rounded"
+                  style={{ cursor: 'pointer' }}
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </CardHeader>
