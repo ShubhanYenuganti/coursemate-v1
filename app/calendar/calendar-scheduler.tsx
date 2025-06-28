@@ -246,22 +246,24 @@ const AllDayRow = ({
   days,
   getGoalsForDate,
   handleGoalClick,
+  onOverflowClick,
 }: {
   days: Date | Date[];
   getGoalsForDate: (d: Date) => Goal[];
   handleGoalClick: (g: Goal, e?: React.MouseEvent) => void;
+  onOverflowClick: (events: Goal[], position: { x: number; y: number }, day: Date) => void;
 }) => {
   const dayList = Array.isArray(days) ? days : [days];
 
   return (
-    <div className="flex h-9 border-b border-gray-200">
+    <div className="flex border-b border-gray-200">
       {/* time-label column */}
-      <div className="w-16 border-r border-gray-200 text-xs flex items-center justify-end pr-1">
+      <div className="w-16 border-r border-gray-200 text-xs flex items-center justify-end pr-1 flex-shrink-0">
         <span className="text-gray-500">All-day</span>
       </div>
 
-      {/* ▼ NEW: wrap the day buckets so Tailwind can draw the dividers */}
-      <div className="flex flex-1 divide-x divide-gray-200">
+      {/* Day buckets with Google Calendar-style layout */}
+      <div className="flex flex-1">
         {dayList.map((d, idx) => {
           const goals = getGoalsForDate(d).filter(isAllDay)
 
@@ -273,23 +275,69 @@ const AllDayRow = ({
           return (
             <div
               key={d.toISOString()}
-              className={`flex-1 flex flex-wrap items-center gap-1 px-1 ${showDivider}`}
+              className={`flex-1 min-w-0 ${showDivider}`}
             >
-              {goals.map((g) => (
-                <div
-                  key={g.goal_id}
-                  className="px-2 py-[2px] rounded text-xs font-medium text-white cursor-pointer truncate"
-                  style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
-                  title={g.goal_descr ?? g.task_title ?? ""}
-                  onClick={(e) => handleGoalClick(g, e)}
-                >
-                  {g.task_title ?? "(untitled)"}
-                </div>
-              ))}
+              {/* Google Calendar-style all-day container */}
+              <div className="min-h-[32px] p-1">
+                {goals.length === 0 ? (
+                  // Empty state - minimal height
+                  <div className="h-6"></div>
+                ) : goals.length === 1 ? (
+                  // Single event - full width
+                  <div
+                    className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center"
+                    style={{ backgroundColor: colorForCourse(goals[0].course_id, goals[0].google_calendar_color) }}
+                    title={goals[0].goal_descr ?? goals[0].task_title ?? ""}
+                    onClick={(e) => handleGoalClick(goals[0], e)}
+                  >
+                    {goals[0].task_title ?? "(untitled)"}
+                  </div>
+                ) : goals.length <= 3 ? (
+                  // 2-3 events - stacked vertically
+                  <div className="space-y-1">
+                    {goals.map((g) => (
+                      <div
+                        key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
+                        className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center"
+                        style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                        title={g.goal_descr ?? g.task_title ?? ""}
+                        onClick={(e) => handleGoalClick(g, e)}
+                      >
+                        {g.task_title ?? "(untitled)"}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  // 4+ events - show first 3 + count indicator
+                  <div className="space-y-1">
+                    {goals.slice(0, 3).map((g) => (
+                      <div
+                        key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
+                        className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center"
+                        style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                        title={g.goal_descr ?? g.task_title ?? ""}
+                        onClick={(e) => handleGoalClick(g, e)}
+                      >
+                        {g.task_title ?? "(untitled)"}
+                      </div>
+                    ))}
+                    {/* Count indicator for additional events */}
+                    <div 
+                      className="h-6 px-2 rounded text-xs font-medium text-gray-600 bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors flex items-center"
+                      title={`${goals.length - 3} more events`}
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        onOverflowClick(goals, { x: rect.left, y: rect.bottom }, d);
+                      }}
+                    >
+                      +{goals.length - 3} more
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
-
       </div>
     </div>
   );
@@ -520,7 +568,7 @@ const calculateEventPositions = (goals: Goal[], hourHeight: number, currentHour:
 };
 
 // Extracted view components to reduce cognitive complexity
-const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel }: any) => (
+const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel, handleOverflowClick }: any) => (
   <div className="flex flex-col h-full">
     <div className="border-b border-gray-200 p-4 flex items-center justify-between">
       <h2 className="text-2xl font-semibold">
@@ -556,6 +604,7 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleGo
       days={currentDate}
       getGoalsForDate={getGoalsForDate}
       handleGoalClick={handleGoalClick}
+      onOverflowClick={handleOverflowClick}
     />
 
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
@@ -614,7 +663,7 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleGo
   </div>
 );
 
-const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel }: any) => (
+const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel, handleOverflowClick }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -673,6 +722,7 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
       days={weekDates}         // pass the whole week array
       getGoalsForDate={getGoalsForDate}
       handleGoalClick={handleGoalClick}
+      onOverflowClick={handleOverflowClick}
     />
 
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
@@ -913,6 +963,7 @@ export function CalendarScheduler() {
   const [selectedCourse, setSelectedCourse] = useState<any>(null)
   const [sidebarTab, setSidebarTab] = useState<"courses" | "tasks">("tasks");
   const [goalDisplayPosition, setGoalDisplayPosition] = useState<{ x: number; y: number } | null>(null)
+  const [overflowEvents, setOverflowEvents] = useState<{ events: Goal[]; position: { x: number; y: number }; day: Date } | null>(null)
 
   /** Hours array for timeline */
   const hours = Array.from({ length: 24 }, (_, i) => i) // 12 AM (0) to 11 PM (23)
@@ -940,6 +991,10 @@ export function CalendarScheduler() {
       setGoalDisplayPosition({ x: clickEvent.clientX, y: clickEvent.clientY })
     }
     setSelectedGoal((p: Goal | null) => (p?.id === event.id ? null : event))
+  }
+
+  const handleOverflowClick = (events: Goal[], position: { x: number; y: number }, day: Date) => {
+    setOverflowEvents({ events, position, day })
   }
 
   const getTasksForCourse = (courseName: string) => allTasks.filter((t) => t.course === courseName)
@@ -1088,7 +1143,8 @@ export function CalendarScheduler() {
             getGoalsForDate={getGoalsForDate} 
             handleGoalClick={handleGoalClick} 
             setTimelineRef={setTimelineRef} 
-            formatHourLabel={formatHourLabel} 
+            formatHourLabel={formatHourLabel}
+            handleOverflowClick={handleOverflowClick}
           />
         ) : currentView === "week" ? (
           <WeekView 
@@ -1099,7 +1155,8 @@ export function CalendarScheduler() {
             getGoalsForDate={getGoalsForDate} 
             handleGoalClick={handleGoalClick} 
             setTimelineRef={setTimelineRef} 
-            formatHourLabel={formatHourLabel} 
+            formatHourLabel={formatHourLabel}
+            handleOverflowClick={handleOverflowClick}
           />
         ) : currentView === "month" ? (
           <MonthView 
@@ -1292,40 +1349,63 @@ export function CalendarScheduler() {
         </div>
       )}
 
-      {/* {selectedTask && (
-        <div className="fixed bottom-0 left-80 right-80 bg-[#ffffff] border-t border-[#e5e8eb] p-4 z-40">
-          <Card>
+      {/* Overflow Events Modal */}
+      {overflowEvents && (
+        <div 
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg"
+          style={{
+            left: Math.max(10, overflowEvents.position.x),
+            top: Math.max(10, overflowEvents.position.y - 300), // Position higher up
+            width: '320px', // Fixed width
+            maxHeight: '400px', // Fixed max height
+          }}
+        >
+          <Card className="border-0 shadow-none h-full">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Task Display</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg truncate">
+                  All Events - {overflowEvents.day.toLocaleDateString()}
+                </CardTitle>
+                <button
+                  onClick={() => setOverflowEvents(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-2"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: selectedTask.color }}></div>
-                  <h3 className="font-semibold text-[#18181b]">{selectedTask.title}</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="text-[#71717a]">Course:</span><span className="ml-2 font-medium">{selectedTask.course || selectedTask.subtitle}</span></div>
-                  <div><span className="text-[#71717a]">Due Date:</span><span className="ml-2 font-medium">{selectedTask.dueDate || "Not specified"}</span></div>
-                  <div><span className="text-[#71717a]">Priority:</span><span className={`ml-2 px-2 py-1 rounded-full text-xs ${selectedTask.priority === "high" ? "bg-red-100 text-red-700" :
-                    selectedTask.priority === "medium" ? "bg-yellow-100 text-yellow-700" :
-                      "bg-green-100 text-green-700"
-                    }`}>{selectedTask.priority || "Medium"}</span></div>
-                  <div><span className="text-[#71717a]">Status:</span><span className={`ml-2 px-2 py-1 rounded-full text-xs ${selectedTask.completed ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                    }`}>{selectedTask.completed ? "Completed" : "Pending"}
-                  </span></div>
-                </div>
-                {selectedTask.description && (
-                  <div>
-                    <span className="text-[#71717a] text-sm">Description:</span>
-                    <p className="mt-1 text-sm text-[#18181b]">{selectedTask.description}</p>
+            <CardContent className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+              <div className="space-y-2">
+                {overflowEvents.events.map((event, index) => (
+                  <div
+                    key={`${event.goal_id}-${event.task_id}-${event.subtask_id}-${index}`}
+                    className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      handleGoalClick(event, e)
+                      setOverflowEvents(null)
+                    }}
+                  >
+                    <div 
+                      className="w-3 h-3 rounded-full flex-shrink-0" 
+                      style={{ backgroundColor: colorForCourse(event.course_id, event.google_calendar_color) }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-gray-900 truncate">
+                        {event.task_title ?? "(untitled)"}
+                      </div>
+                      {event.goal_descr && (
+                        <div className="text-xs text-gray-600 truncate">
+                          {event.goal_descr}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             </CardContent>
           </Card>
         </div>
-      )} */}
+      )}
 
       {/* Settings Dialog */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>

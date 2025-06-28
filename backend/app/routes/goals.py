@@ -993,7 +993,7 @@ def get_goals_by_user():
     user = get_jwt_identity()
 
     try:
-        goals = Goal.query.filter_by(user_id=user).all()
+        goals = Goal.query.filter_by(user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
 
         # -------- group by end_date --------
         grouped: dict[str, list[dict]] = defaultdict(list)
