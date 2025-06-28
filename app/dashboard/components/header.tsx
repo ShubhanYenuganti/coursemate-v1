@@ -61,26 +61,11 @@ export function Header({
                 type="text"
                 value={searchTerm}
                 onChange={handleSearchChange}
-                className="w-64 pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+                className="w-96 pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
                 placeholder="Search courses, tasks..."
               />
             </div>
           </form>
-          
-          {/* Notifications */}
-          <div className="relative">
-            <button
-              onClick={onNotificationClick}
-              className="w-10 h-10 bg-white border border-gray-300 rounded-full flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
-            >
-              🔔
-            </button>
-            {notificationCount > 0 && (
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-xs text-white">
-                {notificationCount > 9 ? '9+' : notificationCount}
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>
