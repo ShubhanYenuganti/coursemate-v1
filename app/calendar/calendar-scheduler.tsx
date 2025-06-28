@@ -7,6 +7,7 @@ import {
   Calendar,
   Settings,
   GraduationCap,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -146,6 +147,49 @@ const allTasks = [
   },
 ]
 
+// Mock calendar events data
+const calendarEvents = [
+  {
+    id: 1,
+    title: "Physics Lecture",
+    subtitle: "Chapter 4",
+    course: "PHYS 101",
+    day: 1, // Monday
+    time: "9:00 AM",
+    color: "#0ea5e9"
+  },
+  {
+    id: 2,
+    title: "Chemistry Lab",
+    subtitle: "Experiment 3",
+    course: "CHEM 101", 
+    day: 2, // Tuesday
+    time: "2:00 PM",
+    color: "#8b5cf6"
+  },
+  {
+    id: 3,
+    title: "English Discussion",
+    subtitle: "Essay Review",
+    course: "ENG 101",
+    day: 3, // Wednesday
+    time: "11:00 AM",
+    color: "#ef4444"
+  }
+]
+
+// Helper function to convert 12-hour time to 24-hour
+const to24Hour = (timeStr: string): number => {
+  const [time, period] = timeStr.split(' ');
+  const [hours, minutes] = time.split(':').map(Number);
+  
+  if (period === 'PM' && hours !== 12) {
+    return hours + 12;
+  } else if (period === 'AM' && hours === 12) {
+    return 0;
+  }
+  return hours;
+}
 
 /*────────────────  COLOR & TIME UTILITIES ─────────────*/
 /** Pick a chip color from the course code (very simple hash) */
@@ -201,11 +245,11 @@ function getLocalDateKey(date: Date): string {
 const AllDayRow = ({
   days,
   getGoalsForDate,
-  handleTaskClick,
+  handleGoalClick,
 }: {
   days: Date | Date[];
   getGoalsForDate: (d: Date) => Goal[];
-  handleTaskClick: (g: Goal) => void;
+  handleGoalClick: (g: Goal, e?: React.MouseEvent) => void;
 }) => {
   const dayList = Array.isArray(days) ? days : [days];
 
@@ -237,7 +281,7 @@ const AllDayRow = ({
                   className="px-2 py-[2px] rounded text-xs font-medium text-white cursor-pointer truncate"
                   style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
                   title={g.goal_descr ?? g.task_title ?? ""}
-                  onClick={() => handleTaskClick(g)}
+                  onClick={(e) => handleGoalClick(g, e)}
                 >
                   {g.task_title ?? "(untitled)"}
                 </div>
@@ -257,13 +301,13 @@ const HourEvents = ({
   hour,
   colWidth,
   goals,
-  handleTaskClick,
+  handleGoalClick,
 }: {
   date: Date;
   hour: number;
   colWidth: number;
   goals: Goal[];
-  handleTaskClick: (g: Goal) => void;
+  handleGoalClick: (g: Goal, e?: React.MouseEvent) => void;
 }) => (
   <>
     {goals.map((g, idx) => (
@@ -277,7 +321,7 @@ const HourEvents = ({
           top: `${minuteOffset(g)}%`,
           height: `${heightPct(g)}%`,
         }}
-        onClick={() => handleTaskClick(g)}
+        onClick={(e) => handleGoalClick(g, e)}
       >
         <div className="font-semibold truncate">{g.task_title ?? "(untitled)"}</div>
       </div>
@@ -476,7 +520,7 @@ const calculateEventPositions = (goals: Goal[], hourHeight: number, currentHour:
 };
 
 // Extracted view components to reduce cognitive complexity
-const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
+const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel }: any) => (
   <div className="flex flex-col h-full">
     <div className="border-b border-gray-200 p-4 flex items-center justify-between">
       <h2 className="text-2xl font-semibold">
@@ -511,7 +555,7 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
     <AllDayRow
       days={currentDate}
       getGoalsForDate={getGoalsForDate}
-      handleTaskClick={handleTaskClick}
+      handleGoalClick={handleGoalClick}
     />
 
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
@@ -547,7 +591,7 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
                       zIndex: pos.zIndex,
                       minHeight: '20px', // Ensure minimum height for visibility
                     }}
-                    onClick={() => handleTaskClick(pos.goal)}
+                    onClick={(e) => handleGoalClick(pos.goal, e)}
                   >
                     {pos.showTitle && (
                       <div className="font-semibold leading-tight truncate">
@@ -570,7 +614,7 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
   </div>
 );
 
-const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
+const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -628,7 +672,7 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
     <AllDayRow
       days={weekDates}         // pass the whole week array
       getGoalsForDate={getGoalsForDate}
-      handleTaskClick={handleTaskClick}
+      handleGoalClick={handleGoalClick}
     />
 
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
@@ -662,7 +706,7 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
                         zIndex: pos.zIndex,
                         minHeight: '16px', // Ensure minimum height for visibility
                       }}
-                      onClick={() => handleTaskClick(pos.goal)}
+                      onClick={(e) => handleGoalClick(pos.goal, e)}
                     >
                       {pos.showTitle && (
                         <div className="font-semibold leading-tight truncate">
@@ -686,7 +730,7 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
   </>
 );
 
-const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskClick }: any) => (
+const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleGoalClick }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -760,7 +804,7 @@ const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskCli
                   key={g.goal_id}
                   className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
                   style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
-                  onClick={() => handleTaskClick(g)}
+                  onClick={(e) => handleGoalClick(g, e)}
                 >
                   {g.task_title ?? "(untitled)"}
                 </div>
@@ -856,11 +900,6 @@ export function CalendarScheduler() {
   /** Current selected date -- initialised to today */
   const [currentDate, setCurrentDate] = useState<Date>(() => startOfToday())
   const [currentView, setCurrentView] = useState<"day" | "week" | "month" | "year">("week")
-
-  // Full-day hours array (0-23)
-  const hours = Array.from({ length: 24 }, (_, i) => i)
-
-  /** Visibility toggle for each course  */
   const [courseVisibility, setCourseVisibility] = useState<Record<string, boolean>>(
     courses.reduce((acc, course) => ({ ...acc, [course.id]: course.visible }), {}),
   )
@@ -869,10 +908,14 @@ export function CalendarScheduler() {
   const [showSettings, setShowSettings] = useState(false)
   const [showAddTask, setShowAddTask] = useState(false)
   const [selectedTask, setSelectedTask] = useState<any>(null)
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
   const [showCourseTasksDialog, setShowCourseTasksDialog] = useState(false)
   const [selectedCourse, setSelectedCourse] = useState<any>(null)
   const [sidebarTab, setSidebarTab] = useState<"courses" | "tasks">("tasks");
+  const [goalDisplayPosition, setGoalDisplayPosition] = useState<{ x: number; y: number } | null>(null)
 
+  /** Hours array for timeline */
+  const hours = Array.from({ length: 24 }, (_, i) => i) // 12 AM (0) to 11 PM (23)
 
   /** Expanded accordion panels for upcoming-tasks list  */
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({
@@ -883,7 +926,7 @@ export function CalendarScheduler() {
   const weekDates = getWeekDates(currentDate) // Sunday‑based week
 
   const toggleCourseVisibility = (id: string) =>
-    setCourseVisibility((prev) => ({ ...prev, [id]: !prev[id] }))
+    setCourseVisibility((prev: Record<string, boolean>) => ({ ...prev, [id]: !prev[id] }))
 
   const getTasksForDate = (dateStr: string) => allTasks.filter((t) => t.dueDate === dateStr)
 
@@ -892,29 +935,52 @@ export function CalendarScheduler() {
 
   const handleTaskClick = (task: any) => setSelectedTask((p: any) => (p?.id === task.id ? null : task))
 
+  const handleGoalClick = (event: Goal | any, clickEvent?: React.MouseEvent) => {
+    if (clickEvent) {
+      setGoalDisplayPosition({ x: clickEvent.clientX, y: clickEvent.clientY })
+    }
+    setSelectedGoal((p: Goal | null) => (p?.id === event.id ? null : event))
+  }
+
   const getTasksForCourse = (courseName: string) => allTasks.filter((t) => t.course === courseName)
+
+  const getEventsForDate = (date: Date) => {
+    const weekStart = weekDates[0]
+    return calendarEvents.filter((ev) => {
+      const evDate = new Date(weekStart)
+      evDate.setDate(weekStart.getDate() + ev.day)
+      const courseKey = ev.course.toLowerCase().replace(/\s+/g, "")
+      const courseVisible = courseVisibility[courseKey] ?? false
+      return courseVisible && evDate.toDateString() === date.toDateString()
+    })
+  }
 
   const handleConnectCalendar = () => {
     if (typeof window === "undefined") return;
     const token = localStorage.getItem("token");
     if (!token) return alert("Please log in first.");
 
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+    const apiBase = process.env.BACKEND_URL;
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
 
   // one ref for both Day + Week
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const hasScrolledToCurrentHour = useRef(false);
 
   /** Scroll-to-current-hour the moment the timeline element is in the DOM */
   const setTimelineRef = (node: HTMLDivElement | null) => {
     if (!node) return;            // ref is being cleared
     scrollRef.current = node;
 
-    // compute where "now" should sit
-    const hour = new Date().getHours();
-    const rowHeight = currentView === "day" ? 80 : 64;      // h-20 vs h-16
-    node.scrollTop = Math.max(0, hour * rowHeight - 2 * rowHeight);
+    // Only scroll to current hour on initial load, not when clicking events
+    if (!hasScrolledToCurrentHour.current) {
+      // compute where "now" should sit
+      const hour = new Date().getHours();
+      const rowHeight = currentView === "day" ? 80 : 64;      // h-20 vs h-16
+      node.scrollTop = Math.max(0, hour * rowHeight - 2 * rowHeight);
+      hasScrolledToCurrentHour.current = true;
+    }
   };
 
   const [goalsByDate, setGoalsByDate] = useState<GoalsByDate>({});
@@ -1015,14 +1081,38 @@ export function CalendarScheduler() {
         </div>
         {/* ───────── DAY VIEW ───────── */}
         {currentView === "day" ? (
-          <DayView currentDate={currentDate} setCurrentDate={setCurrentDate} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
-        ) : /* ───────── WEEK VIEW ───────── */ currentView === "week" ? (
-          <WeekView currentDate={currentDate} setCurrentDate={setCurrentDate} weekDates={weekDates} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
-        ) : /* ───────── MONTH VIEW ───────── */ currentView === "month" ? (
-          <MonthView currentDate={currentDate} setCurrentDate={setCurrentDate} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} />
+          <DayView 
+            currentDate={currentDate} 
+            setCurrentDate={setCurrentDate} 
+            hours={hours} 
+            getGoalsForDate={getGoalsForDate} 
+            handleGoalClick={handleGoalClick} 
+            setTimelineRef={setTimelineRef} 
+            formatHourLabel={formatHourLabel} 
+          />
+        ) : currentView === "week" ? (
+          <WeekView 
+            currentDate={currentDate} 
+            setCurrentDate={setCurrentDate} 
+            weekDates={weekDates} 
+            hours={hours} 
+            getGoalsForDate={getGoalsForDate} 
+            handleGoalClick={handleGoalClick} 
+            setTimelineRef={setTimelineRef} 
+            formatHourLabel={formatHourLabel} 
+          />
+        ) : currentView === "month" ? (
+          <MonthView 
+            currentDate={currentDate} 
+            setCurrentDate={setCurrentDate} 
+            getGoalsForDate={getGoalsForDate} 
+            handleGoalClick={handleGoalClick} 
+          />
         ) : (
-          /* ───────── YEAR VIEW ───────── */
-          <YearView currentDate={currentDate} setCurrentDate={setCurrentDate} />
+          <YearView 
+            currentDate={currentDate} 
+            setCurrentDate={setCurrentDate} 
+          />
         )}
       </div>
 
@@ -1082,7 +1172,7 @@ export function CalendarScheduler() {
                 //                   <div className="flex-1 min-w-0">
                 //                     <div className={text-sm font-medium truncate ${task.completed ? "line-through text-[#71717a]" : "text-[#18181b]"}}>{task.title}</div>
                 //                     <div className="text-xs text-[#71717a] truncate">{task.course}</div>
-                //                     <div className={text-xs mt-1 px-2 py-1 rounded-full inline-block ${task.priority === "high" ? "bg-red-100 text-red-700" : task.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}}>{task.priority}</div>
+                //                     <div className={text-xs mt-1 px-2 py-1 rounded-full ${task.priority === "high" ? "bg-red-100 text-red-700" : task.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}}>{task.priority}</div>
                 //                   </div>
                 //                 </div>
                 //               ))
@@ -1121,8 +1211,88 @@ export function CalendarScheduler() {
       </div>
 
 
-      {/* Bottom Task Display Section */}
-      {selectedTask && (
+      {/* Floating Goal Display */}
+      {selectedGoal && goalDisplayPosition && (
+        <div 
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg"
+          style={{
+            left: Math.max(10, goalDisplayPosition.x - 320),
+            top: Math.max(10, goalDisplayPosition.y - 200),
+            maxWidth: Math.min(320, window.innerWidth - 20),
+            maxHeight: Math.min(400, window.innerHeight - 20),
+          }}
+        >
+          <Card className="border-0 shadow-none h-full">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg truncate">
+                  {selectedGoal.goal_id === "Google Calendar" ? "Google Calendar Event" : "Task Details"}
+                </CardTitle>
+                <button
+                  onClick={() => {
+                    setSelectedGoal(null)
+                    setGoalDisplayPosition(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-2"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: selectedGoal.google_calendar_color ?? "#0a80ed" }}></div>
+                  <h3 className="font-semibold text-[#18181b] truncate">{selectedGoal.task_title}</h3>
+                </div>
+                
+                {selectedGoal.goal_id === "Google Calendar" ? (
+                  // Google Calendar Event Display
+                  <div className="space-y-3">
+                    {selectedGoal.subtask_descr && (
+                      <div>
+                        <span className="text-[#71717a] text-sm">Description:</span>
+                        <p className="mt-1 text-sm text-[#18181b] break-words">{selectedGoal.subtask_descr}</p>
+                      </div>
+                    )}
+                    {selectedGoal.goal_descr && (
+                      <div>
+                        <span className="text-[#71717a] text-sm">Calendar:</span>
+                        <p className="mt-1 text-sm text-[#18181b] truncate">{selectedGoal.goal_descr}</p>
+                      </div>
+                    )}
+                    {selectedGoal.start_time && selectedGoal.end_time && (
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="text-[#71717a]">Start:</span>
+                          <span className="ml-2 font-medium break-words">
+                            {new Date(selectedGoal.start_time).toLocaleString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[#71717a]">End:</span>
+                          <span className="ml-2 font-medium break-words">
+                            {new Date(selectedGoal.end_time).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Regular Task Display
+                  <div className="space-y-3">
+                    <div className="text-sm text-[#71717a]">
+                      Regular task details will be displayed here
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* {selectedTask && (
         <div className="fixed bottom-0 left-80 right-80 bg-[#ffffff] border-t border-[#e5e8eb] p-4 z-40">
           <Card>
             <CardHeader className="pb-3">
@@ -1142,7 +1312,8 @@ export function CalendarScheduler() {
                       "bg-green-100 text-green-700"
                     }`}>{selectedTask.priority || "Medium"}</span></div>
                   <div><span className="text-[#71717a]">Status:</span><span className={`ml-2 px-2 py-1 rounded-full text-xs ${selectedTask.completed ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                    }`}>{selectedTask.completed ? "Completed" : "Pending"}</span></div>
+                    }`}>{selectedTask.completed ? "Completed" : "Pending"}
+                  </span></div>
                 </div>
                 {selectedTask.description && (
                   <div>
@@ -1154,7 +1325,7 @@ export function CalendarScheduler() {
             </CardContent>
           </Card>
         </div>
-      )}
+      )} */}
 
       {/* Settings Dialog */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
@@ -1427,8 +1598,8 @@ export function CalendarScheduler() {
                       <div
                         key={task.id}
                         className="border border-[#e5e8eb] rounded-lg p-4 hover:shadow-sm transition-shadow cursor-pointer"
-                        onClick={() => {
-                          handleTaskClick(task)
+                        onClick={(e) => {
+                          handleGoalClick(task, e)
                           setShowCourseTasksDialog(false)
                         }}
                       >
