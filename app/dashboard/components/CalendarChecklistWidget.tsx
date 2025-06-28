@@ -14,10 +14,7 @@ const ChecklistWidget: React.FC<ChecklistWidgetProps> = ({
     <div className="bg-white rounded-2xl shadow-lg p-8 flex flex-col w-full max-w-2xl mx-auto">
       {/* Checklist */}
       <div className="w-full">
-          <TodaysChecklist
-            onTaskToggle={onTaskToggle}
-            onAddTask={onAddTask}
-          />
+          <TodaysChecklist />
       </div>
     </div>
   );

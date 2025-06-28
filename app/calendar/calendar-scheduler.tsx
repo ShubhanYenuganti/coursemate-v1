@@ -856,11 +856,6 @@ export function CalendarScheduler() {
   /** Current selected date -- initialised to today */
   const [currentDate, setCurrentDate] = useState<Date>(() => startOfToday())
   const [currentView, setCurrentView] = useState<"day" | "week" | "month" | "year">("week")
-
-  // Full-day hours array (0-23)
-  const hours = Array.from({ length: 24 }, (_, i) => i)
-
-  /** Visibility toggle for each course  */
   const [courseVisibility, setCourseVisibility] = useState<Record<string, boolean>>(
     courses.reduce((acc, course) => ({ ...acc, [course.id]: course.visible }), {}),
   )
@@ -873,6 +868,8 @@ export function CalendarScheduler() {
   const [selectedCourse, setSelectedCourse] = useState<any>(null)
   const [sidebarTab, setSidebarTab] = useState<"courses" | "tasks">("tasks");
 
+  /** Hours array for timeline */
+  const hours = Array.from({ length: 13 }, (_, i) => i + 8) // 8 AM to 8 PM
 
   /** Expanded accordion panels for upcoming-tasks list  */
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({
@@ -883,7 +880,7 @@ export function CalendarScheduler() {
   const weekDates = getWeekDates(currentDate) // Sunday‑based week
 
   const toggleCourseVisibility = (id: string) =>
-    setCourseVisibility((prev) => ({ ...prev, [id]: !prev[id] }))
+    setCourseVisibility((prev: Record<string, boolean>) => ({ ...prev, [id]: !prev[id] }))
 
   const getTasksForDate = (dateStr: string) => allTasks.filter((t) => t.dueDate === dateStr)
 
@@ -893,6 +890,17 @@ export function CalendarScheduler() {
   const handleTaskClick = (task: any) => setSelectedTask((p: any) => (p?.id === task.id ? null : task))
 
   const getTasksForCourse = (courseName: string) => allTasks.filter((t) => t.course === courseName)
+
+  const getEventsForDate = (date: Date) => {
+    const weekStart = weekDates[0]
+    return calendarEvents.filter((ev) => {
+      const evDate = new Date(weekStart)
+      evDate.setDate(weekStart.getDate() + ev.day)
+      const courseKey = ev.course.toLowerCase().replace(/\s+/g, "")
+      const courseVisible = courseVisibility[courseKey] ?? false
+      return courseVisible && evDate.toDateString() === date.toDateString()
+    })
+  }
 
   const handleConnectCalendar = () => {
     if (typeof window === "undefined") return;
@@ -1015,6 +1023,188 @@ export function CalendarScheduler() {
         </div>
         {/* ───────── DAY VIEW ───────── */}
         {currentView === "day" ? (
+          <>
+            {/* top nav */}
+            <div className="border-b border-gray-200 p-4 flex items-center justify-between">
+              <h2 className="text-2xl font-semibold">
+                {currentDate.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </h2>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+                  Today
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentDate(new Date(currentDate.getTime() - 86_400_000))}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentDate(new Date(currentDate.getTime() + 86_400_000))}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* 24-hour grid */}
+            <div className="flex-1 overflow-y-auto flex" ref={setTimelineRef}>
+              {/* time column */}
+              <div className="w-20 border-r border-gray-200">
+                {hours.map((h) => (
+                  <div
+                    key={h}
+                    className="h-20 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1"
+                  >
+                    {formatHourLabel(h)}
+                  </div>
+                ))}
+              </div>
+
+              {/* events */}
+              <div className="flex-1 relative">
+                {hours.map((h) => (
+                  <div key={h} className="h-20 border-b border-gray-200 relative">
+                    {calendarEvents
+                      .filter((e) => {
+                        const courseKey = e.course.toLowerCase().replace(/\s+/g, "")
+                        const visible = courseVisibility[courseKey] ?? false
+                        return (
+                          visible &&
+                          e.day === currentDate.getDay() && to24Hour(e.time) === h
+                        );
+                      })
+                      .map((e) => (
+                        <div
+                          key={e.id}
+                          className="absolute inset-1 rounded text-white text-sm p-2 cursor-pointer"
+                          style={{ backgroundColor: e.color }}
+                          onClick={() => handleTaskClick(e)}
+                        >
+                          {e.title}
+                        </div>
+                      ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : /* ───────── WEEK VIEW ───────── */ currentView === "week" ? (
+          <>
+            {/* ───────── WEEK HEADER (wrapper) ───────── */}
+            <div className="flex flex-col border-b border-gray-200">
+              {/* ─ row 1 : nav bar ─ */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentDate((p) => new Date(p.getFullYear(), p.getMonth(), p.getDate() - 7))
+                    }
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+                    This Week
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentDate((p) => new Date(p.getFullYear(), p.getMonth(), p.getDate() + 7))
+                    }
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {weekDates[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
+                  {weekDates[6].toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </h2>
+              </div>
+
+              {/* ─ row 2 : day headers + TZ cell ─ */}
+              <div className="flex">
+                {/* TZ label  */}
+                <div className="w-16 border-r border-gray-200 p-4 text-xs text-gray-500 flex-shrink-0">
+                </div>
+
+                {/* weekdays */}
+                {weekDates.map((d) => {
+                  const isToday = d.toDateString() === startOfToday().toDateString();
+                  return (
+                    <div
+                      key={d.toISOString()}
+                      className="flex-1 border-r border-gray-200 p-4 text-center min-w-0"
+                    >
+                      <div className="text-xs text-gray-500 mb-1">
+                        {d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
+                      </div>
+                      <div className={`text-2xl font-semibold ${isToday ? "text-blue-600" : "text-gray-900"}`}>
+                        {d.getDate()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* week grid */}
+            <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
+              <div className="flex">
+                {/* time column */}
+                <div className="w-16 border-r border-gray-200">
+                  {hours.map((h) => (
+                    <div
+                      key={h}
+                      className="h-16 border-b border-gray-200 p-2 text-xs text-gray-500"
+                    >
+                      {formatHourLabel(h)}
+                    </div>
+                  ))}
+                </div>
+
+                {/* days */}
+                {weekDates.map((d, dayIdx) => (
+                  <div key={d.toISOString()} className="flex-1 border-r border-gray-200">
+                    {hours.map((h) => (
+                      <div key={h} className="h-16 border-b border-gray-200 relative p-1">
+                        {calendarEvents
+                          .filter((e) => {
+                            const courseKey = e.course.toLowerCase().replace(/\s+/g, "")
+                            const visible = courseVisibility[courseKey] ?? false
+                            return (
+                              visible && e.day === dayIdx && to24Hour(e.time) == h
+                            );
+                          })
+                          .map((e) => (
+                            <div
+                              key={e.id}
+                              className="absolute inset-1 rounded p-2 text-xs text-white font-medium cursor-pointer"
+                              style={{ backgroundColor: e.color }}
+                              onClick={() => handleTaskClick(e)}
+                            >
+                              <div className="font-semibold">{e.title}</div>
+                              <div className="text-xs opacity-90">{e.subtitle}</div>
+                            </div>
+                          ))}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
           <DayView currentDate={currentDate} setCurrentDate={setCurrentDate} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
         ) : /* ───────── WEEK VIEW ───────── */ currentView === "week" ? (
           <WeekView currentDate={currentDate} setCurrentDate={setCurrentDate} weekDates={weekDates} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
@@ -1082,7 +1272,7 @@ export function CalendarScheduler() {
                 //                   <div className="flex-1 min-w-0">
                 //                     <div className={text-sm font-medium truncate ${task.completed ? "line-through text-[#71717a]" : "text-[#18181b]"}}>{task.title}</div>
                 //                     <div className="text-xs text-[#71717a] truncate">{task.course}</div>
-                //                     <div className={text-xs mt-1 px-2 py-1 rounded-full inline-block ${task.priority === "high" ? "bg-red-100 text-red-700" : task.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}}>{task.priority}</div>
+                //                     <div className={text-xs mt-1 px-2 py-1 rounded-full ${task.priority === "high" ? "bg-red-100 text-red-700" : task.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}}>{task.priority}</div>
                 //                   </div>
                 //                 </div>
                 //               ))
