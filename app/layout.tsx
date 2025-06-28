@@ -5,13 +5,17 @@ import "./globals.css"
 import { CourseProvider } from "@/contexts/course-context"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
+import { Providers } from "@/app/context/Providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "CourseHelper",
   description: "Manage your college coursework with ease",
-  generator: 'v0.dev'
+  generator: 'v0.dev',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({
@@ -23,7 +27,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-          <CourseProvider>{children}</CourseProvider>
+          <Providers>
+            <CourseProvider>{children}</CourseProvider>
+          </Providers>
           <Toaster />
         </ThemeProvider>
       </body>

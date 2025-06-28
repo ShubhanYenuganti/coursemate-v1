@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
 from .config import Config
-from .extensions import db, migrate, jwt, mail
+from .extensions import db, migrate, jwt, mail, socketio
 import os
 
 def create_app(config_class=Config):
@@ -13,6 +13,9 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
     jwt.init_app(app)
     mail.init_app(app)
+
+    # Allow CORS for all origins on Socket.IO
+    socketio.init_app(app, cors_allowed_origins="*")
     
     # Import models to ensure they're registered with SQLAlchemy
     from . import models    
@@ -23,7 +26,8 @@ def create_app(config_class=Config):
              r"/api/*": {
                  "origins": [
                      "http://192.168.1.198:3001",
-                     "http://172.31.215.88:3001", 
+                     "http://172.31.215.88:3001",
+                     "http://192.168.86.41:3001", 
                      "http://localhost:3001",
                      "http://localhost:3000"
                  ],
@@ -69,6 +73,7 @@ def create_app(config_class=Config):
     from .routes.oauth import oauth_bp, register_oauth
     from .routes.messages import messages_bp
     from .routes.goals import goals_bp
+    from .routes.friends import friends_bp
     from .routes.calendar import calendar_bp, register_calendar_oauth
 
     app.register_blueprint(auth_bp)
@@ -82,6 +87,13 @@ def create_app(config_class=Config):
     app.register_blueprint(oauth_bp)
     app.register_blueprint(messages_bp)
     app.register_blueprint(goals_bp)
+    app.register_blueprint(friends_bp)
+
+    # Ensure SocketIO handlers from blueprints are recognized
+    # (This is implicitly handled by importing the blueprints before socketio runs,
+    # but let's make sure our friends blueprint is imported where socketio can see it)
+    from .routes import friends
+
     app.register_blueprint(calendar_bp)
     register_calendar_oauth(app)
     

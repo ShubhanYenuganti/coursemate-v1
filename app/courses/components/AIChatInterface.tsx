@@ -86,7 +86,7 @@ const AIChatInterface: React.FC<{ courseId: string }> = ({ courseId }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5173'}/api/chat/send`, {
+      const response = await fetch(`${process.env.BACKEND_URL}/api/chat/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

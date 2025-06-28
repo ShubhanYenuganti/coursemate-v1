@@ -397,7 +397,7 @@ def get_public_course(course_id):
     # Add ownership information
     course_dict['is_owned_by_user'] = (course.user_id == current_user_id)
     
-    return jsonify(course_dict)
+    return jsonify(course_dict) 
 
 @courses_bp.route('/<course_id>/materials/upload', methods=['POST'])
 @jwt_required()
