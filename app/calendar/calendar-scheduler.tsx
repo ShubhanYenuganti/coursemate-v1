@@ -1485,7 +1485,7 @@ export function CalendarScheduler() {
               <SelectValue placeholder="Select a tab" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="tasks">Upcoming Tasks</SelectItem>
+              <SelectItem value="tasks">Current Tasks</SelectItem>
               <SelectItem value="courses">My Courses</SelectItem>
             </SelectContent>
           </Select>
@@ -1495,45 +1495,64 @@ export function CalendarScheduler() {
             {/* Upcoming Tasks list */}
             <div className="space-y-4">
               {
-                // getNextNDays(7).map((d) => {
-                //   const ds = d.toISOString().split("T")[0];
-                //   const tasksForDay = getTasksForDate(ds);
-                //   const isExpanded = expandedDays[ds];
-                //   const isToday = ds === "2021-02-21";
-                //   return (
-                //     <div key={ds} className="border border-[#e5e8eb] rounded-lg">
-                //       <Collapsible open={isExpanded} onOpenChange={() => toggleDayExpansion(ds)}>
-                //         <CollapsibleTrigger asChild>
-                //           <div className={flex items-center justify-between p-4 cursor-pointer hover:bg-[#f8f9fa] rounded-t-lg ${isToday ? "bg-[#eff6ff]" : ""}}>{/* header */}
-                //             <div>
-                //               <div className={font-medium ${isToday ? "text-[#0a80ed]" : "text-[#18181b]"}}>{d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}{isToday && <span className="ml-2 text-xs">(Today)</span>}</div>
-                //               <div className="text-sm text-[#71717a]">{tasksForDay.length} task{tasksForDay.length !== 1 ? "s" : ""}</div>
-                //             </div>
-                //             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                //           </div>
-                //         </CollapsibleTrigger>
-                //         <CollapsibleContent>
-                //           <div className="px-4 pb-4 space-y-2">
-                //             {tasksForDay.length === 0 ? (
-                //               <p className="text-sm text-[#71717a] italic">No tasks for this day</p>
-                //             ) : (
-                //               tasksForDay.map((task) => (
-                //                 <div key={task.id} className="flex items-start gap-3 p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] cursor-pointer" onClick={() => setSelectedTask(task)}>
-                //                   <div className="w-3 h-3 rounded-full mt-1" style={{ backgroundColor: task.color }} />
-                //                   <div className="flex-1 min-w-0">
-                //                     <div className={text-sm font-medium truncate ${task.completed ? "line-through text-[#71717a]" : "text-[#18181b]"}}>{task.title}</div>
-                //                     <div className="text-xs text-[#71717a] truncate">{task.course}</div>
-                //                     <div className={text-xs mt-1 px-2 py-1 rounded-full ${task.priority === "high" ? "bg-red-100 text-red-700" : task.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}}>{task.priority}</div>
-                //                   </div>
-                //                 </div>
-                //               ))
-                //             )}
-                //           </div>
-                //         </CollapsibleContent>
-                //       </Collapsible>
-                //     </div>
-                //   );
-                // })
+                Object.entries(sortedGoalsByDate).map(([date, goals]) => {
+                  const groupedTasks = groupTasksByTaskId(goals);
+                  const isExpanded = expandedDays[date] || false;
+                  const currentDate = new Date();
+                  const taskDate = new Date(date + 'T00:00:00');
+                  const isPastDue = taskDate < currentDate && taskDate.toDateString() !== currentDate.toDateString();
+                  
+                  return (
+                    <div key={date} className="border border-[#e5e8eb] rounded-lg">
+                      <div 
+                        className="p-4 cursor-pointer hover:bg-[#f8f9fa] transition-colors"
+                        onClick={() => toggleDayExpansion(date)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className={`font-medium ${isPastDue ? 'text-red-600' : 'text-[#18181b]'}`}>
+                              {taskDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                            </div>
+                            <div className={`text-sm ${isPastDue ? 'text-red-500' : 'text-[#71717a]'}`}>
+                              {Object.keys(groupedTasks).length} task{Object.keys(groupedTasks).length !== 1 ? "s" : ""}
+                            </div>
+                          </div>
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''} ${isPastDue ? 'text-red-500' : 'text-gray-500'}`} />
+                        </div>
+                      </div>
+                      
+                      {isExpanded && (
+                        <div className="px-4 pt-4 pb-4 space-y-2 border-t border-[#e5e8eb]">
+                          {Object.values(groupedTasks).map((group, index) => (
+                            <div 
+                              key={index} 
+                              className="flex items-start gap-3 p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] cursor-pointer"
+                              onClick={(e) => {
+                                const representativeGoal = group.subtasks[0];
+                                handleGoalClick(representativeGoal, e);
+                              }}
+                            >
+                              <div 
+                                className="w-3 h-3 rounded-full mt-1 flex-shrink-0" 
+                                style={{ backgroundColor: colorForCourse(group.courseId, group.googleCalendarColor) }}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-[#18181b] truncate">
+                                  {group.taskTitle || "(untitled)"}
+                                </div>
+                                {group.taskDescr && (
+                                  <div className="text-xs text-[#71717a] truncate mt-1">
+                                    {group.taskDescr}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               }
             </div>
           </>
