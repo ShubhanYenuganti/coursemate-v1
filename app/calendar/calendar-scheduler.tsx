@@ -73,6 +73,144 @@ export function CalendarScheduler() {
     setOverflowEvents({ events, position, day })
   }
 
+  const handleSubtaskToggle = async (sub: Goal) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+      
+      // Store the original state for potential rollback
+      const originalSelectedGoal = selectedGoal;
+      const originalGoalsByDate = goalsByDate;
+      const originalSortedGoalsByDate = sortedGoalsByDate;
+      
+      // Optimistic update - immediately update the UI
+      setSelectedGoal((prev) => {
+        if (!prev) return null;
+        
+        // Update the specific subtask in the selected goal
+        const updatedSubtasks = prev.subtasks?.map(subtask => 
+          subtask.subtask_id === sub.subtask_id ? { ...subtask, subtask_completed: !subtask.subtask_completed } : subtask
+        ) || [];
+        
+        // Recalculate progress
+        const completedSubtasks = updatedSubtasks.filter(s => s.subtask_completed).length;
+        const totalSubtasks = updatedSubtasks.length;
+        const newProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+        
+        // Calculate if task is completed (all subtasks completed)
+        const taskCompleted = totalSubtasks > 0 && completedSubtasks === totalSubtasks;
+        
+        return {
+          ...prev,
+          subtasks: updatedSubtasks,
+          completedSubtasks,
+          totalSubtasks,
+          progress: newProgress,
+          task_completed: taskCompleted // Update task completion status
+        };
+      });
+      
+      // Also optimistically update the main goals data
+      setGoalsByDate((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(dateKey => {
+          updated[dateKey] = updated[dateKey].map(goal => {
+            if (goal.subtask_id === sub.subtask_id) {
+              return { ...goal, subtask_completed: !goal.subtask_completed };
+            }
+            // Also update task_completed for all rows with the same task_id
+            if (goal.task_id === sub.task_id) {
+              // Get all subtasks for this task to calculate completion
+              const taskSubtasks = updated[dateKey].filter(g => g.task_id === sub.task_id);
+              const taskCompletedSubtasks = taskSubtasks.filter(g => g.subtask_completed).length;
+              const taskTotalSubtasks = taskSubtasks.length;
+              const taskCompleted = taskTotalSubtasks > 0 && taskCompletedSubtasks === taskTotalSubtasks;
+              return { ...goal, task_completed: taskCompleted };
+            }
+            return goal;
+          });
+        });
+        return updated;
+      });
+      
+      setSortedGoalsByDate((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(dateKey => {
+          updated[dateKey] = updated[dateKey].map(goal => {
+            if (goal.subtask_id === sub.subtask_id) {
+              return { ...goal, subtask_completed: !goal.subtask_completed };
+            }
+            // Also update task_completed for all rows with the same task_id
+            if (goal.task_id === sub.task_id) {
+              // Get all subtasks for this task to calculate completion
+              const taskSubtasks = updated[dateKey].filter(g => g.task_id === sub.task_id);
+              const taskCompletedSubtasks = taskSubtasks.filter(g => g.subtask_completed).length;
+              const taskTotalSubtasks = taskSubtasks.length;
+              const taskCompleted = taskTotalSubtasks > 0 && taskCompletedSubtasks === taskTotalSubtasks;
+              return { ...goal, task_completed: taskCompleted };
+            }
+            return goal;
+          });
+        });
+        return updated;
+      });
+      
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const res = await fetch(`${api}/api/goals/tasks/subtasks/${sub.subtask_id}`, {
+        method: "PUT",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ subtask_completed: !sub.subtask_completed }),
+      });
+      
+      if (!res.ok) {
+        // If API call fails, revert the optimistic updates
+        console.error("Subtask toggle failed, reverting changes");
+        setSelectedGoal(originalSelectedGoal);
+        setGoalsByDate(originalGoalsByDate);
+        setSortedGoalsByDate(originalSortedGoalsByDate);
+        
+        throw new Error(`Request failed ${res.status}`);
+      }
+      
+      // If successful, refresh the data to ensure consistency with server
+      const fetchGoals = async () => {
+        try {
+          const goalsRes = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!goalsRes.ok) throw new Error(`Request failed ${goalsRes.status}`);
+
+          const raw: GoalsByDate = await goalsRes.json();
+          const all: Goal[] = Object.values(raw).flat();
+
+          const grouped: GoalsByDate = {};
+          for (const g of all) {
+            const when = new Date(g.start_time ?? g.due_date!);
+            const key = getLocalDateKey(when);
+            (grouped[key] ??= []).push(g);
+          }
+          setGoalsByDate(grouped);
+
+          const ordered: GoalsByDate = Object.entries(grouped)
+            .sort(([a], [b]) => +new Date(a) - +new Date(b))
+            .reduce((acc, [k, v]) => ((acc[k] = v), acc), {} as GoalsByDate);
+          setSortedGoalsByDate(ordered);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+      
+      // Refresh the goals data
+      fetchGoals();
+      
+    } catch (err) {
+      console.error("handleSubtaskToggle error", err);
+    }
+  }
+
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
     setIsDragging(true)
@@ -440,7 +578,23 @@ export function CalendarScheduler() {
                               key={index} 
                               className="flex items-start gap-3 p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] cursor-pointer"
                               onClick={(e) => {
-                                const representativeGoal = group.subtasks[0];
+                                // Create a complete goal object with all grouped task information
+                                const representativeGoal = {
+                                  ...group.subtasks[0], // Use first subtask as base
+                                  task_title: group.taskTitle,
+                                  task_descr: group.taskDescr,
+                                  start_time: group.startTime,
+                                  end_time: group.endTime,
+                                  course_id: group.courseId,
+                                  google_calendar_color: group.googleCalendarColor,
+                                  // Add progress information
+                                  progress: group.progress,
+                                  totalSubtasks: group.totalSubtasks,
+                                  completedSubtasks: group.completedSubtasks,
+                                  subtasks: group.subtasks,
+                                  // Calculate status
+                                  status: calculateStatus(group.subtasks[0])
+                                };
                                 handleGoalClick(representativeGoal, e);
                               }}
                             >
@@ -631,7 +785,8 @@ export function CalendarScheduler() {
                               {selectedGoal.subtasks?.map((subtask, index) => (
                                 <div
                                   key={subtask.subtask_id || index}
-                                  className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs"
+                                  className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs cursor-pointer hover:bg-gray-100 transition-colors"
+                                  onClick={() => handleSubtaskToggle(subtask)}
                                 >
                                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
                                     subtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'

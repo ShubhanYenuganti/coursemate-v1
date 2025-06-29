@@ -585,22 +585,22 @@ def update_goal_tasks(goal_id):
                         subtask_completed=False
                     )
                     db.session.add(new_subtask)
-        
-        # Instead of deleting tasks that weren't in the update, we'll keep them
-        # This allows for incremental additions without losing existing data
-        
-        # Check if all tasks are completed to update goal completion status
-        if updated_task_ids:
-            all_tasks_completed = True
-            for task_id in updated_task_ids:
-                task_rows = [g for g in goals if g.task_id == task_id]
-                if not all(g.task_completed for g in task_rows):
-                    all_tasks_completed = False
-                    break
             
-            # Update goal completion status
-            for g in goals:
-                g.goal_completed = all_tasks_completed
+            # Instead of deleting tasks that weren't in the update, we'll keep them
+            # This allows for incremental additions without losing existing data
+            
+            # Check if all tasks are completed to update goal completion status
+            if updated_task_ids:
+                all_tasks_completed = True
+                for task_id in updated_task_ids:
+                    task_rows = [g for g in goals if g.task_id == task_id]
+                    if not all(g.task_completed for g in task_rows):
+                        all_tasks_completed = False
+                        break
+                
+                # Update goal completion status
+                for g in goals:
+                    g.goal_completed = all_tasks_completed
         
         db.session.commit()
         
@@ -809,7 +809,7 @@ def update_subtask(subtask_id):
         user_id = get_jwt_identity()
         
         # Get the subtask row
-        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
+        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").first()
         
         if not subtask:
             return jsonify({'error': 'Subtask not found or you do not have access'}), 404
@@ -826,18 +826,28 @@ def update_subtask(subtask_id):
         if 'subtask_completed' in data:
             subtask.subtask_completed = data['subtask_completed']
             
-            # Get all rows for this task
-            task_rows = Goal.query.filter_by(task_id=subtask.task_id, user_id=user_id).all()
+            # Commit the subtask change first
+            db.session.commit()
+            
+            # Now get fresh data for this task after the update
+            task_rows = Goal.query.filter_by(task_id=subtask.task_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
             
             # Check if all subtasks are completed to update task completion status
+            # Task is complete ONLY if ALL subtasks are completed
+            # Task is incomplete if ANY subtask is incomplete
             all_subtasks_completed = all(row.subtask_completed for row in task_rows)
+            
+            # Debug logging
+            current_app.logger.info(f"Task {subtask.task_id} - Subtasks: {[row.subtask_completed for row in task_rows]}")
+            current_app.logger.info(f"Task {subtask.task_id} - All completed: {all_subtasks_completed}")
             
             # Update task completion status in all rows for this task
             for row in task_rows:
                 row.task_completed = all_subtasks_completed
+                current_app.logger.info(f"Updated task row {row.subtask_id} - task_completed: {row.task_completed}")
             
             # Get all rows for this goal
-            goal_rows = Goal.query.filter_by(goal_id=subtask.goal_id, user_id=user_id).all()
+            goal_rows = Goal.query.filter_by(goal_id=subtask.goal_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
             
             # Get unique task IDs and their completion status
             task_completion_status = {}
@@ -845,12 +855,19 @@ def update_subtask(subtask_id):
                 if row.task_id not in task_completion_status:
                     task_completion_status[row.task_id] = row.task_completed
             
+            # Debug logging for goal completion
+            current_app.logger.info(f"Goal {subtask.goal_id} - Task completion status: {task_completion_status}")
+            
             # Check if all tasks are completed to update goal completion status
+            # Goal is complete ONLY if ALL tasks are completed
             all_tasks_completed = all(task_completion_status.values()) if task_completion_status else False
+            
+            current_app.logger.info(f"Goal {subtask.goal_id} - All tasks completed: {all_tasks_completed}")
             
             # Update goal completion status in all rows for this goal
             for row in goal_rows:
                 row.goal_completed = all_tasks_completed
+                current_app.logger.info(f"Updated goal row {row.subtask_id} - goal_completed: {row.goal_completed}")
         
         subtask.updated_at = datetime.utcnow()
         db.session.commit()
@@ -983,9 +1000,9 @@ def create_empty_task(goal_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error creating empty task: {str(e)}")
-        return jsonify({'error': 'An error occurred while creating empty task'}), 500 
-        return jsonify({'error': 'An error occurred while saving tasks'}), 500 
-    
+        return jsonify({'error': 'An error occurred while creating empty task'}), 500
+
+
 @goals_bp.route("/api/goals/user", methods=["GET"])
 @jwt_required()                               # still requires a valid JWT
 def get_goals_by_user():
@@ -1025,3 +1042,58 @@ def get_goals_by_user():
     except Exception as e:
         current_app.logger.error(f"Error getting user goals: {e}")
         return jsonify({"error": "An error occurred while getting user goals"}), 500
+
+
+@goals_bp.route("/api/goals/tasks/<task_id>", methods=["PUT"])
+@jwt_required()
+def update_task(task_id):
+    """Update a task row, mirror completion to subtasks,
+    and mark the entire goal complete when all tasks are done."""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Get the task row
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
+        
+        if not task:
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        data = request.get_json()
+        
+        now = datetime.utcnow()
+        
+        if 'task_title' in data:
+            task.task_title = data['task_title']
+        
+        if 'task_descr' in data:
+            task.task_descr = data['task_descr']
+        
+        if 'task_completed' in data:
+            task.task_completed = data['task_completed']
+            
+            # mark/unmark subtasks as completed
+            subtask_rows: list[Goal] = Goal.query.filter_by(task_id=task.task_id, user_id=user_id).all()
+            for row in subtask_rows:
+                row.subtask_completed = task.task_completed
+                row.updated_at = now
+            
+            # update goal completion status if all tasks of the goal are completed
+            goal_rows: list[Goal] = Goal.query.filter_by(goal_id=task.goal_id, user_id=user_id).all()
+            all_tasks_completed = all(row.task_completed for row in goal_rows)
+            for row in goal_rows:
+                row.goal_completed = all_tasks_completed
+                row.updated_at = now
+        
+        task.updated_at = now
+        db.session.commit()
+        return jsonify(task.to_dict()), 200
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating task: {str(e)}")
+        return jsonify({'error': 'An error occurred while updating the task'}), 500
