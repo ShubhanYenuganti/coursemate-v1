@@ -215,6 +215,77 @@ export function CalendarScheduler() {
     }
   }, [isDragging, dragOffset, selectedGoal, goalDisplayPosition, overflowEvents]);
 
+  // Handle window resize to reposition modals
+  useEffect(() => {
+    const handleResize = () => {
+      if (overflowEvents) {
+        // Reposition overflow modal to ensure it's still visible
+        const modalWidth = Math.min(320, window.innerWidth - 40);
+        const modalHeight = Math.min(400, window.innerHeight - 40);
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        let newLeft = overflowEvents.position.x;
+        let newTop = overflowEvents.position.y - 300;
+        
+        // Adjust horizontal position
+        if (newLeft + modalWidth > viewportWidth - 20) {
+          newLeft = Math.max(10, viewportWidth - modalWidth - 20);
+        }
+        if (newLeft < 10) {
+          newLeft = 10;
+        }
+        
+        // Adjust vertical position
+        if (newTop < 10) {
+          newTop = Math.min(viewportHeight - modalHeight - 10, overflowEvents.position.y + 10);
+        }
+        if (newTop + modalHeight > viewportHeight - 10) {
+          newTop = Math.max(10, overflowEvents.position.y - modalHeight - 10);
+        }
+        
+        setOverflowEvents(prev => prev ? {
+          ...prev,
+          position: { x: newLeft, y: newTop + 300 } // Convert back to original format
+        } : null);
+      }
+      
+      if (selectedGoal && goalDisplayPosition) {
+        // Reposition goal display modal
+        const modalWidth = Math.min(320, window.innerWidth - 40);
+        const modalHeight = Math.min(400, window.innerHeight - 40);
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        let newX = goalDisplayPosition.x - 320;
+        let newY = goalDisplayPosition.y - 200;
+        
+        // Adjust horizontal position
+        if (newX + modalWidth > viewportWidth - 20) {
+          newX = Math.max(10, viewportWidth - modalWidth - 20);
+        }
+        if (newX < 10) {
+          newX = 10;
+        }
+        
+        // Adjust vertical position
+        if (newY < 10) {
+          newY = 10;
+        }
+        if (newY + modalHeight > viewportHeight - 10) {
+          newY = Math.max(10, viewportHeight - modalHeight - 10);
+        }
+        
+        setGoalDisplayPosition({ x: newX + 320, y: newY + 200 });
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [overflowEvents, selectedGoal, goalDisplayPosition]);
+
   console.log(sortedGoalsByDate)
   /** Return the list of goals whose due-date === that calendar day */
   const getGoalsForDate = (date: Date): Goal[] => {
@@ -298,6 +369,7 @@ export function CalendarScheduler() {
             setCurrentDate={setCurrentDate} 
             getGoalsForDate={getGoalsForDate} 
             handleGoalClick={handleGoalClick} 
+            handleOverflowClick={handleOverflowClick}
           />
         ) : (
           <YearView 
@@ -458,7 +530,9 @@ export function CalendarScheduler() {
                 </button>
               </div>
             </CardHeader>
-            <CardContent className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
+            <CardContent className="overflow-y-auto" style={{ 
+              maxHeight: `${Math.min(280, window.innerHeight - 160)}px` // Responsive max height for overflow modal
+            }}>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: colorForCourse(selectedGoal.course_id, selectedGoal.google_calendar_color) }}></div>
@@ -608,17 +682,47 @@ export function CalendarScheduler() {
         <div 
           className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg floating-goal-display"
           style={{
-            left: Math.max(10, overflowEvents.position.x),
-            top: Math.max(10, overflowEvents.position.y - 300), // Position higher up
-            width: '320px', // Fixed width
-            maxHeight: '400px', // Fixed max height
+            left: (() => {
+              const modalWidth = Math.min(320, window.innerWidth - 40); // Responsive width
+              const viewportWidth = window.innerWidth;
+              const requestedLeft = overflowEvents.position.x;
+              
+              // Ensure modal doesn't go off the right edge
+              if (requestedLeft + modalWidth > viewportWidth - 20) {
+                return Math.max(10, viewportWidth - modalWidth - 20);
+              }
+              
+              // Ensure modal doesn't go off the left edge
+              return Math.max(10, requestedLeft);
+            })(),
+            top: (() => {
+              const modalHeight = Math.min(400, window.innerHeight - 40); // Responsive height
+              const viewportHeight = window.innerHeight;
+              const requestedTop = overflowEvents.position.y - 300;
+              
+              // If modal would go off the top, position it below the click point
+              if (requestedTop < 10) {
+                return Math.min(viewportHeight - modalHeight - 10, overflowEvents.position.y + 10);
+              }
+              
+              // If modal would go off the bottom, position it above the click point
+              if (requestedTop + modalHeight > viewportHeight - 10) {
+                return Math.max(10, overflowEvents.position.y - modalHeight - 10);
+              }
+              
+              return requestedTop;
+            })(),
+            width: `${Math.min(320, window.innerWidth - 40)}px`,
+            maxHeight: `${Math.min(400, window.innerHeight - 40)}px`,
+            minWidth: '280px', // Ensure minimum readable width
+            minHeight: '200px', // Ensure minimum readable height
           }}
         >
           <Card className="border-0 shadow-none h-full">
             <CardHeader className="pb-3">
               <div 
                 className="flex items-center justify-between cursor-move"
-                onMouseDown={(e) => handleMouseDown(e, true)}
+                onMouseDown={(e) => handleMouseDown(e)}
                 style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
               >
                 <div className="flex items-center gap-2">

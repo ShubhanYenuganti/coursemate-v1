@@ -3,8 +3,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { colorForCourse } from "../utils/color.utils"
 import { getMonthDays } from "../utils/calendar.utils"
 import { startOfToday } from "../utils/date.utils"
+import { groupTasksByTaskId } from "../utils/goal.progress"
+import { calculateStatus } from "../utils/goal.status"
 
-export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleGoalClick }: any) => (
+export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleGoalClick, handleOverflowClick }: any) => (
     <>
       <div className="flex flex-col border-b border-gray-200">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -57,12 +59,31 @@ export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handle
           {getMonthDays(currentDate).map((d: Date) => {
             const inMonth = d.getMonth() === currentDate.getMonth();
             const isToday = d.toDateString() === startOfToday().toDateString();
-            const evs = getGoalsForDate(d);
+            const rawGoals = getGoalsForDate(d);
+            
+            // Group tasks by task_id like DayView and WeekView
+            const groupedTasks = groupTasksByTaskId(rawGoals);
+            const groupedGoals = Object.values(groupedTasks).map(group => ({
+              ...group.subtasks[0], // Use first subtask as representative
+              task_title: group.taskTitle,
+              task_descr: group.taskDescr,
+              start_time: group.startTime,
+              end_time: group.endTime,
+              course_id: group.courseId,
+              google_calendar_color: group.googleCalendarColor,
+              // Add progress information
+              progress: group.progress,
+              totalSubtasks: group.totalSubtasks,
+              completedSubtasks: group.completedSubtasks,
+              subtasks: group.subtasks,
+              // Calculate status
+              status: calculateStatus(group.subtasks[0])
+            }));
   
             return (
               <div
                 key={d.toISOString()}
-                className={`bg-white p-2 min-h-[110px] ${!inMonth ? "bg-gray-50 text-gray-400" : ""}`}
+                className={`bg-white p-2 min-h-[110px] overflow-visible ${!inMonth ? "bg-gray-50 text-gray-400" : ""}`}
               >
                 <div
                   className={`text-sm font-medium mb-2 ${isToday
@@ -73,20 +94,47 @@ export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handle
                   {d.getDate()}
                 </div>
   
-                {evs.slice(0, 3).map((g: any) => (
-                  <div
-                    key={g.goal_id}
-                    className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
-                    style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
-                    onClick={(e) => handleGoalClick(g, e)}
-                  >
-                    {g.task_title ?? "(untitled)"}
+                {groupedGoals.length === 0 ? (
+                  // Empty state
+                  <div></div>
+                ) : groupedGoals.length <= 2 ? (
+                  // 1-2 events - stacked with padding
+                  <div className="space-y-1">
+                    {groupedGoals.map((g: any) => (
+                      <div
+                        key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
+                        className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
+                        style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                        onClick={(e) => handleGoalClick(g, e)}
+                      >
+                        {g.task_title ?? "(untitled)"}
+                      </div>
+                    ))}
                   </div>
-                ))}
-  
-                {evs.length > 3 && (
-                  <div className="text-xs text-gray-500 font-medium">
-                    +{evs.length - 3} more
+                ) : (
+                  // 3+ events - show first 2 + count indicator
+                  <div className="space-y-1">
+                    {groupedGoals.slice(0, 2).map((g: any) => (
+                      <div
+                        key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
+                        className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
+                        style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                        onClick={(e) => handleGoalClick(g, e)}
+                      >
+                        {g.task_title ?? "(untitled)"}
+                      </div>
+                    ))}
+                    {/* Count indicator for additional events */}
+                    <div 
+                      className="text-xs p-1 rounded text-gray-600 bg-gray-100 font-medium cursor-pointer hover:bg-gray-200 transition-colors"
+                      title={`${groupedGoals.length - 2} more events`}
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        handleOverflowClick(groupedGoals, { x: rect.left, y: rect.bottom }, d);
+                      }}
+                    >
+                      +{groupedGoals.length - 2} more
+                    </div>
                   </div>
                 )}
               </div>
