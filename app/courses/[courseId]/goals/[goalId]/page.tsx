@@ -998,3 +998,4 @@ const GoalDetailPage = () => {
 };
 
 export default GoalDetailPage;
+ 

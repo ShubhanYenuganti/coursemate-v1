@@ -44,6 +44,20 @@ const formatHourLabel = (h: number, withMinutes = false) => {
   )
 }
 
+const to24Hour = (timeStr: string) => {
+  const [time, period] = timeStr.split(/(?=[AP]M)/i)
+  const [hours, minutes] = time.split(':').map(Number)
+  let hour24 = hours
+  
+  if (period?.toUpperCase() === 'PM' && hours !== 12) {
+    hour24 = hours + 12
+  } else if (period?.toUpperCase() === 'AM' && hours === 12) {
+    hour24 = 0
+  }
+  
+  return hour24
+}
+
 /*─────────────────  TYPES & CONSTANTS  ────────────────*/
 
 interface Goal {
@@ -892,15 +906,8 @@ export function CalendarScheduler() {
   const getTasksForCourse = (courseName: string) => allTasks.filter((t) => t.course === courseName)
 
   const getEventsForDate = (date: Date) => {
-    const weekStart = weekDates[0]
-    return calendarEvents.filter((ev) => {
-      const evDate = new Date(weekStart)
-      evDate.setDate(weekStart.getDate() + ev.day)
-      const courseKey = ev.course.toLowerCase().replace(/\s+/g, "")
-      const courseVisible = courseVisibility[courseKey] ?? false
-      return courseVisible && evDate.toDateString() === date.toDateString()
-    })
-  }
+  return getGoalsForDate(date)
+}
 
   const handleConnectCalendar = () => {
     if (typeof window === "undefined") return;
@@ -1073,23 +1080,20 @@ export function CalendarScheduler() {
               <div className="flex-1 relative">
                 {hours.map((h) => (
                   <div key={h} className="h-20 border-b border-gray-200 relative">
-                    {calendarEvents
-                      .filter((e) => {
-                        const courseKey = e.course.toLowerCase().replace(/\s+/g, "")
-                        const visible = courseVisibility[courseKey] ?? false
-                        return (
-                          visible &&
-                          e.day === currentDate.getDay() && to24Hour(e.time) === h
-                        );
+                    {getGoalsForDate(currentDate)
+                      .filter((g) => {
+                        if (!g.start_time) return false;
+                        const startHour = new Date(g.start_time).getHours();
+                        return startHour === h;
                       })
-                      .map((e) => (
+                      .map((g) => (
                         <div
-                          key={e.id}
+                          key={g.goal_id}
                           className="absolute inset-1 rounded text-white text-sm p-2 cursor-pointer"
-                          style={{ backgroundColor: e.color }}
-                          onClick={() => handleTaskClick(e)}
+                          style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                          onClick={() => handleTaskClick(g)}
                         >
-                          {e.title}
+                          {g.task_title || g.goal_descr || "Untitled"}
                         </div>
                       ))}
                   </div>
@@ -1179,23 +1183,21 @@ export function CalendarScheduler() {
                   <div key={d.toISOString()} className="flex-1 border-r border-gray-200">
                     {hours.map((h) => (
                       <div key={h} className="h-16 border-b border-gray-200 relative p-1">
-                        {calendarEvents
-                          .filter((e) => {
-                            const courseKey = e.course.toLowerCase().replace(/\s+/g, "")
-                            const visible = courseVisibility[courseKey] ?? false
-                            return (
-                              visible && e.day === dayIdx && to24Hour(e.time) == h
-                            );
+                        {getGoalsForDate(d)
+                          .filter((g) => {
+                            if (!g.start_time) return false;
+                            const startHour = new Date(g.start_time).getHours();
+                            return startHour === h;
                           })
-                          .map((e) => (
+                          .map((g) => (
                             <div
-                              key={e.id}
+                              key={g.goal_id}
                               className="absolute inset-1 rounded p-2 text-xs text-white font-medium cursor-pointer"
-                              style={{ backgroundColor: e.color }}
-                              onClick={() => handleTaskClick(e)}
+                              style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                              onClick={() => handleTaskClick(g)}
                             >
-                              <div className="font-semibold">{e.title}</div>
-                              <div className="text-xs opacity-90">{e.subtitle}</div>
+                              <div className="font-semibold">{g.task_title || g.goal_descr || "Untitled"}</div>
+                              <div className="text-xs opacity-90">{g.task_descr || ""}</div>
                             </div>
                           ))}
                       </div>
@@ -1205,7 +1207,6 @@ export function CalendarScheduler() {
               </div>
             </div>
           </>
-          <DayView currentDate={currentDate} setCurrentDate={setCurrentDate} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
         ) : /* ───────── WEEK VIEW ───────── */ currentView === "week" ? (
           <WeekView currentDate={currentDate} setCurrentDate={setCurrentDate} weekDates={weekDates} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
         ) : /* ───────── MONTH VIEW ───────── */ currentView === "month" ? (

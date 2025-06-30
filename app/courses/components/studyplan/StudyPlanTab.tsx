@@ -44,13 +44,13 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           console.log('Processing goal from API:', goal);
           return {
             id: goal.goal_id || goal.id, // Handle both ID formats
-            courseId: courseId,
-            title: goal.goal_descr,
-            targetDate: goal.due_date || new Date().toISOString(),
-            workMinutesPerDay: 60, // Default value
-            frequency: 'daily', // Default value
-            createdAt: goal.created_at,
-            updatedAt: goal.updated_at,
+          courseId: courseId,
+          title: goal.goal_descr,
+          targetDate: goal.due_date || new Date().toISOString(),
+          workMinutesPerDay: 60, // Default value
+          frequency: 'daily', // Default value
+          createdAt: goal.created_at,
+          updatedAt: goal.updated_at,
             progress: goal.progress || 0,
             totalTasks: goal.total_tasks || 0,
             completedTasks: goal.completed_tasks || 0
@@ -185,13 +185,13 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         console.log('Processing goal from API:', goal);
         return {
           id: goal.goal_id || goal.id, // Handle both ID formats
-          courseId: courseId,
-          title: goal.goal_descr,
-          targetDate: goal.due_date || new Date().toISOString(),
-          workMinutesPerDay: 60, // Default value
-          frequency: 'daily', // Default value
-          createdAt: goal.created_at,
-          updatedAt: goal.updated_at,
+        courseId: courseId,
+        title: goal.goal_descr,
+        targetDate: goal.due_date || new Date().toISOString(),
+        workMinutesPerDay: 60, // Default value
+        frequency: 'daily', // Default value
+        createdAt: goal.created_at,
+        updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0
@@ -255,13 +255,13 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         console.log('Processing goal from API:', goal);
         return {
           id: goal.goal_id || goal.id, // Handle both ID formats
-          courseId: courseId,
-          title: goal.goal_descr,
-          targetDate: goal.due_date || new Date().toISOString(),
-          workMinutesPerDay: 60, // Default value
-          frequency: 'daily', // Default value
-          createdAt: goal.created_at,
-          updatedAt: goal.updated_at,
+        courseId: courseId,
+        title: goal.goal_descr,
+        targetDate: goal.due_date || new Date().toISOString(),
+        workMinutesPerDay: 60, // Default value
+        frequency: 'daily', // Default value
+        createdAt: goal.created_at,
+        updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0
@@ -316,13 +316,13 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         console.log('Processing goal from API:', goal);
         return {
           id: goal.goal_id || goal.id, // Handle both ID formats
-          courseId: courseId,
-          title: goal.goal_descr,
-          targetDate: goal.due_date || new Date().toISOString(),
-          workMinutesPerDay: 60, // Default value
-          frequency: 'daily', // Default value
-          createdAt: goal.created_at,
-          updatedAt: goal.updated_at,
+        courseId: courseId,
+        title: goal.goal_descr,
+        targetDate: goal.due_date || new Date().toISOString(),
+        workMinutesPerDay: 60, // Default value
+        frequency: 'daily', // Default value
+        createdAt: goal.created_at,
+        updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0
