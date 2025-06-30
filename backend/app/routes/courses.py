@@ -116,7 +116,7 @@ def get_course(course_id):
     """Get a specific course (user can only access their own courses)"""
     current_user_id = get_jwt_identity()
     
-    course = Course.query.filter_by(id=course_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").first()
+    course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
     if not course:
         return jsonify({'error': 'Course not found'}), 404
     

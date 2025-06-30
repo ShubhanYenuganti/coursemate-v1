@@ -25,9 +25,10 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   // Fetch goals from the backend
   useEffect(() => {
     const fetchGoals = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        const response = await fetch(`/api/courses/${courseId}/goals`, {
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -106,7 +107,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       }
       
       // Now save the goal to the backend along with tasks and subtasks
-      const response = await fetch(`/api/courses/${courseId}/goals`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,7 +149,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       
       console.log('Sending tasks to backend:', { tasks: tasksData });
       
-      const tasksResponse = await fetch(`/api/goals/${goalId}/save-tasks`, {
+      const tasksResponse = await fetch(`${api}/api/goals/${goalId}/save-tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,7 +169,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       
       // Refetch goals from the backend to ensure data consistency
       setLoading(true);
-      const fetchResponse = await fetch(`/api/courses/${courseId}/goals`, {
+      const fetchResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -218,7 +220,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const handleGoalUpdated = async (updatedGoal: GoalWithProgress) => {
     try {
       // Update goal in backend
-      const response = await fetch(`/api/goals/${updatedGoal.id}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${updatedGoal.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -238,7 +241,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       
       // Refetch goals from the backend to ensure data consistency
       setLoading(true);
-      const fetchResponse = await fetch(`/api/courses/${courseId}/goals`, {
+      const fetchResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -282,7 +285,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const handleGoalDeleted = async (goalId: string) => {
     try {
       // Delete goal from backend
-      const response = await fetch(`/api/goals/${goalId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -299,7 +303,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       
       // Refetch goals from the backend to ensure data consistency
       setLoading(true);
-      const fetchResponse = await fetch(`/api/courses/${courseId}/goals`, {
+      const fetchResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

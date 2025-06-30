@@ -13,6 +13,9 @@ import {
   Clock,
   CheckCircle,
   Circle,
+  Edit,
+  Save,
+  ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +38,7 @@ import { groupTasksByTaskId } from "./utils/goal.progress"
 import { Goal, GoalsByDate, Course } from "./utils/goal.types"
 import { startOfToday, getWeekDates, formatHourLabel, getLocalDateKey } from "./utils/date.utils"
 
+
 export function CalendarScheduler() {
   /** Current selected date -- initialised to today */
   const [currentDate, setCurrentDate] = useState<Date>(() => startOfToday())
@@ -52,7 +56,8 @@ export function CalendarScheduler() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [courseVisibility, setCourseVisibility] = useState<Record<string, boolean>>({});
   const [filteredGoals, setFilteredGoals] = useState<Goal[]>([]);
-  
+
+
   /** Hours array for timeline */
   const hours = Array.from({ length: 24 }, (_, i) => i) // 12 AM (0) to 11 PM (23)
 
@@ -223,22 +228,33 @@ export function CalendarScheduler() {
       // If successful, refresh the data to ensure consistency with server
       const fetchGoals = async () => {
         try {
-          const goalsRes = await fetch(`${api}/api/goals/user`, {
+          const token =
+            typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/user`, {
             headers: { Authorization: `Bearer ${token}` },
           });
-          if (!goalsRes.ok) throw new Error(`Request failed ${goalsRes.status}`);
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
 
-          const raw: GoalsByDate = await goalsRes.json();
+          // 1️⃣ flatten everything we got from the server
+          const raw: GoalsByDate = await res.json();
           const all: Goal[] = Object.values(raw).flat();
 
+          // Filter out placeholder tasks
+          const filteredAll = all.filter(goal => goal.task_id !== 'placeholder');
+
+          // 2️⃣ regroup by *local* YYYY-MM-DD
           const grouped: GoalsByDate = {};
-          for (const g of all) {
+          for (const g of filteredAll) {
+            // Convert UTC time to local time for grouping
             const when = new Date(g.start_time ?? g.due_date!);
             const key = getLocalDateKey(when);
             (grouped[key] ??= []).push(g);
           }
 
-          // Sort tasks within each date group for consistent positioning
+          // 3️⃣ Sort tasks within each date group for consistent positioning
           Object.keys(grouped).forEach(dateKey => {
             grouped[dateKey].sort((a, b) => {
               // First sort by task_id to keep tasks together
@@ -252,10 +268,88 @@ export function CalendarScheduler() {
 
           setGoalsByDate(grouped);
 
+          // 4️⃣ optional chronological copy you already had
           const ordered: GoalsByDate = Object.entries(grouped)
             .sort(([a], [b]) => +new Date(a) - +new Date(b))
             .reduce((acc, [k, v]) => ((acc[k] = v), acc), {} as GoalsByDate);
           setSortedGoalsByDate(ordered);
+
+          // set courses by grouping goals by course_id - set colors immediately
+          const courses: Course[] = [];
+          const courseIds = [...new Set(all.map(g => g.course_id))]; // Get unique course IDs
+          
+          // First, create courses with immediate color assignment
+          courseIds.forEach(courseId => {
+            const courseGoals = all.filter(goal => goal.course_id === courseId);
+            // Use the first goal's google_calendar_color if available, otherwise generate a consistent color
+            const firstGoal = courseGoals[0];
+            const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
+            
+            courses.push({
+              goals: courseGoals,
+              course_title: courseId, // Temporary title until async fetch completes
+              course_description: '', // Empty until async fetch completes
+              course_id: courseId,
+              color: color
+            });
+          });
+          
+          // Set courses immediately with colors
+          setCourses(courses);
+          console.log('Courses set with colors:', courses);
+          
+          // Then fetch course details asynchronously and update titles/descriptions
+          const coursePromises = courseIds.map(async courseId => {
+            try {
+              // get course details from the database
+              const course = await fetch(`${api}/api/courses/${courseId}`, {
+                headers: { 
+                  Authorization: `Bearer ${token}`
+                },
+                method: "GET"
+              });
+
+              if (!course.ok) throw new Error(`Request failed ${course.status}`);
+              const courseDetails = await course.json();
+              console.log('Course details:', courseDetails);
+              
+              return {
+                course_id: courseId,
+                course_title: courseDetails.title,
+                course_description: courseDetails.description
+              };
+            } catch (error) {
+              console.error(`Failed to fetch course ${courseId}:`, error);
+              // Return fallback data if fetch fails
+              return {
+                course_id: courseId,
+                course_title: courseId, // Use course_id as fallback title
+                course_description: ''
+              };
+            }
+          });
+          
+          // Update courses with fetched details
+          Promise.all(coursePromises).then(courseDetails => {
+            setCourses(prevCourses => 
+              prevCourses.map(course => {
+                const details = courseDetails.find(d => d.course_id === course.course_id);
+                return details ? {
+                  ...course,
+                  course_title: details.course_title,
+                  course_description: details.course_description
+                } : course;
+              })
+            );
+            console.log('Courses updated with details:', courseDetails);
+          });
+
+          // Initialize all courses as visible by default
+          const initialVisibility: Record<string, boolean> = {};
+          courseIds.forEach(courseId => {
+            initialVisibility[courseId] = true;
+          });
+          setCourseVisibility(initialVisibility);
         } catch (err) {
           console.error("fetchGoals error", err);
         }
@@ -352,8 +446,11 @@ export function CalendarScheduler() {
           const raw: GoalsByDate = await goalsRes.json();
           const all: Goal[] = Object.values(raw).flat();
 
+          // Filter out placeholder tasks
+          const filteredAll = all.filter(goal => goal.task_id !== 'placeholder');
+
           const grouped: GoalsByDate = {};
-          for (const g of all) {
+          for (const g of filteredAll) {
             const when = new Date(g.start_time ?? g.due_date!);
             const key = getLocalDateKey(when);
             (grouped[key] ??= []).push(g);
@@ -431,6 +528,8 @@ export function CalendarScheduler() {
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
 
+
+
   // one ref for both Day + Week
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const hasScrolledToCurrentHour = useRef(false);
@@ -478,9 +577,12 @@ export function CalendarScheduler() {
         const raw: GoalsByDate = await res.json();
         const all: Goal[] = Object.values(raw).flat();
 
+        // Filter out placeholder tasks
+        const filteredAll = all.filter(goal => goal.task_id !== 'placeholder');
+
         // 2️⃣ regroup by *local* YYYY-MM-DD
         const grouped: GoalsByDate = {};
-        for (const g of all) {
+        for (const g of filteredAll) {
           // Convert UTC time to local time for grouping
           const when = new Date(g.start_time ?? g.due_date!);
           const key = getLocalDateKey(when);
@@ -730,13 +832,15 @@ export function CalendarScheduler() {
     const future: { [date: string]: Goal[] } = {};
     const completed: { [date: string]: Goal[] } = {};
 
-    // Group filtered goals by date
+    // Group filtered goals by date, excluding Google Calendar events
     const filteredGoalsByDate: GoalsByDate = {};
-    filteredGoals.forEach(goal => {
-      const when = new Date(goal.start_time ?? goal.due_date!);
-      const key = getLocalDateKey(when);
-      (filteredGoalsByDate[key] ??= []).push(goal);
-    });
+    filteredGoals
+      .filter(goal => goal.goal_id !== "Google Calendar") // Exclude Google Calendar events
+      .forEach(goal => {
+        const when = new Date(goal.start_time ?? goal.due_date!);
+        const key = getLocalDateKey(when);
+        (filteredGoalsByDate[key] ??= []).push(goal);
+      });
 
     Object.entries(filteredGoalsByDate).forEach(([date, goals]) => {
       const taskDate = new Date(date + 'T00:00:00');
@@ -948,13 +1052,13 @@ export function CalendarScheduler() {
         </div>
         {/* ───────── DAY VIEW ───────── */}
         {currentView === "day" ? (
-          <DayView
-            currentDate={currentDate}
-            setCurrentDate={setCurrentDate}
-            hours={hours}
-            getGoalsForDate={getGoalsForDate}
-            handleGoalClick={handleGoalClick}
-            setTimelineRef={setTimelineRef}
+          <DayView 
+            currentDate={currentDate} 
+            setCurrentDate={setCurrentDate} 
+            hours={hours} 
+            getGoalsForDate={getGoalsForDate} 
+            handleGoalClick={handleGoalClick} 
+            setTimelineRef={setTimelineRef} 
             formatHourLabel={formatHourLabel}
             handleOverflowClick={handleOverflowClick}
             getCourseColor={getCourseColor}
@@ -976,8 +1080,8 @@ export function CalendarScheduler() {
           <MonthView 
             currentDate={currentDate} 
             setCurrentDate={setCurrentDate} 
-            getGoalsForDate={getGoalsForDate}
-            handleGoalClick={handleGoalClick}
+            getGoalsForDate={getGoalsForDate} 
+            handleGoalClick={handleGoalClick} 
             handleOverflowClick={handleOverflowClick}
             getCourseColor={getCourseColor}
           />
@@ -1018,7 +1122,7 @@ export function CalendarScheduler() {
             <div className="space-y-4">
               {(() => {
                 const { overdue, upcoming, future, completed } = categorizeTasks();
-                return (
+                  return (
                   <>
                     {renderTaskSection("Overdue", overdue, "overdue", "#ef4444")}
                     {renderTaskSection("This Week", upcoming, "upcoming", "#10b981")}
@@ -1027,7 +1131,7 @@ export function CalendarScheduler() {
                   </>
                 );
               })()}
-            </div>
+                            </div>
           </>
         ) : (
           <>
@@ -1043,19 +1147,19 @@ export function CalendarScheduler() {
                       <div key={course.course_id} className="flex items-center justify-between p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] transition-colors">
                         <div className="flex items-center gap-3 flex-1">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: course.color }} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-[#18181b] truncate">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-[#18181b] truncate">
                               {course.course_title === course.course_id ? (
                                 <span className="text-gray-400">Loading...</span>
                               ) : (
                                 course.course_title
                               )}
-                            </div>
+                                </div>
                             <div className="text-xs text-[#71717a] mt-1">
                               {courseEventCount} event{courseEventCount !== 1 ? 's' : ''}
+                                  </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={isVisible}
@@ -1064,11 +1168,11 @@ export function CalendarScheduler() {
                           />
                           <Eye className={`w-4 h-4 ${isVisible ? 'text-blue-600' : 'text-gray-400'}`} />
                         </div>
-                      </div>
-                    );
+                    </div>
+                  );
                   })}
-                </div>
-              </>
+            </div>
+          </>
             )}
           </>
         )}
@@ -1096,20 +1200,34 @@ export function CalendarScheduler() {
                 <div className="flex items-center gap-2">
                   <GripVertical className="w-4 h-4 text-gray-400" />
                   <CardTitle className="text-lg truncate">
-                    {selectedGoal.goal_id === "Google Calendar" ? "Google Calendar Event" : "Task Details"}
+                    {selectedGoal.goal_id !== "Google Calendar" ? "Edit Task" : "Google Calendar Event"}
                   </CardTitle>
+                  {selectedGoal.goal_id !== "Google Calendar" && (
+                    <button
+                      onClick={() => {
+                        const url = `http://localhost:3001/courses/${selectedGoal.course_id}/goals/${selectedGoal.goal_id}`;
+                        window.open(url, '_blank');
+                      }}
+                      className="text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0 p-1 hover:bg-blue-50 rounded"
+                      title="Open in full view"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-                <button
-                  onClick={() => {
-                    setSelectedGoal(null)
-                    setGoalDisplayPosition(null)
-                    setExpandedTaskId(null)
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-2 p-1 hover:bg-gray-100 rounded"
-                  style={{ cursor: 'pointer' }}
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedGoal(null)
+                      setGoalDisplayPosition(null)
+                      setExpandedTaskId(null)
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 hover:bg-gray-100 rounded"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="overflow-y-auto" style={{ 
@@ -1452,135 +1570,7 @@ export function CalendarScheduler() {
         </DialogContent>
       </Dialog>
 
-      {/* Add/Edit Task Dialog */}
-      <Dialog open={showAddTask} onOpenChange={setShowAddTask}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader className="border-b border-[#e5e8eb] pb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-[#0a80ed] rounded-full flex items-center justify-center">
-                <span className="text-white text-xs font-bold">C</span>
-              </div>
-              <DialogTitle className="text-lg font-semibold">CourseHelper</DialogTitle>
-            </div>
-          </DialogHeader>
 
-          <div className="py-6">
-            <h2 className="text-xl font-semibold mb-6">Add/Edit Task</h2>
-
-            <div className="space-y-6">
-              <div>
-                <Label htmlFor="title" className="text-sm font-medium text-[#18181b] mb-2 block">
-                  Title
-                </Label>
-                <Input
-                  id="title"
-                  placeholder="Enter task title"
-                  className="w-full h-11 border-[#e5e8eb] focus:border-[#0a80ed] focus:ring-[#0a80ed]"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="deadline" className="text-sm font-medium text-[#18181b] mb-2 block">
-                  Deadline
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="deadline"
-                    type="date"
-                    className="w-full h-11 border-[#e5e8eb] focus:border-[#0a80ed] focus:ring-[#0a80ed]"
-                  />
-                  <Calendar className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-[#71717a] pointer-events-none" />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="priority" className="text-sm font-medium text-[#18181b] mb-2 block">
-                  Priority
-                </Label>
-                <Select>
-                  <SelectTrigger className="w-full h-11 border-[#e5e8eb] focus:border-[#0a80ed] focus:ring-[#0a80ed]">
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        Low
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="medium">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-                        Medium
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="high">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                        High
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="course" className="text-sm font-medium text-[#18181b] mb-2 block">
-                  Course
-                </Label>
-                <Select>
-                  <SelectTrigger className="w-full h-11 border-[#e5e8eb] focus:border-[#0a80ed] focus:ring-[#0a80ed]">
-                    <SelectValue placeholder="Select course" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {/* {courses.map((course) => (
-                      <SelectItem key={course.id} value={course.id}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: course.color }}></div>
-                          {course.name}
-                        </div>
-                      </SelectItem>
-                    ))} */}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="recurring" className="text-sm font-medium text-[#18181b] mb-2 block">
-                  Recurring
-                </Label>
-                <Select>
-                  <SelectTrigger className="w-full h-11 border-[#e5e8eb] focus:border-[#0a80ed] focus:ring-[#0a80ed]">
-                    <SelectValue placeholder="Convert to Event" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#e5e8eb]">
-            <Button
-              variant="outline"
-              onClick={() => setShowAddTask(false)}
-              className="px-6 py-2 border-[#e5e8eb] text-[#71717a] hover:bg-[#f8f9fa]"
-            >
-              Cancel
-            </Button>
-            <Button
-              className="bg-[#0a80ed] hover:bg-[#0369a1] text-white px-6 py-2"
-              onClick={() => setShowAddTask(false)}
-            >
-              Save
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Floating Action Buttons */}
       <div className="fixed bottom-6 right-6 flex flex-col gap-2">
@@ -1588,6 +1578,119 @@ export function CalendarScheduler() {
           <Settings className="w-5 h-5" />
         </Button>
       </div>
+
+
+
+      {/* Add Task Modal */}
+      {showAddTask && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Plus className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Add New Task</h2>
+                </div>
+                <button
+                  onClick={() => setShowAddTask(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Task Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Task Name *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter task name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Due Date *
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Course Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Course
+                  </label>
+                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Select a course</option>
+                    {courses.map((course) => (
+                      <option key={course.course_id} value={course.course_id}>
+                        {course.course_title === course.course_id ? "Loading..." : course.course_title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Task Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Task Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Add a description for this task (optional)"
+                  />
+                </div>
+
+                {/* Subtasks */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium text-gray-900">Subtasks</h3>
+                    <button
+                      className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Subtask
+                    </button>
+                  </div>
+
+                  <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                    <p>No subtasks yet. Add your first subtask to get started.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => setShowAddTask(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Create Task
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

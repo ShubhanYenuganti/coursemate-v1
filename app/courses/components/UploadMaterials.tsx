@@ -35,7 +35,7 @@ const UploadMaterials: React.FC<UploadMaterialsProps> = ({ courseId, onUploadCom
       for (const file of selectedFiles) {
         const formData = new FormData();
         formData.append('file', file);
-        const res = await fetch(`/api/courses/${courseId}/materials/upload`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173"}/api/courses/${courseId}/materials/upload`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`

@@ -40,12 +40,10 @@ const GoalDetailPage = () => {
 
   useEffect(() => {
     const fetchGoalDetails = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        console.log('Fetching goal details for courseId:', courseId, 'goalId:', goalId);
-        
-        // Fetch goal details
-        const goalResponse = await fetch(`/api/courses/${courseId}/goals`, {
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const goalResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -98,7 +96,7 @@ const GoalDetailPage = () => {
         
         // Fetch tasks for this goal
         console.log('Fetching tasks for goalId:', goalId);
-        const tasksResponse = await fetch(`/api/goals/${goalId}/tasks`, {
+        const tasksResponse = await fetch(`${api}/api/goals/${goalId}/tasks`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -125,6 +123,11 @@ const GoalDetailPage = () => {
         // First pass: create task objects
         tasksData.forEach((item: any) => {
           console.log('Processing task item:', item);
+          
+          // Filter out placeholder tasks
+          if (item.task_id === 'placeholder') {
+            return;
+          }
           
           // Each row in the response contains goal, task, and subtask data
           // We need to extract and group by task_id
@@ -207,7 +210,8 @@ const GoalDetailPage = () => {
     if (!goal) return;
     
     try {
-      const response = await fetch(`/api/goals/${goalId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -262,7 +266,8 @@ const GoalDetailPage = () => {
       
       console.log('Creating new task:', tasksData);
       
-      const response = await fetch(`/api/goals/${goalId}/save-tasks`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}/save-tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -277,7 +282,7 @@ const GoalDetailPage = () => {
       }
       
       // Refresh tasks
-      const tasksResponse = await fetch(`/api/goals/${goalId}/tasks`, {
+      const tasksResponse = await fetch(`${api}/api/goals/${goalId}/tasks`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -295,6 +300,11 @@ const GoalDetailPage = () => {
       
       // First pass: create task objects
       tasksData2.forEach((item: any) => {
+        // Filter out placeholder tasks
+        if (item.task_id === 'placeholder') {
+          return;
+        }
+        
         // Each row in the response contains goal, task, and subtask data
         // We need to extract and group by task_id
         if (!taskMap.has(item.task_id)) {
@@ -404,7 +414,8 @@ const GoalDetailPage = () => {
       };
       
       // Update task in backend
-      const response = await fetch(`/api/goals/${goalId}/tasks`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}/tasks`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -429,7 +440,7 @@ const GoalDetailPage = () => {
       setEditingTask(null);
       
       // Refresh goal data to get updated progress
-      const goalResponse = await fetch(`/api/courses/${courseId}/goals`, {
+      const goalResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -472,7 +483,8 @@ const GoalDetailPage = () => {
 
   const handleTaskDeleted = async (taskId: string) => {
     try {
-      const response = await fetch(`/api/goals/${goalId}/tasks/${taskId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}/tasks/${taskId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -516,7 +528,8 @@ const GoalDetailPage = () => {
 
   const handleConfirmDeleteGoal = async () => {
     try {
-      const response = await fetch(`/api/goals/${goalId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -567,7 +580,8 @@ const GoalDetailPage = () => {
       };
       
       // Update task in backend
-      const response = await fetch(`/api/goals/${goalId}/tasks`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}/tasks`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

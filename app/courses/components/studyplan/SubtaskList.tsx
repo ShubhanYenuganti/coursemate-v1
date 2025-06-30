@@ -25,11 +25,18 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
     if (!subtask) return;
 
     try {
-      const response = await fetch(`/api/goals/tasks/subtasks/${subtaskId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/subtasks/${subtaskId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           subtask_descr: subtask.name,
@@ -66,10 +73,17 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
 
   const handleDeleteConfirm = async (subtaskId: string) => {
     try {
-      const response = await fetch(`/api/goals/tasks/subtasks/${subtaskId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/subtasks/${subtaskId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -102,11 +116,18 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
     }
 
     try {
-      const response = await fetch(`/api/goals/tasks/subtasks/${subtaskId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/subtasks/${subtaskId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           subtask_descr: editedSubtaskName,
@@ -141,11 +162,18 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
     }
 
     try {
-      const response = await fetch(`/api/goals/tasks/${taskId}/subtasks`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/${taskId}/subtasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           subtask_descr: newSubtaskName,

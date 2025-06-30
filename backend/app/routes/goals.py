@@ -809,7 +809,7 @@ def update_subtask(subtask_id):
         user_id = get_jwt_identity()
         
         # Get the subtask row
-        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").first()
+        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
         
         if not subtask:
             return jsonify({'error': 'Subtask not found or you do not have access'}), 404
@@ -831,7 +831,7 @@ def update_subtask(subtask_id):
             subtask.updated_at = datetime.utcnow()
             
             # Now get fresh data for this task after the update
-            task_rows = Goal.query.filter_by(task_id=subtask.task_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
+            task_rows = Goal.query.filter_by(task_id=subtask.task_id, user_id=user_id).all()
             
             # Check if all subtasks are completed to update task completion status
             all_subtasks_completed = all(row.subtask_completed for row in task_rows)
@@ -842,7 +842,7 @@ def update_subtask(subtask_id):
                 row.updated_at = datetime.utcnow()
             
             # Get all rows for this goal
-            goal_rows = Goal.query.filter_by(goal_id=subtask.goal_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
+            goal_rows = Goal.query.filter_by(goal_id=subtask.goal_id, user_id=user_id).all()
             
             # Get unique task IDs and their completion status
             task_completion_map = {}
@@ -999,7 +999,7 @@ def get_goals_by_user():
     user = get_jwt_identity()
 
     try:
-        goals = Goal.query.filter_by(user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
+        goals = Goal.query.filter_by(user_id=user).all()
 
         # -------- group by end_date --------
         grouped: dict[str, list[dict]] = defaultdict(list)
@@ -1043,7 +1043,7 @@ def update_task(task_id):
         user_id = get_jwt_identity()
         
         # Get the task row - use the authenticated user's ID
-        task = Goal.query.filter_by(task_id=task_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").first()
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
         
         if not task:
             return jsonify({'error': 'Task not found or you do not have access'}), 404
@@ -1063,7 +1063,7 @@ def update_task(task_id):
             
             # When marking task as complete, set both task_completed and subtask_completed to true for all subtask rows
             # When marking task as incomplete, set task_completed to false for all subtask rows, keep subtask_completed unchanged
-            subtask_rows: list[Goal] = Goal.query.filter_by(task_id=task.task_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
+            subtask_rows: list[Goal] = Goal.query.filter_by(task_id=task.task_id, user_id=user_id).all()
             
             if task.task_completed:
                 # mark all subtasks as completed when task is completed
@@ -1079,7 +1079,7 @@ def update_task(task_id):
                     row.updated_at = now
             
             # update goal completion status based on current task completion states
-            goal_rows: list[Goal] = Goal.query.filter_by(goal_id=task.goal_id, user_id="4aa170c9-ceb2-4b01-be54-61c6740393b8").all()
+            goal_rows: list[Goal] = Goal.query.filter_by(goal_id=task.goal_id, user_id=user_id).all()
             
             # Get unique task IDs and their completion status
             task_completion_map = {}
