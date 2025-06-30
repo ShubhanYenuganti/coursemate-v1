@@ -52,11 +52,22 @@ export function CalendarScheduler() {
     [startOfToday().toISOString().split("T")[0]]: true,
   })
 
+  /** Expanded sections for task categories */
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    overdue: true,
+    upcoming: true,
+    future: true,
+    completed: false,
+  })
+
   /** Helpers */
   const weekDates = getWeekDates(currentDate) // Sunday‑based week
 
   const toggleDayExpansion = (dateStr: string) =>
     setExpandedDays((prev) => ({ ...prev, [dateStr]: !prev[dateStr] }))
+
+  const toggleSectionExpansion = (section: string) =>
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }))
 
   const handleGoalClick = (event: Goal | any, clickEvent?: React.MouseEvent) => {
     if (clickEvent) {
@@ -596,6 +607,181 @@ export function CalendarScheduler() {
     return goalsByDate[key] ?? [];
   };
 
+  // Helper functions to categorize tasks
+  const categorizeTasks = () => {
+    const today = startOfToday();
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay()); // Sunday
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6); // Saturday
+
+    const overdue: { [date: string]: Goal[] } = {};
+    const upcoming: { [date: string]: Goal[] } = {};
+    const future: { [date: string]: Goal[] } = {};
+    const completed: { [date: string]: Goal[] } = {};
+
+    Object.entries(sortedGoalsByDate).forEach(([date, goals]) => {
+      const taskDate = new Date(date + 'T00:00:00');
+      
+      // Separate completed tasks
+      const completedGoals = goals.filter(goal => goal.task_completed);
+      const incompleteGoals = goals.filter(goal => !goal.task_completed);
+      
+      if (completedGoals.length > 0) {
+        completed[date] = completedGoals;
+      }
+      
+      if (incompleteGoals.length > 0) {
+        if (taskDate < today) {
+          overdue[date] = incompleteGoals;
+        } else if (taskDate >= today && taskDate <= weekEnd) {
+          upcoming[date] = incompleteGoals;
+        } else {
+          future[date] = incompleteGoals;
+        }
+      }
+    });
+
+    return { overdue, upcoming, future, completed };
+  };
+
+  const renderTaskSection = (title: string, tasks: { [date: string]: Goal[] }, sectionKey: string, color: string) => {
+    const taskEntries = Object.entries(tasks);
+    if (taskEntries.length === 0) return null;
+
+    const totalTasks = taskEntries.reduce((sum, [_, goals]) => {
+      const groupedTasks = groupTasksByTaskId(goals);
+      return sum + Object.keys(groupedTasks).length;
+    }, 0);
+
+    const isExpanded = expandedSections[sectionKey] || false;
+    const isCompletedSection = sectionKey === 'completed';
+
+    return (
+      <div key={sectionKey} className="border border-[#e5e8eb] rounded-lg">
+        <div 
+          className="p-4 cursor-pointer hover:bg-[#f8f9fa] transition-colors"
+          onClick={() => toggleSectionExpansion(sectionKey)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div>
+                <div className="font-medium text-[#18181b]">{title}</div>
+                <div className="text-sm text-[#71717a]">
+                  {totalTasks} task{totalTasks !== 1 ? "s" : ""}
+                </div>
+              </div>
+            </div>
+            <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+          </div>
+        </div>
+        
+        {isExpanded && (
+          <div className="px-4 pt-4 pb-4 space-y-3 border-t border-[#e5e8eb]">
+            {taskEntries.map(([date, goals]) => {
+              const groupedTasks = groupTasksByTaskId(goals);
+              const taskDate = new Date(date + 'T00:00:00');
+              const isPastDue = taskDate < startOfToday() && taskDate.toDateString() !== startOfToday().toDateString();
+              
+              return (
+                <div key={date} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className={`text-sm font-medium ${isPastDue && !isCompletedSection ? 'text-red-600' : 'text-[#18181b]'}`}>
+                      {taskDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                    </div>
+                    <div className={`text-xs ${isPastDue && !isCompletedSection ? 'text-red-500' : 'text-[#71717a]'}`}>
+                      {Object.keys(groupedTasks).length} task{Object.keys(groupedTasks).length !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 ml-2">
+                    {Object.values(groupedTasks).map((group, index) => (
+                      <div 
+                        key={index} 
+                        className={`flex items-start gap-3 p-3 rounded-lg hover:bg-[#f0f0f0] ${
+                          isCompletedSection ? 'bg-[#f8f9fa] opacity-75' : 'bg-[#f8f9fa]'
+                        }`}
+                      >
+                        <div 
+                          className="w-3 h-3 rounded-full mt-1 flex-shrink-0" 
+                          style={{ backgroundColor: colorForCourse(group.courseId, group.googleCalendarColor) }}
+                        />
+                        <div 
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={(e) => {
+                            const representativeGoal = {
+                              ...group.subtasks[0],
+                              task_title: group.taskTitle,
+                              task_descr: group.taskDescr,
+                              start_time: group.startTime,
+                              end_time: group.endTime,
+                              course_id: group.courseId,
+                              google_calendar_color: group.googleCalendarColor,
+                              progress: group.progress,
+                              totalSubtasks: group.totalSubtasks,
+                              completedSubtasks: group.completedSubtasks,
+                              subtasks: group.subtasks,
+                              status: calculateStatus(group.subtasks[0])
+                            };
+                            handleGoalClick(representativeGoal, e);
+                          }}
+                        >
+                          <div className={`text-sm font-medium truncate ${
+                            isCompletedSection ? 'text-[#71717a] line-through' : 'text-[#18181b]'
+                          }`}>
+                            {group.taskTitle || "(untitled)"}
+                          </div>
+                          {group.taskDescr && (
+                            <div className={`text-xs truncate mt-1 ${
+                              isCompletedSection ? 'text-[#a1a1aa] line-through' : 'text-[#71717a]'
+                            }`}>
+                              {group.taskDescr}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const representativeGoal = {
+                              ...group.subtasks[0],
+                              task_title: group.taskTitle,
+                              task_descr: group.taskDescr,
+                              start_time: group.startTime,
+                              end_time: group.endTime,
+                              course_id: group.courseId,
+                              google_calendar_color: group.googleCalendarColor,
+                              progress: group.progress,
+                              totalSubtasks: group.totalSubtasks,
+                              completedSubtasks: group.completedSubtasks,
+                              subtasks: group.subtasks,
+                              status: calculateStatus(group.subtasks[0])
+                            };
+                            handleTaskToggle(representativeGoal);
+                          }}
+                          className={`w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors ${
+                            group.subtasks[0].task_completed 
+                              ? 'bg-green-500 border-green-500' 
+                              : 'bg-white border-gray-300 hover:border-green-400'
+                          }`}
+                          title={group.subtasks[0].task_completed ? "Mark as incomplete" : "Mark as complete"}
+                        >
+                          {group.subtasks[0].task_completed && (
+                            <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const loading = useAuthRedirect()
   if (loading) return <div>Loading...</div>
@@ -700,126 +886,26 @@ export function CalendarScheduler() {
               <SelectValue placeholder="Select a tab" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="tasks">Current Tasks</SelectItem>
+              <SelectItem value="tasks">My Tasks</SelectItem>
               <SelectItem value="courses">My Courses</SelectItem>
             </SelectContent>
           </Select>
         </div>
         {sidebarTab === "tasks" ? (
           <>
-            {/* Upcoming Tasks list */}
+            {/* Categorized Tasks */}
             <div className="space-y-4">
-              {
-                Object.entries(sortedGoalsByDate).map(([date, goals]) => {
-                  const groupedTasks = groupTasksByTaskId(goals);
-                  const isExpanded = expandedDays[date] || false;
-                  const currentDate = new Date();
-                  const taskDate = new Date(date + 'T00:00:00');
-                  const isPastDue = taskDate < currentDate && taskDate.toDateString() !== currentDate.toDateString();
-                  
-                  return (
-                    <div key={date} className="border border-[#e5e8eb] rounded-lg">
-                      <div 
-                        className="p-4 cursor-pointer hover:bg-[#f8f9fa] transition-colors"
-                        onClick={() => toggleDayExpansion(date)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className={`font-medium ${isPastDue ? 'text-red-600' : 'text-[#18181b]'}`}>
-                              {taskDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
-                            </div>
-                            <div className={`text-sm ${isPastDue ? 'text-red-500' : 'text-[#71717a]'}`}>
-                              {Object.keys(groupedTasks).length} task{Object.keys(groupedTasks).length !== 1 ? "s" : ""}
-                            </div>
-                          </div>
-                          <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                        </div>
-                      </div>
-                      
-                      {isExpanded && (
-                        <div className="px-4 pt-4 pb-4 space-y-2 border-t border-[#e5e8eb]">
-                          {Object.values(groupedTasks).map((group, index) => (
-                            <div 
-                              key={index} 
-                              className="flex items-start gap-3 p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0]"
-                            >
-                              <div 
-                                className="w-3 h-3 rounded-full mt-1 flex-shrink-0" 
-                                style={{ backgroundColor: colorForCourse(group.courseId, group.googleCalendarColor) }}
-                              />
-                              <div 
-                                className="flex-1 min-w-0 cursor-pointer"
-                                onClick={(e) => {
-                                  // Create a complete goal object with all grouped task information
-                                  const representativeGoal = {
-                                    ...group.subtasks[0], // Use first subtask as base
-                                    task_title: group.taskTitle,
-                                    task_descr: group.taskDescr,
-                                    start_time: group.startTime,
-                                    end_time: group.endTime,
-                                    course_id: group.courseId,
-                                    google_calendar_color: group.googleCalendarColor,
-                                    // Add progress information
-                                    progress: group.progress,
-                                    totalSubtasks: group.totalSubtasks,
-                                    completedSubtasks: group.completedSubtasks,
-                                    subtasks: group.subtasks,
-                                    // Calculate status
-                                    status: calculateStatus(group.subtasks[0])
-                                  };
-                                  handleGoalClick(representativeGoal, e);
-                                }}
-                              >
-                                <div className="text-sm font-medium text-[#18181b] truncate">
-                                  {group.taskTitle || "(untitled)"}
-                                </div>
-                                {group.taskDescr && (
-                                  <div className="text-xs text-[#71717a] truncate mt-1">
-                                    {group.taskDescr}
-                                  </div>
-                                )}
-                              </div>
-                              {/* Task Toggle Button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const representativeGoal = {
-                                    ...group.subtasks[0],
-                                    task_title: group.taskTitle,
-                                    task_descr: group.taskDescr,
-                                    start_time: group.startTime,
-                                    end_time: group.endTime,
-                                    course_id: group.courseId,
-                                    google_calendar_color: group.googleCalendarColor,
-                                    progress: group.progress,
-                                    totalSubtasks: group.totalSubtasks,
-                                    completedSubtasks: group.completedSubtasks,
-                                    subtasks: group.subtasks,
-                                    status: calculateStatus(group.subtasks[0])
-                                  };
-                                  handleTaskToggle(representativeGoal);
-                                }}
-                                className={`w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors ${
-                                  group.subtasks[0].task_completed 
-                                    ? 'bg-green-500 border-green-500' 
-                                    : 'bg-white border-gray-300 hover:border-green-400'
-                                }`}
-                                title={group.subtasks[0].task_completed ? "Mark as incomplete" : "Mark as complete"}
-                              >
-                                {group.subtasks[0].task_completed && (
-                                  <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                )}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              }
+              {(() => {
+                const { overdue, upcoming, future, completed } = categorizeTasks();
+                return (
+                  <>
+                    {renderTaskSection("Overdue", overdue, "overdue", "#ef4444")}
+                    {renderTaskSection("This Week", upcoming, "upcoming", "#10b981")}
+                    {renderTaskSection("Future", future, "future", "#3b82f6")}
+                    {renderTaskSection("Completed", completed, "completed", "#0a80ed")}
+                  </>
+                );
+              })()}
             </div>
           </>
         ) : (
