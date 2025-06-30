@@ -56,6 +56,14 @@ export function CalendarScheduler() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [courseVisibility, setCourseVisibility] = useState<Record<string, boolean>>({});
   const [filteredGoals, setFilteredGoals] = useState<Goal[]>([]);
+  
+  // Add task modal state
+  const [userCourses, setUserCourses] = useState<any[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [courseGoals, setCourseGoals] = useState<any[]>([]);
+  const [selectedGoalId, setSelectedGoalId] = useState<string>('');
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false);
+  const [isLoadingGoals, setIsLoadingGoals] = useState(false);
 
 
   /** Hours array for timeline */
@@ -526,6 +534,77 @@ export function CalendarScheduler() {
 
     const apiBase = process.env.BACKEND_URL;
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
+  };
+
+  // Fetch user courses for add task modal
+  const fetchUserCourses = async () => {
+    try {
+      setIsLoadingCourses(true);
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/courses/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch courses');
+      
+      const coursesData = await response.json();
+      setUserCourses(coursesData);
+    } catch (error) {
+      console.error('Error fetching user courses:', error);
+    } finally {
+      setIsLoadingCourses(false);
+    }
+  };
+
+  // Fetch goals for selected course
+  const fetchCourseGoals = async (courseId: string) => {
+    try {
+      setIsLoadingGoals(true);
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch goals');
+      
+      const goalsData = await response.json();
+      setCourseGoals(goalsData);
+    } catch (error) {
+      console.error('Error fetching course goals:', error);
+    } finally {
+      setIsLoadingGoals(false);
+    }
+  };
+
+  // Handle course selection
+  const handleCourseChange = (courseId: string) => {
+    setSelectedCourseId(courseId);
+    setSelectedGoalId(''); // Reset goal selection when course changes
+    setCourseGoals([]); // Clear previous goals
+    
+    if (courseId) {
+      fetchCourseGoals(courseId);
+    }
+  };
+
+  // Reset add task form
+  const resetAddTaskForm = () => {
+    setSelectedCourseId('');
+    setSelectedGoalId('');
+    setCourseGoals([]);
+    setUserCourses([]);
+  };
+
+  // Handle modal close
+  const handleCloseAddTaskModal = () => {
+    setShowAddTask(false);
+    resetAddTaskForm();
   };
 
 
@@ -1216,17 +1295,17 @@ export function CalendarScheduler() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedGoal(null)
-                      setGoalDisplayPosition(null)
-                      setExpandedTaskId(null)
-                    }}
+                <button
+                  onClick={() => {
+                    setSelectedGoal(null)
+                    setGoalDisplayPosition(null)
+                    setExpandedTaskId(null)
+                  }}
                     className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 hover:bg-gray-100 rounded"
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  style={{ cursor: 'pointer' }}
+                >
+                  <X className="w-5 h-5" />
+                </button>
                 </div>
               </div>
             </CardHeader>
@@ -1577,7 +1656,7 @@ export function CalendarScheduler() {
         <Button size="icon" variant="outline" className="rounded-full w-12 h-12" onClick={() => setShowSettings(true)}>
           <Settings className="w-5 h-5" />
         </Button>
-      </div>
+              </div>
 
 
 
@@ -1595,17 +1674,17 @@ export function CalendarScheduler() {
                   <h2 className="text-xl font-semibold text-gray-900">Add New Task</h2>
                 </div>
                 <button
-                  onClick={() => setShowAddTask(false)}
+                  onClick={handleCloseAddTaskModal}
                   className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-6">
+            <div className="space-y-6">
                 {/* Task Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
+              <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Task Name *
                     </label>
@@ -1613,37 +1692,74 @@ export function CalendarScheduler() {
                       type="text"
                       placeholder="Enter task name"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                />
+              </div>
 
-                  <div>
+              <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Due Date *
                     </label>
                     <input
-                      type="date"
+                    type="date"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                  />
                 </div>
+              </div>
 
                 {/* Course Selection */}
-                <div>
+              <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Course
                   </label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <select 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={selectedCourseId}
+                    onChange={(e) => handleCourseChange(e.target.value)}
+                    onFocus={() => {
+                      if (userCourses.length === 0) {
+                        fetchUserCourses();
+                      }
+                    }}
+                  >
                     <option value="">Select a course</option>
-                    {courses.map((course) => (
-                      <option key={course.course_id} value={course.course_id}>
-                        {course.course_title === course.course_id ? "Loading..." : course.course_title}
-                      </option>
-                    ))}
+                    {isLoadingCourses ? (
+                      <option value="" disabled>Loading courses...</option>
+                    ) : (
+                      userCourses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.title || course.id}
+                        </option>
+                      ))
+                    )}
                   </select>
-                </div>
+                      </div>
+
+                {/* Goal Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Goal
+                  </label>
+                  <select 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={selectedGoalId}
+                    onChange={(e) => setSelectedGoalId(e.target.value)}
+                    disabled={!selectedCourseId}
+                  >
+                    <option value="">Select a goal</option>
+                    {isLoadingGoals ? (
+                      <option value="" disabled>Loading goals...</option>
+                    ) : (
+                      courseGoals.map((goal) => (
+                        <option key={goal.goal_id} value={goal.goal_id}>
+                          {goal.goal_descr || goal.goal_id}
+                        </option>
+                      ))
+                    )}
+                  </select>
+              </div>
 
                 {/* Task Description */}
-                <div>
+              <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Task Description
                   </label>
@@ -1652,10 +1768,10 @@ export function CalendarScheduler() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Add a description for this task (optional)"
                   />
-                </div>
+              </div>
 
                 {/* Subtasks */}
-                <div>
+              <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-medium text-gray-900">Subtasks</h3>
                     <button
@@ -1668,17 +1784,17 @@ export function CalendarScheduler() {
 
                   <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
                     <p>No subtasks yet. Add your first subtask to get started.</p>
-                  </div>
-                </div>
               </div>
+            </div>
+          </div>
 
               {/* Footer */}
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button
-                  onClick={() => setShowAddTask(false)}
+                  onClick={handleCloseAddTaskModal}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
+            >
+              Cancel
                 </button>
                 <button
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
@@ -1686,8 +1802,8 @@ export function CalendarScheduler() {
                   <Save className="w-4 h-4" />
                   Create Task
                 </button>
-              </div>
-            </div>
+          </div>
+      </div>
           </div>
         </div>
       )}
