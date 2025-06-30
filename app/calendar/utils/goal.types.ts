@@ -29,3 +29,11 @@ export interface Goal {
 }
 
 export type GoalsByDate = Record<string, Goal[]>
+
+export interface Course {
+    goals: Goal[];
+    course_id: string;
+    course_title: string;
+    course_description: string;
+    color: string;
+}

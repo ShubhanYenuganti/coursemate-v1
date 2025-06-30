@@ -1,18 +1,20 @@
-import { colorForCourse } from "../utils/color.utils";
-import { Goal } from "../utils/goal.types";
-import { isAllDay, groupTasksByTaskId } from "../utils/goal.progress";
+import { groupTasksByTaskId, isAllDay } from "../utils/goal.progress";
 import { calculateStatus } from "../utils/goal.status";
+
+import { Goal } from "../utils/goal.types";
 
 export const AllDayRow = ({
     days,
     getGoalsForDate,
     handleGoalClick,
     onOverflowClick,
+    getCourseColor
   }: {
     days: Date | Date[];
     getGoalsForDate: (d: Date) => Goal[];
     handleGoalClick: (g: Goal, e?: React.MouseEvent) => void;
     onOverflowClick: (events: Goal[], position: { x: number; y: number }, day: Date) => void;
+    getCourseColor: (courseId: string) => string;
   }) => {
     const dayList = Array.isArray(days) ? days : [days];
   
@@ -64,7 +66,7 @@ export const AllDayRow = ({
                     // Single event - full width
                     <div
                       className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center"
-                      style={{ backgroundColor: colorForCourse(groupedGoals[0].course_id, groupedGoals[0].google_calendar_color) }}
+                      style={{ backgroundColor: getCourseColor(groupedGoals[0].course_id) }}
                       title={groupedGoals[0].goal_descr ?? groupedGoals[0].task_title ?? ""}
                       onClick={(e) => handleGoalClick(groupedGoals[0], e)}
                     >
@@ -81,7 +83,7 @@ export const AllDayRow = ({
                         <div
                           key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
                           className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center"
-                          style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                          style={{ backgroundColor: getCourseColor(g.course_id) }}
                           title={g.goal_descr ?? g.task_title ?? ""}
                           onClick={(e) => handleGoalClick(g, e)}
                         >
@@ -100,7 +102,7 @@ export const AllDayRow = ({
                         <div
                           key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
                           className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center"
-                          style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                          style={{ backgroundColor: getCourseColor(g.course_id) }}
                           title={g.goal_descr ?? g.task_title ?? ""}
                           onClick={(e) => handleGoalClick(g, e)}
                         >

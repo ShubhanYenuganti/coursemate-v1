@@ -1,12 +1,11 @@
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { colorForCourse } from "../utils/color.utils"
 import { getMonthDays } from "../utils/calendar.utils"
 import { startOfToday } from "../utils/date.utils"
 import { groupTasksByTaskId } from "../utils/goal.progress"
 import { calculateStatus } from "../utils/goal.status"
 
-export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleGoalClick, handleOverflowClick }: any) => (
+export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleGoalClick, handleOverflowClick, getCourseColor }: any) => (
     <>
       <div className="flex flex-col border-b border-gray-200">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -104,7 +103,7 @@ export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handle
                       <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
                         className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
-                        style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                        style={{ backgroundColor: getCourseColor(g.course_id) }}
                         onClick={(e) => handleGoalClick(g, e)}
                       >
                         {g.task_title ?? "(untitled)"}
@@ -118,7 +117,7 @@ export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handle
                       <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
                         className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
-                        style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                        style={{ backgroundColor: getCourseColor(g.course_id) }}
                         onClick={(e) => handleGoalClick(g, e)}
                       >
                         {g.task_title ?? "(untitled)"}

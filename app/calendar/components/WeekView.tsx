@@ -1,14 +1,13 @@
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { AllDayRow } from "./AllDayRow"
-import { colorForCourse } from "../utils/color.utils"
 import { goalsStartingAtHour } from "../utils/calendar.utils"
 import { calculateEventPositions } from "../utils/calendar.layout"
 import { groupTasksByTaskId } from "../utils/goal.progress"
 import { calculateStatus } from "../utils/goal.status"
 import { startOfToday } from "../utils/date.utils"
 
-export const WeekView = ({ setCurrentDate, weekDates, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel, handleOverflowClick }: any) => (
+export const WeekView = ({ setCurrentDate, weekDates, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel, handleOverflowClick, getCourseColor }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -68,6 +67,7 @@ export const WeekView = ({ setCurrentDate, weekDates, hours, getGoalsForDate, ha
       getGoalsForDate={getGoalsForDate}
       handleGoalClick={handleGoalClick}
       onOverflowClick={handleOverflowClick}
+      getCourseColor={getCourseColor}
     />
 
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
@@ -110,7 +110,7 @@ export const WeekView = ({ setCurrentDate, weekDates, hours, getGoalsForDate, ha
                       key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
                       className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90 shadow-sm"
                       style={{
-                        backgroundColor: colorForCourse(pos.goal.course_id, pos.goal.google_calendar_color),
+                        backgroundColor: getCourseColor(pos.goal.course_id),
                         width: `${pos.width}%`,
                         left: `${pos.left}%`,
                         top: `${pos.top}%`,

@@ -8,6 +8,11 @@ import {
   X,
   ChevronDown,
   GripVertical,
+  Eye,
+  Plus,
+  Clock,
+  CheckCircle,
+  Circle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,6 +22,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import useAuthRedirect from "@/hooks/useAuthRedirect"
+import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
 
 import { DayView } from "./components/DayView"
 import { WeekView } from "./components/WeekView"
@@ -25,7 +32,7 @@ import { YearView } from "./components/YearView"
 import { colorForCourse } from "./utils/color.utils" 
 import { calculateStatus, getStatusColor } from "./utils/goal.status"
 import { groupTasksByTaskId } from "./utils/goal.progress"
-import { Goal, GoalsByDate } from "./utils/goal.types"
+import { Goal, GoalsByDate, Course } from "./utils/goal.types"
 import { startOfToday, getWeekDates, formatHourLabel, getLocalDateKey } from "./utils/date.utils"
 
 export function CalendarScheduler() {
@@ -43,7 +50,9 @@ export function CalendarScheduler() {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-
+  const [courseVisibility, setCourseVisibility] = useState<Record<string, boolean>>({});
+  const [filteredGoals, setFilteredGoals] = useState<Goal[]>([]);
+  
   /** Hours array for timeline */
   const hours = Array.from({ length: 24 }, (_, i) => i) // 12 AM (0) to 11 PM (23)
 
@@ -82,6 +91,13 @@ export function CalendarScheduler() {
 
   const handleOverflowClick = (events: Goal[], position: { x: number; y: number }, day: Date) => {
     setOverflowEvents({ events, position, day })
+  }
+  
+  const toggleCourseVisibility = (courseId: string) => {
+    setCourseVisibility(prev => ({
+      ...prev,
+      [courseId]: !prev[courseId]
+    }));
   }
 
   const handleSubtaskToggle = async (sub: Goal) => {
@@ -437,6 +453,14 @@ export function CalendarScheduler() {
   const [goalsByDate, setGoalsByDate] = useState<GoalsByDate>({});
   const [sortedGoalsByDate, setSortedGoalsByDate] = useState<GoalsByDate>({});
 
+  const [courses, setCourses] = useState<Course[]>([]);
+
+  // Helper function to get course color from courses array
+  const getCourseColor = (courseId: string): string => {
+    const course = courses.find(c => c.course_id === courseId);
+    return course?.color || "#6b7280"; // fallback to gray
+  };
+
   useEffect(() => {
     const fetchGoals = async () => {
       try {
@@ -482,6 +506,83 @@ export function CalendarScheduler() {
           .sort(([a], [b]) => +new Date(a) - +new Date(b))
           .reduce((acc, [k, v]) => ((acc[k] = v), acc), {} as GoalsByDate);
         setSortedGoalsByDate(ordered);
+
+        // set courses by grouping goals by course_id - set colors immediately
+        const courses: Course[] = [];
+        const courseIds = [...new Set(all.map(g => g.course_id))]; // Get unique course IDs
+        
+        // First, create courses with immediate color assignment
+        courseIds.forEach(courseId => {
+          const courseGoals = all.filter(goal => goal.course_id === courseId);
+          // Use the first goal's google_calendar_color if available, otherwise generate a consistent color
+          const firstGoal = courseGoals[0];
+          const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
+          
+          courses.push({
+            goals: courseGoals,
+            course_title: courseId, // Temporary title until async fetch completes
+            course_description: '', // Empty until async fetch completes
+            course_id: courseId,
+            color: color
+          });
+        });
+        
+        // Set courses immediately with colors
+        setCourses(courses);
+        console.log('Courses set with colors:', courses);
+        
+        // Then fetch course details asynchronously and update titles/descriptions
+        const coursePromises = courseIds.map(async courseId => {
+          try {
+            // get course details from the database
+            const course = await fetch(`${api}/api/courses/${courseId}`, {
+              headers: { 
+                Authorization: `Bearer ${token}`
+              },
+              method: "GET"
+            });
+
+            if (!course.ok) throw new Error(`Request failed ${course.status}`);
+            const courseDetails = await course.json();
+            console.log('Course details:', courseDetails);
+            
+            return {
+              course_id: courseId,
+              course_title: courseDetails.title,
+              course_description: courseDetails.description
+            };
+          } catch (error) {
+            console.error(`Failed to fetch course ${courseId}:`, error);
+            // Return fallback data if fetch fails
+            return {
+              course_id: courseId,
+              course_title: courseId, // Use course_id as fallback title
+              course_description: ''
+            };
+          }
+        });
+        
+        // Update courses with fetched details
+        Promise.all(coursePromises).then(courseDetails => {
+          setCourses(prevCourses => 
+            prevCourses.map(course => {
+              const details = courseDetails.find(d => d.course_id === course.course_id);
+              return details ? {
+                ...course,
+                course_title: details.course_title,
+                course_description: details.course_description
+              } : course;
+            })
+          );
+          console.log('Courses updated with details:', courseDetails);
+        });
+
+        // Initialize all courses as visible by default
+        const initialVisibility: Record<string, boolean> = {};
+        courseIds.forEach(courseId => {
+          initialVisibility[courseId] = true;
+        });
+        setCourseVisibility(initialVisibility);
       } catch (err) {
         console.error("fetchGoals error", err);
       }
@@ -601,10 +702,19 @@ export function CalendarScheduler() {
   }, [overflowEvents, selectedGoal, goalDisplayPosition]);
 
   console.log(sortedGoalsByDate)
+  // Filter goals based on course visibility
+  useEffect(() => {
+    const allGoals = Object.values(goalsByDate).flat();
+    const filtered = allGoals.filter(goal => courseVisibility[goal.course_id] !== false);
+    setFilteredGoals(filtered);
+  }, [goalsByDate, courseVisibility]);
+
   /** Return the list of goals whose due-date === that calendar day */
   const getGoalsForDate = (date: Date): Goal[] => {
     const key = getLocalDateKey(date);
-    return goalsByDate[key] ?? [];
+    const dateGoals = goalsByDate[key] ?? [];
+    // Filter goals based on course visibility
+    return dateGoals.filter(goal => courseVisibility[goal.course_id] !== false);
   };
 
   // Helper functions to categorize tasks
@@ -620,7 +730,15 @@ export function CalendarScheduler() {
     const future: { [date: string]: Goal[] } = {};
     const completed: { [date: string]: Goal[] } = {};
 
-    Object.entries(sortedGoalsByDate).forEach(([date, goals]) => {
+    // Group filtered goals by date
+    const filteredGoalsByDate: GoalsByDate = {};
+    filteredGoals.forEach(goal => {
+      const when = new Date(goal.start_time ?? goal.due_date!);
+      const key = getLocalDateKey(when);
+      (filteredGoalsByDate[key] ??= []).push(goal);
+    });
+
+    Object.entries(filteredGoalsByDate).forEach(([date, goals]) => {
       const taskDate = new Date(date + 'T00:00:00');
       
       // Separate completed tasks
@@ -704,7 +822,7 @@ export function CalendarScheduler() {
                       >
                         <div 
                           className="w-3 h-3 rounded-full mt-1 flex-shrink-0" 
-                          style={{ backgroundColor: colorForCourse(group.courseId, group.googleCalendarColor) }}
+                          style={{ backgroundColor: getCourseColor(group.courseId) }}
                         />
                         <div 
                           className="flex-1 min-w-0 cursor-pointer"
@@ -830,15 +948,16 @@ export function CalendarScheduler() {
         </div>
         {/* ───────── DAY VIEW ───────── */}
         {currentView === "day" ? (
-          <DayView 
-            currentDate={currentDate} 
-            setCurrentDate={setCurrentDate} 
-            hours={hours} 
-            getGoalsForDate={getGoalsForDate} 
-            handleGoalClick={handleGoalClick} 
-            setTimelineRef={setTimelineRef} 
+          <DayView
+            currentDate={currentDate}
+            setCurrentDate={setCurrentDate}
+            hours={hours}
+            getGoalsForDate={getGoalsForDate}
+            handleGoalClick={handleGoalClick}
+            setTimelineRef={setTimelineRef}
             formatHourLabel={formatHourLabel}
             handleOverflowClick={handleOverflowClick}
+            getCourseColor={getCourseColor}
           />
         ) : currentView === "week" ? (
           <WeekView 
@@ -851,14 +970,16 @@ export function CalendarScheduler() {
             setTimelineRef={setTimelineRef} 
             formatHourLabel={formatHourLabel}
             handleOverflowClick={handleOverflowClick}
+            getCourseColor={getCourseColor}
           />
         ) : currentView === "month" ? (
           <MonthView 
             currentDate={currentDate} 
             setCurrentDate={setCurrentDate} 
-            getGoalsForDate={getGoalsForDate} 
-            handleGoalClick={handleGoalClick} 
+            getGoalsForDate={getGoalsForDate}
+            handleGoalClick={handleGoalClick}
             handleOverflowClick={handleOverflowClick}
+            getCourseColor={getCourseColor}
           />
         ) : (
           <YearView 
@@ -910,24 +1031,45 @@ export function CalendarScheduler() {
           </>
         ) : (
           <>
-            {/* My Courses list */}
-            {/* <h2 className="text-xl font-semibold mb-4 text-[#18181b]">My Courses</h2>
-            <div className="space-y-4">
-              {courses.map((course) => (
-                <div key={course.id} className="flex items-center justify-between p-3 rounded-lg bg-[#f8f9fa]">
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: course.color }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-[#18181b] truncate">{course.name}</div>
-                    </div>
-                    <Switch checked={courseVisibility[course.id]} onCheckedChange={() => toggleCourseVisibility(course.id)} className="ml-2" />
-                  </div>
-                  <Button variant="ghost" size="sm" className="ml-2 text-[#71717a] hover:text-[#18181b] p-1" onClick={() => { setSelectedCourse(course); setShowCourseTasksDialog(true); }}>
-                    <Eye className="w-4 h-4" />
-                  </Button>
+            {sidebarTab === "courses" && (
+              <>
+                {/* List All Courses in the sidebar */}
+                <div className="space-y-4">
+                  {courses.map((course) => {
+                    const courseEventCount = filteredGoals.filter(goal => goal.course_id === course.course_id).length;
+                    const isVisible = courseVisibility[course.course_id] !== false;
+                    
+                    return (
+                      <div key={course.course_id} className="flex items-center justify-between p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] transition-colors">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: course.color }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-[#18181b] truncate">
+                              {course.course_title === course.course_id ? (
+                                <span className="text-gray-400">Loading...</span>
+                              ) : (
+                                course.course_title
+                              )}
+                            </div>
+                            <div className="text-xs text-[#71717a] mt-1">
+                              {courseEventCount} event{courseEventCount !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={isVisible}
+                            onCheckedChange={() => toggleCourseVisibility(course.course_id)}
+                            className="ml-2"
+                          />
+                          <Eye className={`w-4 h-4 ${isVisible ? 'text-blue-600' : 'text-gray-400'}`} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div> */}
+              </>
+            )}
           </>
         )}
       </div>
@@ -975,7 +1117,7 @@ export function CalendarScheduler() {
             }}>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: colorForCourse(selectedGoal.course_id, selectedGoal.google_calendar_color) }}></div>
+                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(selectedGoal.course_id) }}></div>
                   <h3 className="font-semibold text-[#18181b] truncate">{selectedGoal.task_title}</h3>
                 </div>
                 
@@ -1194,7 +1336,7 @@ export function CalendarScheduler() {
                   >
                     <div 
                       className="w-3 h-3 rounded-full flex-shrink-0" 
-                      style={{ backgroundColor: colorForCourse(event.course_id, event.google_calendar_color) }}
+                      style={{ backgroundColor: getCourseColor(event.course_id) }}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-gray-900 truncate">
