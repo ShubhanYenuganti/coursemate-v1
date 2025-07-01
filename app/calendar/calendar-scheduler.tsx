@@ -38,6 +38,58 @@ import { groupTasksByTaskId } from "./utils/goal.progress"
 import { Goal, GoalsByDate, Course } from "./utils/goal.types"
 import { startOfToday, getWeekDates, formatHourLabel, getLocalDateKey, getDateKeyFromDateString } from "./utils/date.utils"
 
+// Add this helper near the top (after imports)
+function formatDate(dateString: string) {
+  if (!dateString) return '';
+  const [year, month, day] = dateString.split('T')[0].split('-');
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+// Helper to get a Date object from a date string, always as UTC for date-only values
+function getUtcDate(dateString: string) {
+  if (!dateString) return null;
+  // Handles both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' formats
+  const datePart = dateString.split('T')[0];
+  return new Date(datePart + 'T00:00:00Z');
+}
+
+// Helper to regroup and sort goals by date, matching the useEffect logic
+function regroupAndSortGoals(goals: Goal[]): GoalsByDate {
+  // Filter out placeholder tasks
+  const filteredAll = goals.filter(goal => goal.task_id !== 'placeholder');
+  // Regroup by *local* YYYY-MM-DD
+  const grouped: GoalsByDate = {};
+  for (const g of filteredAll) {
+    let key: string;
+    if (!g.start_time && g.due_date) {
+      key = getDateKeyFromDateString(g.due_date);
+    } else if (g.start_time && g.end_time) {
+      key = getLocalDateKey(new Date(g.start_time));
+    } else if (g.due_date) {
+      const utcDate = getUtcDate(g.due_date);
+      key = getLocalDateKey(utcDate ?? new Date());
+    } else {
+      const utcDate = getUtcDate(g.due_date!);
+      key = getLocalDateKey(utcDate ?? new Date());
+    }
+    (grouped[key] ??= []).push(g);
+  }
+  // Sort tasks within each date group
+  Object.keys(grouped).forEach(dateKey => {
+    grouped[dateKey].sort((a, b) => {
+      if (a.task_id !== b.task_id) {
+        return (a.task_id || '').localeCompare(b.task_id || '');
+      }
+      return (a.subtask_id || '').localeCompare(b.subtask_id || '');
+    });
+  });
+  return grouped;
+}
 
 export function CalendarScheduler() {
   /** Current selected date -- initialised to today */
@@ -155,28 +207,26 @@ export function CalendarScheduler() {
         const updated = { ...prev };
         Object.keys(updated).forEach(dateKey => {
           updated[dateKey] = updated[dateKey].map(goal => {
+            let updatedGoal = { ...goal };
             if (goal.subtask_id === sub.subtask_id) {
-              return { ...goal, subtask_completed: !goal.subtask_completed };
+              updatedGoal = { ...updatedGoal, subtask_completed: !goal.subtask_completed };
             }
-            // Also update task_completed for all rows with the same task_id
             if (goal.task_id === sub.task_id) {
               // Get all subtasks for this task to calculate completion
               const taskSubtasks = updated[dateKey].filter(g => g.task_id === sub.task_id);
               // Calculate completed subtasks, accounting for the current subtask being toggled
               const taskCompletedSubtasks = taskSubtasks.reduce((count, g) => {
                 if (g.subtask_id === sub.subtask_id) {
-                  // This is the subtask being toggled, use the new completion status
                   return count + (!sub.subtask_completed ? 1 : 0);
                 } else {
-                  // Use the current completion status
                   return count + (g.subtask_completed ? 1 : 0);
                 }
               }, 0);
               const taskTotalSubtasks = taskSubtasks.length;
               const taskCompleted = taskTotalSubtasks > 0 && taskCompletedSubtasks === taskTotalSubtasks;
-              return { ...goal, task_completed: taskCompleted };
+              updatedGoal = { ...updatedGoal, task_completed: taskCompleted };
             }
-            return goal;
+            return updatedGoal;
           });
         });
         return updated;
@@ -246,74 +296,36 @@ export function CalendarScheduler() {
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
 
-          // 1️⃣ flatten everything we got from the server
-          const raw: GoalsByDate = await res.json();
-          const all: Goal[] = Object.values(raw).flat();
-
-          // Filter out placeholder tasks
-          const filteredAll = all.filter(goal => goal.task_id !== 'placeholder');
-
-          // 2️⃣ regroup by *local* YYYY-MM-DD
-          const grouped: GoalsByDate = {};
-          for (const g of filteredAll) {
-            // If this is an all-day or due-date event, use the date string directly to avoid timezone shift
-            let key: string;
-            if (!g.start_time && g.due_date) {
-              key = getDateKeyFromDateString(g.due_date);
-            } else if (g.start_time && g.end_time) {
-              // Timed event: use local time
-              key = getLocalDateKey(new Date(g.start_time));
-            } else if (g.due_date) {
-              // Fallback for due_date
-              key = getDateKeyFromDateString(g.due_date);
-            } else {
-              // Fallback: use local time
-              key = getLocalDateKey(new Date(g.start_time ?? g.due_date!));
-            }
-            (grouped[key] ??= []).push(g);
-          }
-
-          // 3️⃣ Sort tasks within each date group for consistent positioning
-          Object.keys(grouped).forEach(dateKey => {
-            grouped[dateKey].sort((a, b) => {
-              // First sort by task_id to keep tasks together
-              if (a.task_id !== b.task_id) {
-                return (a.task_id || '').localeCompare(b.task_id || '');
-              }
-              // Then sort by subtask_id for consistent subtask order
-              return (a.subtask_id || '').localeCompare(b.subtask_id || '');
-            });
+          // Use backend grouping directly
+          const grouped = await res.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
           });
-
-          setGoalsByDate(grouped);
-
-          // 4️⃣ optional chronological copy you already had
-          const ordered: GoalsByDate = Object.entries(grouped)
-            .sort(([a], [b]) => +new Date(a) - +new Date(b))
-            .reduce((acc, [k, v]) => ((acc[k] = v), acc), {} as GoalsByDate);
+          setGoalsByDate(filteredGrouped);
+          // Optionally, sort the keys for display order
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
           setSortedGoalsByDate(ordered);
 
           // set courses by grouping goals by course_id - set colors immediately
+          const all: Goal[] = ([] as Goal[]).concat(...Object.values(grouped));
           const courses: Course[] = [];
           const courseIds = [...new Set(all.map(g => g.course_id))]; // Get unique course IDs
-          
-          // First, create courses with immediate color assignment
           courseIds.forEach(courseId => {
             const courseGoals = all.filter(goal => goal.course_id === courseId);
-            // Use the first goal's google_calendar_color if available, otherwise generate a consistent color
             const firstGoal = courseGoals[0];
             const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
-            
             courses.push({
               goals: courseGoals,
-              course_title: courseId, // Temporary title until async fetch completes
-              course_description: '', // Empty until async fetch completes
+              course_title: courseId,
+              course_description: '',
               course_id: courseId,
               color: color
             });
           });
-          
-          // Set courses immediately with colors
           setCourses(courses);
           console.log('Courses set with colors:', courses);
           
@@ -461,44 +473,37 @@ export function CalendarScheduler() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!goalsRes.ok) throw new Error(`Request failed ${goalsRes.status}`);
-
-          const raw: GoalsByDate = await goalsRes.json();
-          const all: Goal[] = Object.values(raw).flat();
-
-          // Filter out placeholder tasks
-          const filteredAll = all.filter(goal => goal.task_id !== 'placeholder');
-
-          const grouped: GoalsByDate = {};
-          for (const g of filteredAll) {
-            const when = new Date(g.start_time ?? g.due_date!);
-            const key = getLocalDateKey(when);
-            (grouped[key] ??= []).push(g);
-          }
-
-          // Sort tasks within each date group for consistent positioning
-          Object.keys(grouped).forEach(dateKey => {
-            grouped[dateKey].sort((a, b) => {
-              // First sort by task_id to keep tasks together
-              if (a.task_id !== b.task_id) {
-                return (a.task_id || '').localeCompare(b.task_id || '');
-              }
-              // Then sort by subtask_id for consistent subtask order
-              return (a.subtask_id || '').localeCompare(b.subtask_id || '');
+          const grouped = await goalsRes.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+          const all: Goal[] = ([] as Goal[]).concat(...Object.values(grouped));
+          const courses: Course[] = [];
+          const courseIds = [...new Set(all.map(g => g.course_id))];
+          courseIds.forEach(courseId => {
+            const courseGoals = all.filter(goal => goal.course_id === courseId);
+            const firstGoal = courseGoals[0];
+            const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
+            courses.push({
+              goals: courseGoals,
+              course_title: courseId,
+              course_description: '',
+              course_id: courseId,
+              color: color
             });
           });
-
-          setGoalsByDate(grouped);
-
-          const ordered: GoalsByDate = Object.entries(grouped)
-            .sort(([a], [b]) => +new Date(a) - +new Date(b))
-            .reduce((acc, [k, v]) => ((acc[k] = v), acc), {} as GoalsByDate);
-          setSortedGoalsByDate(ordered);
+          setCourses(courses);
         } catch (err) {
           console.error("fetchGoals error", err);
         }
       };
-      
-      // Refresh the goals data
       fetchGoals();
       
     } catch (err) {
@@ -663,74 +668,36 @@ export function CalendarScheduler() {
         });
         if (!res.ok) throw new Error(`Request failed ${res.status}`);
 
-        // 1️⃣ flatten everything we got from the server
-        const raw: GoalsByDate = await res.json();
-        const all: Goal[] = Object.values(raw).flat();
-
-        // Filter out placeholder tasks
-        const filteredAll = all.filter(goal => goal.task_id !== 'placeholder');
-
-        // 2️⃣ regroup by *local* YYYY-MM-DD
-        const grouped: GoalsByDate = {};
-        for (const g of filteredAll) {
-          // If this is an all-day or due-date event, use the date string directly to avoid timezone shift
-          let key: string;
-          if (!g.start_time && g.due_date) {
-            key = getDateKeyFromDateString(g.due_date);
-          } else if (g.start_time && g.end_time) {
-            // Timed event: use local time
-            key = getLocalDateKey(new Date(g.start_time));
-          } else if (g.due_date) {
-            // Fallback for due_date
-            key = getDateKeyFromDateString(g.due_date);
-          } else {
-            // Fallback: use local time
-            key = getLocalDateKey(new Date(g.start_time ?? g.due_date!));
-          }
-          (grouped[key] ??= []).push(g);
-        }
-
-        // 3️⃣ Sort tasks within each date group for consistent positioning
-        Object.keys(grouped).forEach(dateKey => {
-          grouped[dateKey].sort((a, b) => {
-            // First sort by task_id to keep tasks together
-            if (a.task_id !== b.task_id) {
-              return (a.task_id || '').localeCompare(b.task_id || '');
-            }
-            // Then sort by subtask_id for consistent subtask order
-            return (a.subtask_id || '').localeCompare(b.subtask_id || '');
-          });
+        // Use backend grouping directly
+        const grouped = await res.json() as Record<string, Goal[]>;
+        // Filter out placeholder tasks from each date group
+        const filteredGrouped: Record<string, Goal[]> = {};
+        Object.keys(grouped).forEach(key => {
+          filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
         });
-
-        setGoalsByDate(grouped);
-
-        // 4️⃣ optional chronological copy you already had
-        const ordered: GoalsByDate = Object.entries(grouped)
-          .sort(([a], [b]) => +new Date(a) - +new Date(b))
-          .reduce((acc, [k, v]) => ((acc[k] = v), acc), {} as GoalsByDate);
+        setGoalsByDate(filteredGrouped);
+        // Optionally, sort the keys for display order
+        const ordered = Object.keys(filteredGrouped)
+          .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+          .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
         setSortedGoalsByDate(ordered);
 
         // set courses by grouping goals by course_id - set colors immediately
+        const all: Goal[] = ([] as Goal[]).concat(...Object.values(grouped));
         const courses: Course[] = [];
         const courseIds = [...new Set(all.map(g => g.course_id))]; // Get unique course IDs
-        
-        // First, create courses with immediate color assignment
         courseIds.forEach(courseId => {
           const courseGoals = all.filter(goal => goal.course_id === courseId);
-          // Use the first goal's google_calendar_color if available, otherwise generate a consistent color
           const firstGoal = courseGoals[0];
           const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
-          
           courses.push({
             goals: courseGoals,
-            course_title: courseId, // Temporary title until async fetch completes
-            course_description: '', // Empty until async fetch completes
+            course_title: courseId,
+            course_description: '',
             course_id: courseId,
             color: color
           });
         });
-        
-        // Set courses immediately with colors
         setCourses(courses);
         console.log('Courses set with colors:', courses);
         
@@ -790,7 +757,6 @@ export function CalendarScheduler() {
         console.error("fetchGoals error", err);
       }
     };
-
     fetchGoals();
   }, []);
 
@@ -944,9 +910,11 @@ export function CalendarScheduler() {
         } else if (goal.start_time && goal.end_time) {
           key = getLocalDateKey(new Date(goal.start_time));
         } else if (goal.due_date) {
-          key = getDateKeyFromDateString(goal.due_date);
+          const utcDate = getUtcDate(goal.due_date);
+          key = getLocalDateKey(utcDate ?? new Date());
         } else {
-          key = getLocalDateKey(new Date(goal.start_time ?? goal.due_date!));
+          const utcDate = getUtcDate(goal.due_date!);
+          key = getLocalDateKey(utcDate ?? new Date());
         }
         (filteredGoalsByDate[key] ??= []).push(goal);
       });
@@ -1381,102 +1349,51 @@ export function CalendarScheduler() {
                     )}
                   </div>
                 ) : (
-                  // Regular Task Display
+                  // Simplified Regular Task Display
                   <div className="space-y-3">
-                    {selectedGoal.goal_descr && (
-                      <div>
-                        <span className="text-[#71717a] text-sm">Goal Description:</span>
-                        <p className="mt-1 text-sm text-[#18181b] break-words">{selectedGoal.goal_descr}</p>
-                      </div>
-                    )}
-                    {selectedGoal.task_descr && (
-                      <div>
-                        <span className="text-[#71717a] text-sm">Task Description:</span>
-                        <p className="mt-1 text-sm text-[#18181b] break-words">{selectedGoal.task_descr}</p>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-sm">
-                      <span>Task Status:</span>
-                      <span className={`font-medium ${getStatusColor(calculateStatus(selectedGoal))}`}>
-                        {calculateStatus(selectedGoal)}
-                      </span>
+                    <div className="mb-2">
+                      {selectedGoal.task_descr && (
+                        <div className="text-sm text-gray-700 mb-1">{selectedGoal.task_descr}</div>
+                      )}
                     </div>
-                    {/* Show subtask progress for grouped tasks */}
+                    <ul className="text-sm text-gray-800 space-y-1">
+                      <li><strong>Status:</strong> <span className={`font-medium ${getStatusColor(calculateStatus(selectedGoal))}`}>{calculateStatus(selectedGoal)}</span></li>
+                      <li><strong>Assigned:</strong> {formatDate(selectedGoal.updated_at || '')}</li>
+                      <li><strong>Due:</strong> {formatDate(selectedGoal.due_date || '')}</li>
+                      {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks > 1 && (
+                        <li><strong>Progress:</strong> {selectedGoal.completedSubtasks}/{selectedGoal.totalSubtasks} subtasks ({selectedGoal.progress || 0}%)</li>
+                      )}
+                    </ul>
                     {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks > 1 && (
-                      <div>
-                        <span className="text-[#71717a] text-sm">Progress:</span>
-                        <div className="mt-1 space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span>Subtasks completed:</span>
-                            <span className="font-medium">{selectedGoal.completedSubtasks || 0}/{selectedGoal.totalSubtasks}</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${selectedGoal.progress || 0}%` }}
-                            ></div>
-                          </div>
-                          <div className="text-xs text-[#71717a] text-center">
-                            {selectedGoal.progress || 0}% complete
-                          </div>
-                        </div>
-                        
-                        {/* Subtasks List */}
-                        <div className="mt-3">
-                          <button
-                            onClick={() => setExpandedTaskId(expandedTaskId === selectedGoal.task_id ? null : selectedGoal.task_id)}
-                            className="flex items-center gap-2 text-sm text-[#0a80ed] hover:text-[#0369a1] transition-colors"
-                          >
-                            {expandedTaskId === selectedGoal.task_id ? (
-                              <ChevronDown className="w-4 h-4" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4" />
-                            )}
-                            View Subtasks ({selectedGoal.totalSubtasks})
-                          </button>
-                          
-                          {expandedTaskId === selectedGoal.task_id && (
-                            <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                              {selectedGoal.subtasks?.map((subtask, index) => (
-                                <div
-                                  key={subtask.subtask_id || index}
-                                  className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs cursor-pointer hover:bg-gray-100 transition-colors"
-                                  onClick={() => handleSubtaskToggle(subtask)}
-                                >
-                                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                    subtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'
-                                  }`} />
-                                  <span className={`flex-1 ${
-                                    subtask.subtask_completed ? 'line-through text-gray-500' : 'text-gray-700'
-                                  }`}>
-                                    {subtask.subtask_descr || `Subtask ${index + 1}`}
-                                  </span>
-                                  {subtask.subtask_type && subtask.subtask_type !== 'other' && (
-                                    <span className="text-xs px-1 py-0.5 bg-gray-200 rounded text-gray-600">
-                                      {subtask.subtask_type}
-                                    </span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
+                      <div className="mt-2">
+                        <button
+                          onClick={() => setExpandedTaskId(expandedTaskId === selectedGoal.task_id ? null : selectedGoal.task_id)}
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                        >
+                          {expandedTaskId === selectedGoal.task_id ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
                           )}
-                        </div>
-                      </div>
-                    )}
-                    {selectedGoal.updated_at && selectedGoal.due_date && (
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <span className="text-[#71717a]">Assigned:</span>
-                          <span className="ml-2 font-medium break-words">
-                            {new Date(selectedGoal.updated_at).toLocaleString()}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[#71717a]">Due:</span>
-                          <span className="ml-2 font-medium break-words">
-                            {new Date(selectedGoal.due_date).toLocaleString()}
-                          </span>
-                        </div>
+                          View Subtasks ({selectedGoal.totalSubtasks})
+                        </button>
+                        {expandedTaskId === selectedGoal.task_id && (
+                          <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                            {selectedGoal.subtasks?.map((subtask, index) => (
+                              <div
+                                key={subtask.subtask_id || index}
+                                className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs cursor-pointer hover:bg-gray-100 transition-colors"
+                                onClick={() => handleSubtaskToggle(subtask)}
+                              >
+                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${subtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'}`} />
+                                <span className={`flex-1 ${subtask.subtask_completed ? 'line-through text-gray-500' : 'text-gray-700'}`}>{subtask.subtask_descr || `Subtask ${index + 1}`}</span>
+                                {subtask.subtask_type && subtask.subtask_type !== 'other' && (
+                                  <span className="text-xs px-1 py-0.5 bg-gray-200 rounded text-gray-600">{subtask.subtask_type}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
