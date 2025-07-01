@@ -60,7 +60,10 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onGoalUpdated, onGoalDeleted,
 
   return (
     <>
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+      <div 
+        className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+        onClick={handleViewDetails}
+      >
         {/* Goal Header */}
         <div className="p-6">
           <div className="flex items-start justify-between">
@@ -112,30 +115,17 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onGoalUpdated, onGoalDeleted,
 
             <div className="flex items-center gap-2 ml-4">
               <button
-                onClick={handleDeleteClick}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteClick();
+                }}
                 className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 title="Delete Goal"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
-              <button
-                onClick={handleViewDetails}
-                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                title="View Details"
-              >
-                <ArrowRight className="w-4 h-4" />
-              </button>
             </div>
           </div>
-          
-          {/* View Details Button */}
-          <button
-            onClick={handleViewDetails}
-            className="mt-4 w-full py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-          >
-            <span>View Details</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
       </div>
 

@@ -143,11 +143,27 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
         id: `task-${Date.now()}-${index}`
       }));
       
-      const finalSubtasks = validSubtasks.map((subtask, index) => ({
-        ...subtask,
-        id: `subtask-${Date.now()}-${index}`,
-        taskId: finalTasks.find(task => task.id === subtask.taskId)?.id || subtask.taskId
-      }));
+      // Create a mapping from old task IDs to new task IDs
+      const taskIdMapping = new Map();
+      validTasks.forEach((oldTask, index) => {
+        taskIdMapping.set(oldTask.id, finalTasks[index].id);
+      });
+      
+      console.log('Task ID mapping:', Object.fromEntries(taskIdMapping));
+      console.log('Valid subtasks before mapping:', validSubtasks);
+      
+      const finalSubtasks = validSubtasks.map((subtask, index) => {
+        const newTaskId = taskIdMapping.get(subtask.taskId);
+        console.log(`Subtask ${subtask.id}: old taskId=${subtask.taskId}, new taskId=${newTaskId}`);
+        
+        return {
+          ...subtask,
+          id: `subtask-${Date.now()}-${index}`,
+          taskId: newTaskId || subtask.taskId
+        };
+      });
+      
+      console.log('Final subtasks after mapping:', finalSubtasks);
       
       onSave(finalTasks, finalSubtasks);
     } catch (error) {

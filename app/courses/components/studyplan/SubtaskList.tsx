@@ -238,8 +238,8 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
       {localSubtasks.length === 0 ? (
         <p className="text-sm text-gray-500">No subtasks yet.</p>
       ) : (
-        <div className="space-y-2">
-          {localSubtasks.map(subtask => (
+    <div className="space-y-2">
+      {localSubtasks.map(subtask => (
             <div key={subtask.id} className="flex items-start gap-2 py-2 border-b border-gray-100">
               {editingSubtask === subtask.id ? (
                 <div className="flex-1">
@@ -267,16 +267,16 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
                 </div>
               ) : (
                 <>
-                  <button
-                    onClick={() => handleToggleSubtask(subtask.id)}
+          <button
+            onClick={() => handleToggleSubtask(subtask.id)}
                     className="flex-shrink-0 mt-0.5"
-                  >
-                    {subtask.completed ? (
+          >
+            {subtask.completed ? (
                       <CheckCircle className="w-4 h-4 text-green-500" />
-                    ) : (
+            ) : (
                       <Circle className="w-4 h-4 text-gray-300" />
-                    )}
-                  </button>
+            )}
+          </button>
                   <div className="flex-1">
                     <p className={`text-sm ${subtask.completed ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
                       {subtask.name}

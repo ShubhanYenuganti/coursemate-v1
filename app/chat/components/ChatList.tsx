@@ -1,22 +1,26 @@
 "use client";
 import React from 'react';
-import { Plus, UserPlus } from 'lucide-react';
+import { Plus, UserPlus, Bell } from 'lucide-react';
 import { ChatWithPreview } from '../types';
 
 interface ChatListProps {
   chats: ChatWithPreview[];
   selectedChatId?: string;
+  pendingRequestCount: number;
   onChatSelect: (chatId: string) => void;
   onAddChat: () => void;
   onAddFriend: () => void;
+  onToggleFriendRequests: () => void;
 }
 
 const ChatList: React.FC<ChatListProps> = ({
   chats,
   selectedChatId,
+  pendingRequestCount,
   onChatSelect,
   onAddChat,
   onAddFriend,
+  onToggleFriendRequests,
 }) => {
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -68,7 +72,19 @@ const ChatList: React.FC<ChatListProps> = ({
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Messages</h2>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onToggleFriendRequests}
+              className="relative p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title="Friend Requests"
+            >
+              <Bell className="w-4 h-4" />
+              {pendingRequestCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                  {pendingRequestCount}
+                </span>
+              )}
+            </button>
             <button
               onClick={onAddChat}
               className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

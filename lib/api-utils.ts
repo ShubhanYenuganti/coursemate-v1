@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5173';
+const API_URL = process.env.BACKEND_URL || "http://localhost:5173";
+
+console.log('API_URL:', API_URL);
 
 export async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const token = localStorage.getItem('token');

@@ -38,8 +38,8 @@ export function SignUpForm() {
         }
 
         // 1. Register the user
-        console.log("Sending registration request to:", 'http://localhost:5173/api/register');
-        const registerResponse = await fetch('http://localhost:5173/api/register', {
+        console.log("Sending registration request to:", `${process.env.BACKEND_URL}/api/register`);
+        const registerResponse = await fetch(`${process.env.BACKEND_URL}/api/register`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -74,7 +74,7 @@ export function SignUpForm() {
         setIsLoading(false);
       }
     } else if (provider === "google") {
-      window.location.href = "http://localhost:5173/api/auth/google";
+      window.location.href = `${process.env.BACKEND_URL}/api/auth/google`;
     } else {
       // For social logins
       console.log(`Signing up with ${provider} (not implemented)`)

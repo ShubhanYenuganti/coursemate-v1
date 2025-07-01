@@ -635,6 +635,10 @@ def save_tasks_and_subtasks(goal_id):
         
         data = request.get_json()
         current_app.logger.info(f"Received data for goal {goal_id}: {data}")
+        current_app.logger.info(f"Tasks data: {data.get('tasks', [])}")
+        for i, task in enumerate(data.get('tasks', [])):
+            current_app.logger.info(f"Task {i}: {task}")
+            current_app.logger.info(f"Task {i} subtasks: {task.get('subtasks', [])}")
         
         if not data or 'tasks' not in data:
             return jsonify({'error': 'Tasks are required'}), 400
@@ -658,7 +662,7 @@ def save_tasks_and_subtasks(goal_id):
                 for subtask_data in task_data['subtasks']:
                     subtask_descr = subtask_data.get('subtask_descr', 'New Subtask')
                     subtask_type = subtask_data.get('subtask_type', 'other')
-                    subtask_completed = subtask_data.get('completed', False)
+                    subtask_completed = subtask_data.get('subtask_completed', False)
                     
                     current_app.logger.info(f"Adding subtask: {subtask_descr} for task: {task_title}")
                     
