@@ -590,6 +590,20 @@ const GoalDetailPage = () => {
         body: JSON.stringify(taskData)
       });
 
+      if (!response.ok) {
+        throw new Error('Failed to update task');
+      }
+
+      // Update local state
+      setTasks(prevTasks =>
+        prevTasks.map(t => t.id === updatedTask.id ? updatedTask : t)
+      );
+      toast.success('Task completion toggled');
+    } catch (error) {
+      console.error('Error toggling task completion:', error);
+      toast.error('Failed to toggle task completion');
+    }
+  };
 
   if (loading || !goal) {
     return (
