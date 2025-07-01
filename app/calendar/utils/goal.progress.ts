@@ -84,9 +84,28 @@ export const groupTasksByTaskId = (goals: Goal[]) => {
 
     // Calculate progress for each group
     Object.values(groupedTasks).forEach(group => {
+        // Sort subtasks by created_at (or subtask_id as fallback) to match backend/API order
+        group.subtasks.sort((a, b) => {
+            if (a.created_at && b.created_at) {
+                return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            }
+            if (a.subtask_id && b.subtask_id) {
+                return String(a.subtask_id).localeCompare(String(b.subtask_id));
+            }
+            return 0;
+        });
         group.totalSubtasks = group.subtasks.length;
         group.progress = group.totalSubtasks > 0 ? Math.round((group.completedSubtasks / group.totalSubtasks) * 100) : 0;
     });
 
-    return groupedTasks;
+    // Return grouped tasks as a sorted array by created_at (or taskId as fallback)
+    return Object.values(groupedTasks).sort((a, b) => {
+        if (a.subtasks[0]?.created_at && b.subtasks[0]?.created_at) {
+            return new Date(a.subtasks[0].created_at).getTime() - new Date(b.subtasks[0].created_at).getTime();
+        }
+        if (a.taskId && b.taskId) {
+            return String(a.taskId).localeCompare(String(b.taskId));
+        }
+        return 0;
+    });
 };
