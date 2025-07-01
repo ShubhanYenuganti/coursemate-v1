@@ -130,22 +130,26 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       const goalId = savedGoal[0].goal_id;
       
       // Now save tasks and subtasks
-      const tasksData = tasks.map(task => ({
-        task_title: task.name,
-        task_descr: '',
-        scheduledDate: task.scheduledDate,
-        completed: task.completed,
-        subtasks: subtasks
-          .filter(subtask => subtask.taskId === task.id)
-          .map(subtask => ({
+      const tasksData = tasks.map(task => {
+        const taskSubtasks = subtasks.filter(subtask => subtask.taskId === task.id);
+        console.log(`Task ${task.id} (${task.name}) has ${taskSubtasks.length} subtasks:`, taskSubtasks);
+        
+        return {
+          task_title: task.name,
+          task_descr: '',
+          scheduledDate: task.scheduledDate,
+          completed: task.completed,
+          subtasks: taskSubtasks.map(subtask => ({
             subtask_descr: subtask.name,
             subtask_type: subtask.type,
-            estimatedTimeMinutes: subtask.estimatedTimeMinutes,
-            completed: subtask.completed
+            subtask_completed: subtask.completed
           }))
-      }));
+        };
+      });
       
       console.log('Sending tasks to backend:', { tasks: tasksData });
+      console.log('Original tasks:', tasks);
+      console.log('Original subtasks:', subtasks);
       
       const tasksResponse = await fetch(`/api/goals/${goalId}/save-tasks`, {
         method: 'POST',

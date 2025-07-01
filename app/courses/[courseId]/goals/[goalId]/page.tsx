@@ -10,7 +10,8 @@ import {
   Edit, 
   Plus, 
   Trash2,
-  CheckCircle
+  CheckCircle,
+  CheckSquare
 } from 'lucide-react';
 import { Toaster, toast } from 'react-hot-toast';
 import { GoalWithProgress, Task, TaskWithProgress, Subtask } from '../../../components/studyplan/types';
@@ -255,8 +256,7 @@ const GoalDetailPage = () => {
         subtasks: [{
           subtask_descr: 'Initial step',
           subtask_type: 'other',
-          estimatedTimeMinutes: 15,
-          completed: false
+          subtask_completed: false
         }]
       }];
       
@@ -544,75 +544,7 @@ const GoalDetailPage = () => {
     }
   };
 
-  const handleToggleTaskCompletion = async (task: TaskWithProgress) => {
-    try {
-      const updatedTask = {
-        ...task,
-        completed: !task.completed
-      };
-      
-      // Prepare the data for the API
-      const taskData = {
-        tasks: [{
-          task_id: updatedTask.id,
-          task_title: updatedTask.name,
-          task_completed: updatedTask.completed,
-          subtasks: updatedTask.subtasks.map(subtask => ({
-            subtask_id: subtask.id,
-            subtask_descr: subtask.name,
-            subtask_type: subtask.type,
-            subtask_completed: subtask.completed
-          }))
-        }]
-      };
-      
-      // Update task in backend
-      const response = await fetch(`/api/goals/${goalId}/tasks`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(taskData)
-      });
 
-      if (!response.ok) {
-        throw new Error('Failed to update task completion status');
-      }
-      
-      // Update local state
-      setTasks(prevTasks => 
-        prevTasks.map(t => 
-          t.id === task.id ? updatedTask : t
-        )
-      );
-      
-      // Update goal progress
-      if (goal) {
-        const updatedTasks = tasks.map(t => 
-          t.id === task.id ? updatedTask : t
-        );
-        
-        const totalSubtasks = updatedTasks.reduce((sum, t) => sum + t.totalSubtasks, 0);
-        const completedSubtasks = updatedTasks.reduce((sum, t) => sum + t.completedSubtasks, 0);
-        const newProgress = totalSubtasks > 0 
-          ? Math.round((completedSubtasks / totalSubtasks) * 100)
-          : 0;
-        
-        setGoal({
-          ...goal,
-          progress: newProgress,
-          totalTasks: updatedTasks.length,
-          completedTasks: updatedTasks.filter(t => t.progress === 100).length
-        });
-      }
-      
-      toast.success(updatedTask.completed ? 'Task marked as completed' : 'Task marked as incomplete');
-    } catch (error) {
-      console.error('Error toggling task completion:', error);
-      toast.error('Failed to update task');
-    }
-  };
 
   if (loading || !goal) {
     return (
@@ -656,8 +588,8 @@ const GoalDetailPage = () => {
         <h1 className="text-2xl font-bold text-gray-900">Goal Details</h1>
       </div>
       
-      {/* Goal Card */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow p-6 mb-8">
+      {/* Goal Header */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 shadow-sm p-8 mb-8">
         {isEditingGoal ? (
           <div className="space-y-4">
             <div>
@@ -697,40 +629,42 @@ const GoalDetailPage = () => {
           <>
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <Target className="w-5 h-5 text-blue-600" />
-                  <h2 className="text-xl font-semibold text-gray-900">{goal.title}</h2>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <Target className="w-5 h-5 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900">{goal.title}</h2>
                   {goal.progress === 100 && (
-                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
+                    <span className="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full font-medium">
                       Completed
                     </span>
                   )}
                 </div>
                 
-                <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    <span>Due {formatDate(goal.targetDate)}</span>
+                <div className="flex items-center gap-6 text-sm text-gray-600 mb-4">
+                  <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-lg shadow-sm">
+                    <Calendar className="w-4 h-4 text-blue-600" />
+                    <span className="font-medium">Due {formatDate(goal.targetDate)}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    <span>{goal.workMinutesPerDay} min/day</span>
+                  <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-lg shadow-sm">
+                    <Clock className="w-4 h-4 text-blue-600" />
+                    <span className="font-medium">{goal.workMinutesPerDay} min/day</span>
                   </div>
                 </div>
 
                 {/* Progress Bar */}
-                <div className="mb-3">
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-gray-600">Progress</span>
-                    <span className="font-medium">{goal.progress}%</span>
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="text-gray-700 font-medium">Progress</span>
+                    <span className="font-bold text-lg">{goal.progress}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
                     <div
-                      className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(goal.progress)}`}
+                      className={`h-3 rounded-full transition-all duration-300 ${getProgressColor(goal.progress)}`}
                       style={{ width: `${goal.progress}%` }}
                     />
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-sm text-gray-600">
                     {goal.completedTasks} of {goal.totalTasks} tasks completed
                   </div>
                 </div>
@@ -739,17 +673,17 @@ const GoalDetailPage = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsEditingGoal(true)}
-                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="p-3 text-gray-500 hover:text-blue-600 hover:bg-white rounded-lg transition-colors shadow-sm"
                   title="Edit Goal"
                 >
-                  <Edit className="w-4 h-4" />
+                  <Edit className="w-5 h-5" />
                 </button>
                 <button
                   onClick={handleDeleteGoal}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  className="p-3 text-gray-500 hover:text-red-600 hover:bg-white rounded-lg transition-colors shadow-sm"
                   title="Delete Goal"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-5 h-5" />
                 </button>
               </div>
             </div>
@@ -759,11 +693,16 @@ const GoalDetailPage = () => {
       
       {/* Tasks Section */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Tasks</h3>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 bg-gray-600 rounded-lg flex items-center justify-center">
+              <CheckSquare className="w-4 h-4 text-white" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900">Tasks</h3>
+          </div>
           <button
             onClick={() => setIsAddingTask(!isAddingTask)}
-            className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Add Task</span>
@@ -831,19 +770,11 @@ const GoalDetailPage = () => {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleTaskCompletion(task);
-                          }}
-                          className="flex-shrink-0"
-                        >
-                          {task.completed ? (
-                            <CheckCircle className="w-5 h-5 text-green-500" />
-                          ) : (
-                            <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-                          )}
-                        </button>
+                        {task.completed ? (
+                          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                        )}
                         <h4 className={`font-medium ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{task.name}</h4>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
@@ -897,13 +828,17 @@ const GoalDetailPage = () => {
                       subtasks={task.subtasks}
                       onSubtaskDeleted={(subtaskId) => {
                         // Update the local task state to reflect the deleted subtask
+                        const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
+                        const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+                        const totalSubtasksCount = updatedSubtasks.length;
+                        
                         const updatedTask = {
                           ...task,
-                          subtasks: task.subtasks.filter(subtask => subtask.id !== subtaskId),
-                          totalSubtasks: task.totalSubtasks - 1,
-                          completedSubtasks: task.subtasks.find(s => s.id === subtaskId)?.completed 
-                            ? task.completedSubtasks - 1 
-                            : task.completedSubtasks
+                          subtasks: updatedSubtasks,
+                          totalSubtasks: totalSubtasksCount,
+                          completedSubtasks: completedSubtasksCount,
+                          // Automatically complete task if all subtasks are done
+                          completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
                         };
                         
                         // Recalculate progress
@@ -916,11 +851,17 @@ const GoalDetailPage = () => {
                       }}
                       onSubtaskAdded={(newSubtask) => {
                         // Update the local task state to reflect the added subtask
+                        const updatedSubtasks = [...task.subtasks, newSubtask];
+                        const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+                        const totalSubtasksCount = updatedSubtasks.length;
+                        
                         const updatedTask = {
                           ...task,
-                          subtasks: [...task.subtasks, newSubtask],
-                          totalSubtasks: task.totalSubtasks + 1,
-                          completedSubtasks: task.completedSubtasks // New subtask is not completed
+                          subtasks: updatedSubtasks,
+                          totalSubtasks: totalSubtasksCount,
+                          completedSubtasks: completedSubtasksCount,
+                          // Automatically complete task if all subtasks are done
+                          completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
                         };
                         
                         // Recalculate progress
@@ -937,10 +878,15 @@ const GoalDetailPage = () => {
                           subtask.id === subtaskId ? { ...subtask, completed } : subtask
                         );
                         
+                        const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+                        const totalSubtasksCount = updatedSubtasks.length;
+                        
                         const updatedTask = {
                           ...task,
                           subtasks: updatedSubtasks,
-                          completedSubtasks: updatedSubtasks.filter(s => s.completed).length
+                          completedSubtasks: completedSubtasksCount,
+                          // Automatically complete task if all subtasks are done
+                          completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
                         };
                         
                         // Recalculate progress
