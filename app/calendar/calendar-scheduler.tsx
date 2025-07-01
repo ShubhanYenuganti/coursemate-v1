@@ -153,6 +153,13 @@ export function CalendarScheduler() {
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const [isLoadingGoals, setIsLoadingGoals] = useState(false);
 
+  // Add this state near the top of CalendarScheduler
+  const [newSubtasks, setNewSubtasks] = useState<{ subtask_descr: string; subtask_type: string }[]>([]);
+
+  // Add these state variables near the top for form fields
+  const [newTaskName, setNewTaskName] = useState('');
+  const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const [newTaskDescription, setNewTaskDescription] = useState('');
 
   /** Hours array for timeline */
   const hours = Array.from({ length: 24 }, (_, i) => i) // 12 AM (0) to 11 PM (23)
@@ -614,7 +621,47 @@ export function CalendarScheduler() {
     resetAddTaskForm();
   };
 
-
+  // Add the submit handler function inside CalendarScheduler
+  const handleCreateTask = async () => {
+    if (!selectedGoalId || !newTaskName || !newTaskDueDate) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('Not authenticated');
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const payload = {
+        task_title: newTaskName,
+        task_descr: newTaskDescription,
+        task_due_date: newTaskDueDate,
+        subtasks: newSubtasks.map((sub: { subtask_descr: string; subtask_type: string }) => ({
+          subtask_descr: sub.subtask_descr,
+          subtask_type: sub.subtask_type,
+          subtask_completed: false
+        }))
+      };
+      const res = await fetch(`${api}/api/goals/${selectedGoalId}/create-task`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error(`Failed to create task: ${res.status}`);
+      alert('Task created successfully!');
+      // Optionally, refresh goals/tasks here
+      handleCloseAddTaskModal();
+      // Reset form fields
+      setNewTaskName('');
+      setNewTaskDueDate('');
+      setNewTaskDescription('');
+      setNewSubtasks([]);
+    } catch (err: any) {
+      alert('Error creating task: ' + err.message);
+    }
+  };
 
   // one ref for both Day + Week
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -1202,6 +1249,7 @@ export function CalendarScheduler() {
       </div>
 
 
+
       {/* Floating Goal Display */}
       {selectedGoal && goalDisplayPosition && (
         <div 
@@ -1575,10 +1623,10 @@ export function CalendarScheduler() {
                 </button>
               </div>
 
-            <div className="space-y-6">
+              <div className="space-y-6">
                 {/* Task Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Task Name *
                     </label>
@@ -1586,22 +1634,26 @@ export function CalendarScheduler() {
                       type="text"
                       placeholder="Enter task name"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
+                      value={newTaskName}
+                      onChange={e => setNewTaskName(e.target.value)}
+                    />
+                  </div>
 
-              <div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Due Date *
                     </label>
                     <input
-                    type="date"
+                      type="date"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
+                      value={newTaskDueDate}
+                      onChange={e => setNewTaskDueDate(e.target.value)}
+                    />
+                  </div>
                 </div>
-              </div>
 
                 {/* Course Selection */}
-              <div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Course *
                   </label>
@@ -1626,7 +1678,7 @@ export function CalendarScheduler() {
                       ))
                     )}
                   </select>
-                      </div>
+                </div>
 
                 {/* Goal Selection */}
                 <div>
@@ -1650,10 +1702,10 @@ export function CalendarScheduler() {
                       ))
                     )}
                   </select>
-              </div>
+                </div>
 
                 {/* Task Description */}
-              <div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Task Description
                   </label>
@@ -1661,46 +1713,85 @@ export function CalendarScheduler() {
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Add a description for this task (optional)"
+                    value={newTaskDescription}
+                    onChange={e => setNewTaskDescription(e.target.value)}
                   />
-              </div>
+                </div>
 
                 {/* Subtasks */}
-              <div>
+                <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-medium text-gray-900">Subtasks</h3>
                     <button
+                      type="button"
                       className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-2"
+                      onClick={() => setNewSubtasks([...newSubtasks, { subtask_descr: '', subtask_type: 'other' }])}
                     >
                       <Plus className="w-4 h-4" />
                       Add Subtask
                     </button>
                   </div>
+                  {newSubtasks.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                      <p>No subtasks yet. Add your first subtask to get started.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {newSubtasks.map((subtask, idx) => (
+                        <div key={idx} className="relative flex items-start gap-2">
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Subtask Description
+                            </label>
+                            <textarea
+                              rows={2}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder={`Enter subtask description`}
+                              value={subtask.subtask_descr}
+                              onChange={e => {
+                                const updated = [...newSubtasks];
+                                updated[idx].subtask_descr = e.target.value;
+                                setNewSubtasks(updated);
+                              }}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="absolute right-0 -top-2 text-red-500 hover:text-red-700 w-8 h-8 flex items-center justify-center z-10"
+                            style={{ marginRight: '-12px' }}
+                            onClick={() => setNewSubtasks(newSubtasks.filter((_, i) => i !== idx))}
+                            title="Remove subtask"
+                          >
+                            <X className="w-6 h-6" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-                  <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                    <p>No subtasks yet. Add your first subtask to get started.</p>
+                {/* Footer */}
+                <div className="flex gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleCloseAddTaskModal}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    onClick={handleCreateTask}
+                  >
+                    <Save className="w-4 h-4" />
+                    Create Task
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-
-              {/* Footer */}
-              <div className="flex gap-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={handleCloseAddTaskModal}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-                </button>
-                <button
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  Create Task
-                </button>
-          </div>
-      </div>
           </div>
         </div>
       )}
     </div>
   )
 }
+

@@ -1112,3 +1112,86 @@ def update_task(task_id):
         current_app.logger.error(f"Error updating task: {str(e)}")
         return jsonify({'error': 'An error occurred while updating the task'}), 500
     
+@goals_bp.route("/api/goals/<goal_id>/create-task", methods=["POST"])
+@jwt_required()
+def create_task(goal_id):
+    """Create a new task for a goal, with one or more subtasks."""
+    try:
+        user_id = get_jwt_identity()
+        # Check if goal exists
+        existing_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
+        if not existing_goals:
+            return jsonify({'error': 'Goal not found or you do not have access'}), 404
+
+        data = request.get_json()
+        if not data or 'task_title' not in data or 'task_due_date' not in data:
+            return jsonify({'error': 'Task title and due date are required'}), 400
+
+        task_id = str(uuid.uuid4())
+        task_title = data.get('task_title')
+        task_descr = data.get('task_descr', '')
+        task_due_date = data.get('task_due_date', None)
+        # Default to False unless explicitly set
+        task_completed = data.get('task_completed', False)
+
+        # Use the first goal row as a reference for goal fields
+        ref_goal = existing_goals[0]
+
+        created_rows = []
+
+        subtasks = data.get('subtasks', [])
+        if subtasks:
+            for subtask in subtasks:
+                subtask_descr = subtask.get('subtask_descr', 'Initial step')
+                subtask_type = subtask.get('subtask_type', 'other')
+                subtask_completed = subtask.get('subtask_completed', False)
+                new_row = Goal(
+                    user_id=user_id,
+                    course_id=ref_goal.course_id,
+                    goal_id=goal_id,
+                    goal_descr=ref_goal.goal_descr,
+                    due_date=task_due_date,
+                    goal_completed=ref_goal.goal_completed,
+                    task_id=task_id,
+                    task_title=task_title,
+                    task_descr=task_descr,
+                    task_completed=task_completed,
+                    subtask_id=str(uuid.uuid4()),
+                    subtask_descr=subtask_descr,
+                    subtask_type=subtask_type,
+                    subtask_completed=subtask_completed
+                )
+                db.session.add(new_row)
+                created_rows.append(new_row)
+        else:
+            # Create a default subtask if none provided
+            new_row = Goal(
+                user_id=user_id,
+                course_id=ref_goal.course_id,
+                goal_id=goal_id,
+                goal_descr=ref_goal.goal_descr,
+                due_date=task_due_date,
+                goal_completed=ref_goal.goal_completed,
+                task_id=task_id,
+                task_title=task_title,
+                task_descr=task_descr,
+                task_completed=task_completed,
+                subtask_id=str(uuid.uuid4()),
+                subtask_descr='Default Subtask',
+                subtask_type='other',
+                subtask_completed=False
+            )
+            db.session.add(new_row)
+            created_rows.append(new_row)
+
+        db.session.commit()
+        return jsonify([row.to_dict() for row in created_rows]), 201
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating task: {str(e)}")
+        return jsonify({'error': 'An error occurred while creating the task'}), 500
