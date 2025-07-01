@@ -1306,11 +1306,12 @@ export function CalendarScheduler() {
                       <li><strong>Status:</strong> <span className={`font-medium ${getStatusColor(calculateStatus(selectedGoal))}`}>{calculateStatus(selectedGoal)}</span></li>
                       <li><strong>Assigned:</strong> {formatDate(selectedGoal.updated_at || '')}</li>
                       <li><strong>Due:</strong> {formatDate(selectedGoal.due_date || '')}</li>
-                      {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks > 1 && (
+                      {/* Progress Bar and Subtasks Dropdown */}
+                      {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks >= 1 && (
                         <li><strong>Progress:</strong> {selectedGoal.completedSubtasks}/{selectedGoal.totalSubtasks} subtasks ({selectedGoal.progress || 0}%)</li>
                       )}
                     </ul>
-                    {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks > 1 && (
+                    {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks >= 1 && (
                       <div className="mt-2">
                         <button
                           onClick={() => setExpandedTaskId(expandedTaskId === selectedGoal.task_id ? null : selectedGoal.task_id)}
@@ -1602,7 +1603,7 @@ export function CalendarScheduler() {
                 {/* Course Selection */}
               <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Course
+                    Course *
                   </label>
                   <select 
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1630,7 +1631,7 @@ export function CalendarScheduler() {
                 {/* Goal Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Goal
+                    Goal *
                   </label>
                   <select 
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

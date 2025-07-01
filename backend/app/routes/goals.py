@@ -1111,3 +1111,4 @@ def update_task(task_id):
         db.session.rollback()
         current_app.logger.error(f"Error updating task: {str(e)}")
         return jsonify({'error': 'An error occurred while updating the task'}), 500
+    
