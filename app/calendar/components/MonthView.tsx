@@ -100,15 +100,15 @@ export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handle
                   // 1-2 events - stacked with padding
                   <div className="space-y-1">
                     {groupedGoals.map((g: any) => (
-                      <div
+                  <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
-                        className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
+                    className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
                         style={{ backgroundColor: getCourseColor(g.course_id) }}
-                        onClick={(e) => handleGoalClick(g, e)}
-                      >
-                        {g.task_title ?? "(untitled)"}
-                      </div>
-                    ))}
+                    onClick={(e) => handleGoalClick(g, e)}
+                  >
+                    {g.task_title ?? "(untitled)"}
+                  </div>
+                ))}
                   </div>
                 ) : (
                   // 3+ events - show first 2 + count indicator
