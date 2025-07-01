@@ -64,7 +64,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           updatedAt: goal.updated_at,
             progress: goal.progress || 0,
             totalTasks: goal.total_tasks || 0,
-            completedTasks: goal.completed_tasks || 0
+            completedTasks: goal.completed_tasks || 0,
+            completed: goal.goal_completed || false
           };
         });
         
@@ -210,7 +211,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
-          completedTasks: goal.completed_tasks || 0
+          completedTasks: goal.completed_tasks || 0,
+          completed: goal.goal_completed || false
         };
       });
       
@@ -281,7 +283,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
-          completedTasks: goal.completed_tasks || 0
+          completedTasks: goal.completed_tasks || 0,
+          completed: goal.goal_completed || false
         };
       });
       
@@ -343,7 +346,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
-          completedTasks: goal.completed_tasks || 0
+          completedTasks: goal.completed_tasks || 0,
+          completed: goal.goal_completed || false
         };
       });
       

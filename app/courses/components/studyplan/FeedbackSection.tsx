@@ -10,7 +10,7 @@ interface FeedbackSectionProps {
 const FeedbackSection: React.FC<FeedbackSectionProps> = ({ goals }) => {
   const calculateStats = () => {
     const totalGoals = goals.length;
-    const completedGoals = goals.filter(goal => goal.progress === 100).length;
+    const completedGoals = goals.filter(goal => goal.completed).length;
     const activeGoals = totalGoals - completedGoals;
     
     const totalTasks = goals.reduce((sum, goal) => sum + goal.totalTasks, 0);
@@ -19,7 +19,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ goals }) => {
     const overdueGoals = goals.filter(goal => {
       const targetDate = new Date(goal.targetDate);
       const today = new Date();
-      return targetDate < today && goal.progress < 100;
+      return targetDate < today && !goal.completed;
     });
 
     const averageProgress = totalGoals > 0 

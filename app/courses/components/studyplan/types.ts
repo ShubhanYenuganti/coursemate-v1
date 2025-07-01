@@ -47,6 +47,7 @@ export interface GoalWithProgress extends Goal {
   progress: number; // 0-100
   totalTasks: number;
   completedTasks: number;
+  completed: boolean;
 }
 
 export interface TaskWithProgress extends Task {

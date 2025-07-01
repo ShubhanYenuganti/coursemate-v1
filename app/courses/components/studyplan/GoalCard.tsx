@@ -71,12 +71,12 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onGoalUpdated, onGoalDeleted,
               <div className="flex items-center gap-3 mb-2">
                 <Target className="w-5 h-5 text-blue-600" />
                 <h3 className="text-lg font-semibold text-gray-900">{goal.title}</h3>
-                {goal.progress === 100 && (
+                {goal.completed && (
                   <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
                     Completed
                   </span>
                 )}
-                {isOverdue && goal.progress < 100 && (
+                {isOverdue && !goal.completed && (
                   <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-medium">
                     Overdue
                   </span>

@@ -89,7 +89,8 @@ const GoalDetailPage = () => {
           updatedAt: currentGoal.updated_at,
           progress: currentGoal.progress || 0,
           totalTasks: currentGoal.total_tasks || 0,
-          completedTasks: currentGoal.completed_tasks || 0
+          completedTasks: currentGoal.completed_tasks || 0,
+          completed: currentGoal.goal_completed || false
         };
         
         setGoal(transformedGoal);
@@ -189,7 +190,24 @@ const GoalDetailPage = () => {
           // Combine existing and new tasks
           const combinedTasks = [...currentTasks, ...newTasks];
           
-          // Update goal progress is handled in the second instance
+          // Update goal progress
+          if (goal) {
+            const totalSubtasks = combinedTasks.reduce((sum, task) => sum + task.totalSubtasks, 0);
+            const completedSubtasks = combinedTasks.reduce((sum, task) => sum + task.completedSubtasks, 0);
+            const newProgress = totalSubtasks > 0 
+              ? Math.round((completedSubtasks / totalSubtasks) * 100)
+              : 0;
+            
+            const allTasksCompleted = combinedTasks.length > 0 && combinedTasks.every(t => t.completed);
+            
+            setGoal({
+              ...goal,
+              progress: newProgress,
+              totalTasks: combinedTasks.length,
+              completedTasks: combinedTasks.filter(t => t.progress === 100).length,
+              completed: allTasksCompleted
+            });
+          }
           
           return combinedTasks;
         });
@@ -222,7 +240,7 @@ const GoalDetailPage = () => {
         body: JSON.stringify({
           goal_descr: editedGoalTitle,
           due_date: editedGoalDate,
-          goal_completed: goal.progress === 100
+          goal_completed: goal.completed
         })
       });
 
@@ -372,11 +390,14 @@ const GoalDetailPage = () => {
             ? Math.round((completedSubtasks / totalSubtasks) * 100)
             : 0;
           
+          const allTasksCompleted = combinedTasks.length > 0 && combinedTasks.every(t => t.completed);
+          
           setGoal({
             ...goal,
             progress: newProgress,
             totalTasks: combinedTasks.length,
-            completedTasks: combinedTasks.filter(t => t.progress === 100).length
+            completedTasks: combinedTasks.filter(t => t.progress === 100).length,
+            completed: allTasksCompleted
           });
         }
         
@@ -437,6 +458,19 @@ const GoalDetailPage = () => {
         )
       );
       
+      // Update goal completion status based on all tasks
+      if (goal) {
+        const updatedTasks = tasks.map(task => 
+          task.id === updatedTask.id ? updatedTask : task
+        );
+        const allTasksCompleted = updatedTasks.length > 0 && updatedTasks.every(t => t.completed);
+        
+        setGoal({
+          ...goal,
+          completed: allTasksCompleted
+        });
+      }
+      
       // Close the editor
       setEditingTask(null);
       
@@ -468,7 +502,8 @@ const GoalDetailPage = () => {
             updatedAt: currentGoal.updated_at,
             progress: currentGoal.progress || 0,
             totalTasks: currentGoal.total_tasks || 0,
-            completedTasks: currentGoal.completed_tasks || 0
+            completedTasks: currentGoal.completed_tasks || 0,
+            completed: currentGoal.goal_completed || false
           };
           
           setGoal(updatedGoal);
@@ -500,7 +535,7 @@ const GoalDetailPage = () => {
       const updatedTasks = tasks.filter(task => task.id !== taskId);
       setTasks(updatedTasks);
       
-      // Update goal progress
+      // Update goal progress and completion status
       if (goal) {
         const totalSubtasks = updatedTasks.reduce((sum, task) => sum + task.totalSubtasks, 0);
         const completedSubtasks = updatedTasks.reduce((sum, task) => sum + task.completedSubtasks, 0);
@@ -508,11 +543,14 @@ const GoalDetailPage = () => {
           ? Math.round((completedSubtasks / totalSubtasks) * 100)
           : 0;
         
+        const allTasksCompleted = updatedTasks.length > 0 && updatedTasks.every(t => t.completed);
+        
         setGoal({
           ...goal,
           progress: newProgress,
           totalTasks: updatedTasks.length,
-          completedTasks: updatedTasks.filter(t => t.progress === 100).length
+          completedTasks: updatedTasks.filter(t => t.progress === 100).length,
+          completed: allTasksCompleted
         });
       }
       
@@ -560,10 +598,30 @@ const GoalDetailPage = () => {
 
   const handleToggleTaskCompletion = async (task: TaskWithProgress) => {
     try {
+      // Store the original state for potential rollback
+      const originalGoal = goal;
+      const originalTasks = tasks;
+      
       const updatedTask = {
         ...task,
         completed: !task.completed
       };
+      
+      // Optimistic update - immediately update the UI
+      setTasks(prevTasks =>
+        prevTasks.map(t => t.id === updatedTask.id ? updatedTask : t)
+      );
+      
+      // Optimistically update goal completion status
+      if (goal) {
+        const updatedTasks = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
+        const allTasksCompleted = updatedTasks.length > 0 && updatedTasks.every(t => t.completed);
+        
+        setGoal({
+          ...goal,
+          completed: allTasksCompleted
+        });
+      }
       
       // Prepare the data for the API
       const taskData = {
@@ -592,13 +650,13 @@ const GoalDetailPage = () => {
       });
 
       if (!response.ok) {
+        // If API call fails, revert the optimistic updates
+        console.error('Task toggle failed, reverting changes');
+        setGoal(originalGoal);
+        setTasks(originalTasks);
         throw new Error('Failed to update task');
       }
 
-      // Update local state
-      setTasks(prevTasks =>
-        prevTasks.map(t => t.id === updatedTask.id ? updatedTask : t)
-      );
       toast.success('Task completion toggled');
     } catch (error) {
       console.error('Error toggling task completion:', error);
@@ -697,7 +755,7 @@ const GoalDetailPage = () => {
                     <Target className="w-5 h-5 text-white" />
                   </div>
                   <h2 className="text-2xl font-bold text-gray-900">{goal.title}</h2>
-                  {goal.progress === 100 && (
+                  {goal.completed && (
                     <span className="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full font-medium">
                       Completed
                     </span>
@@ -834,9 +892,27 @@ const GoalDetailPage = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         {task.completed ? (
-                          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleTaskCompletion(task);
+                            }}
+                            className="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors bg-green-500 border-green-500 hover:bg-green-600"
+                            title="Mark as incomplete"
+                          >
+                            <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
                         ) : (
-                          <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleTaskCompletion(task);
+                            }}
+                            className="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors bg-white border-gray-300 hover:border-green-400"
+                            title="Mark as complete"
+                          />
                         )}
                         <h4 className={`font-medium ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{task.name}</h4>
                       </div>

@@ -1088,7 +1088,7 @@ def update_task(task_id):
             # Get unique task IDs and their completion status
             task_completion_map = {}
             for row in goal_rows:
-                if row.task_id not in task_completion_map:
+                if row.task_id not in task_completion_map and row.task_id != 'placeholder':
                     task_completion_map[row.task_id] = row.task_completed
             
             # Check if all tasks are completed
