@@ -91,6 +91,42 @@ function regroupAndSortGoals(goals: Goal[]): GoalsByDate {
   return grouped;
 }
 
+// Refactor updateCourseTitles to accept courses array and return new array
+async function updateCourseTitles(courseIds: string[], token: string, courses: Course[]): Promise<Course[]> {
+  const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+  const coursePromises = courseIds.map(async courseId => {
+    try {
+      const course = await fetch(`${api}/api/courses/${courseId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        method: "GET"
+      });
+      if (!course.ok) throw new Error(`Request failed ${course.status}`);
+      const courseDetails = await course.json();
+      return {
+        course_id: courseId,
+        course_title: courseDetails.title,
+        course_description: courseDetails.description
+      };
+    } catch (error) {
+      return {
+        course_id: courseId,
+        course_title: courseId,
+        course_description: ''
+      };
+    }
+  });
+  const courseDetails = await Promise.all(coursePromises);
+  const newCourses = courses.map((course: Course) => {
+    const details = courseDetails.find(d => d.course_id === course.course_id);
+    return details ? {
+      ...course,
+      course_title: details.course_title,
+      course_description: details.course_description
+    } : course;
+  });
+  return newCourses;
+}
+
 export function CalendarScheduler() {
   /** Current selected date -- initialised to today */
   const [currentDate, setCurrentDate] = useState<Date>(() => startOfToday())
@@ -327,54 +363,8 @@ export function CalendarScheduler() {
             });
           });
           setCourses(courses);
-          console.log('Courses set with colors:', courses);
+          updateCourseTitles(courseIds, token, courses).then(setCourses);
           
-          // Then fetch course details asynchronously and update titles/descriptions
-          const coursePromises = courseIds.map(async courseId => {
-            try {
-              // get course details from the database
-              const course = await fetch(`${api}/api/courses/${courseId}`, {
-                headers: { 
-                  Authorization: `Bearer ${token}`
-                },
-                method: "GET"
-              });
-
-              if (!course.ok) throw new Error(`Request failed ${course.status}`);
-              const courseDetails = await course.json();
-              console.log('Course details:', courseDetails);
-              
-              return {
-                course_id: courseId,
-                course_title: courseDetails.title,
-                course_description: courseDetails.description
-              };
-            } catch (error) {
-              console.error(`Failed to fetch course ${courseId}:`, error);
-              // Return fallback data if fetch fails
-              return {
-                course_id: courseId,
-                course_title: courseId, // Use course_id as fallback title
-                course_description: ''
-              };
-            }
-          });
-          
-          // Update courses with fetched details
-          Promise.all(coursePromises).then(courseDetails => {
-            setCourses(prevCourses => 
-              prevCourses.map(course => {
-                const details = courseDetails.find(d => d.course_id === course.course_id);
-                return details ? {
-                  ...course,
-                  course_title: details.course_title,
-                  course_description: details.course_description
-                } : course;
-              })
-            );
-            console.log('Courses updated with details:', courseDetails);
-          });
-
           // Initialize all courses as visible by default
           const initialVisibility: Record<string, boolean> = {};
           courseIds.forEach(courseId => {
@@ -500,6 +490,7 @@ export function CalendarScheduler() {
             });
           });
           setCourses(courses);
+          updateCourseTitles(courseIds, token, courses).then(setCourses);
         } catch (err) {
           console.error("fetchGoals error", err);
         }
@@ -699,54 +690,9 @@ export function CalendarScheduler() {
           });
         });
         setCourses(courses);
+        updateCourseTitles(courseIds, token, courses).then(setCourses);
         console.log('Courses set with colors:', courses);
         
-        // Then fetch course details asynchronously and update titles/descriptions
-        const coursePromises = courseIds.map(async courseId => {
-          try {
-            // get course details from the database
-            const course = await fetch(`${api}/api/courses/${courseId}`, {
-              headers: { 
-                Authorization: `Bearer ${token}`
-              },
-              method: "GET"
-            });
-
-            if (!course.ok) throw new Error(`Request failed ${course.status}`);
-            const courseDetails = await course.json();
-            console.log('Course details:', courseDetails);
-            
-            return {
-              course_id: courseId,
-              course_title: courseDetails.title,
-              course_description: courseDetails.description
-            };
-          } catch (error) {
-            console.error(`Failed to fetch course ${courseId}:`, error);
-            // Return fallback data if fetch fails
-            return {
-              course_id: courseId,
-              course_title: courseId, // Use course_id as fallback title
-              course_description: ''
-            };
-          }
-        });
-        
-        // Update courses with fetched details
-        Promise.all(coursePromises).then(courseDetails => {
-          setCourses(prevCourses => 
-            prevCourses.map(course => {
-              const details = courseDetails.find(d => d.course_id === course.course_id);
-              return details ? {
-                ...course,
-                course_title: details.course_title,
-                course_description: details.course_description
-              } : course;
-            })
-          );
-          console.log('Courses updated with details:', courseDetails);
-        });
-
         // Initialize all courses as visible by default
         const initialVisibility: Record<string, boolean> = {};
         courseIds.forEach(courseId => {
