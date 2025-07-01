@@ -36,7 +36,7 @@ import { colorForCourse } from "./utils/color.utils"
 import { calculateStatus, getStatusColor } from "./utils/goal.status"
 import { groupTasksByTaskId } from "./utils/goal.progress"
 import { Goal, GoalsByDate, Course } from "./utils/goal.types"
-import { startOfToday, getWeekDates, formatHourLabel, getLocalDateKey } from "./utils/date.utils"
+import { startOfToday, getWeekDates, formatHourLabel, getLocalDateKey, getDateKeyFromDateString } from "./utils/date.utils"
 
 
 export function CalendarScheduler() {
@@ -256,9 +256,20 @@ export function CalendarScheduler() {
           // 2️⃣ regroup by *local* YYYY-MM-DD
           const grouped: GoalsByDate = {};
           for (const g of filteredAll) {
-            // Convert UTC time to local time for grouping
-            const when = new Date(g.start_time ?? g.due_date!);
-            const key = getLocalDateKey(when);
+            // If this is an all-day or due-date event, use the date string directly to avoid timezone shift
+            let key: string;
+            if (!g.start_time && g.due_date) {
+              key = getDateKeyFromDateString(g.due_date);
+            } else if (g.start_time && g.end_time) {
+              // Timed event: use local time
+              key = getLocalDateKey(new Date(g.start_time));
+            } else if (g.due_date) {
+              // Fallback for due_date
+              key = getDateKeyFromDateString(g.due_date);
+            } else {
+              // Fallback: use local time
+              key = getLocalDateKey(new Date(g.start_time ?? g.due_date!));
+            }
             (grouped[key] ??= []).push(g);
           }
 
@@ -662,9 +673,20 @@ export function CalendarScheduler() {
         // 2️⃣ regroup by *local* YYYY-MM-DD
         const grouped: GoalsByDate = {};
         for (const g of filteredAll) {
-          // Convert UTC time to local time for grouping
-          const when = new Date(g.start_time ?? g.due_date!);
-          const key = getLocalDateKey(when);
+          // If this is an all-day or due-date event, use the date string directly to avoid timezone shift
+          let key: string;
+          if (!g.start_time && g.due_date) {
+            key = getDateKeyFromDateString(g.due_date);
+          } else if (g.start_time && g.end_time) {
+            // Timed event: use local time
+            key = getLocalDateKey(new Date(g.start_time));
+          } else if (g.due_date) {
+            // Fallback for due_date
+            key = getDateKeyFromDateString(g.due_date);
+          } else {
+            // Fallback: use local time
+            key = getLocalDateKey(new Date(g.start_time ?? g.due_date!));
+          }
           (grouped[key] ??= []).push(g);
         }
 
@@ -916,8 +938,16 @@ export function CalendarScheduler() {
     filteredGoals
       .filter(goal => goal.goal_id !== "Google Calendar") // Exclude Google Calendar events
       .forEach(goal => {
-        const when = new Date(goal.start_time ?? goal.due_date!);
-        const key = getLocalDateKey(when);
+        let key: string;
+        if (!goal.start_time && goal.due_date) {
+          key = getDateKeyFromDateString(goal.due_date);
+        } else if (goal.start_time && goal.end_time) {
+          key = getLocalDateKey(new Date(goal.start_time));
+        } else if (goal.due_date) {
+          key = getDateKeyFromDateString(goal.due_date);
+        } else {
+          key = getLocalDateKey(new Date(goal.start_time ?? goal.due_date!));
+        }
         (filteredGoalsByDate[key] ??= []).push(goal);
       });
 

@@ -32,3 +32,9 @@ export function getLocalDateKey(date: Date): string {
         String(date.getDate()).padStart(2, "0")
     );
 }
+
+// Returns a date key (YYYY-MM-DD) from a date string, ignoring time and timezone
+export function getDateKeyFromDateString(dateString: string): string {
+  // Handles both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' formats
+  return dateString.split('T')[0];
+}

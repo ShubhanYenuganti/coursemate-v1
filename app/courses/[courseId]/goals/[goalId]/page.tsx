@@ -18,6 +18,7 @@ import { GoalWithProgress, Task, TaskWithProgress, Subtask } from '../../../comp
 import TaskCard from '../../../components/studyplan/TaskCard';
 import SubtaskList from '../../../components/studyplan/SubtaskList';
 import TaskEditorModal from '../../../components/studyplan/TaskEditorModal';
+import { format, parseISO } from 'date-fns';
 
 const GoalDetailPage = () => {
   // Use the useParams hook to get the route parameters
@@ -625,7 +626,10 @@ const GoalDetailPage = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    // Extract the date part (YYYY-MM-DD) and display as local calendar day
+    const [year, month, day] = dateString.split('T')[0].split('-');
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    return date.toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
