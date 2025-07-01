@@ -81,7 +81,45 @@ const courses = [
   { id: "hist201", name: "HIST 201", color: "#22c55e", visible: true },
   { id: "bio101", name: "BIO 101", color: "#ec4899", visible: true },
   { id: "cs101", name: "CS 101", color: "#0ea5e9", visible: true },
-]
+  ]
+
+const calendarEvents = [
+  {
+    id: 1,
+      title: "Physics Lecture",
+      subtitle: "Chapter 4",
+    course: "PHYS 101",
+      day: 1, // Monday
+      time: "10:00 AM",
+      color: "#0ea5e9",
+  },
+  {
+    id: 2,
+      title: "Chemistry Lab",
+      subtitle: "Experiment 3",
+    course: "CHEM 101",
+      day: 2, // Tuesday
+      time: "2:00 PM",
+      color: "#8b5cf6",
+    },
+    {
+      id: 3,
+      title: "English Discussion",
+      subtitle: "Essay Review",
+      course: "ENG 101",
+      day: 3, // Wednesday
+    time: "11:00 AM",
+    color: "#ef4444",
+    },
+  ]
+  
+  const to24Hour = (timeStr: string) => {
+    const [time, period] = timeStr.split(' ');
+    const [hours, minutes] = time.split(':').map(Number);
+    if (period === 'PM' && hours !== 12) return hours + 12;
+    if (period === 'AM' && hours === 12) return 0;
+    return hours;
+  }
 
 const allTasks = [
   {
@@ -290,22 +328,22 @@ const HourEvents = ({
 const getMonthDays = (date: Date) => {
   const year = date.getFullYear()
   const month = date.getMonth()
-  const firstDay = new Date(year, month, 1)
-  const lastDay = new Date(year, month + 1, 0)
-  const startDate = new Date(firstDay)
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const startDate = new Date(firstDay)
   startDate.setDate(firstDay.getDate() - firstDay.getDay()) // Start from Sunday
 
-  const days = []
-  const current = new Date(startDate)
+    const days = []
+    const current = new Date(startDate)
 
   // Generate 42 days (6 weeks * 7 days) to ensure we cover the entire month
-  for (let i = 0; i < 42; i++) {
-    days.push(new Date(current))
-    current.setDate(current.getDate() + 1)
-  }
+    for (let i = 0; i < 42; i++) {
+      days.push(new Date(current))
+      current.setDate(current.getDate() + 1)
+    }
 
-  return days
-}
+    return days
+  }
 
 /** Return "timed" goals whose hour-block **intersects** the supplied hour */
 /** Timed goals that START in this exact hour */
@@ -490,23 +528,23 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
       <div className="flex gap-2">
         <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
           Today
-        </Button>
-        <Button
+            </Button>
+            <Button
           variant="outline"
-          size="sm"
+              size="sm"
           onClick={() => setCurrentDate(new Date(currentDate.getTime() - 86_400_000))}
-        >
+            >
           <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <Button
+            </Button>
+            <Button
           variant="outline"
-          size="sm"
+              size="sm"
           onClick={() => setCurrentDate(new Date(currentDate.getTime() + 86_400_000))}
-        >
+            >
           <ChevronRight className="w-4 h-4" />
-        </Button>
+            </Button>
+        </div>
       </div>
-    </div>
 
     <AllDayRow
       days={currentDate}
@@ -523,16 +561,16 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
               className="h-20 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1"
             >
               {formatHourLabel(h)}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
         <div className="flex-1 relative overflow-visible">
           {hours.map((h: number) => {
             const goals = goalsStartingAtHour(currentDate, h, getGoalsForDate);
             const eventPositions = calculateEventPositions(goals, 80, h, currentDate);
 
-            return (
+                return (
               <div key={h} className="h-20 border-b border-gray-200 relative p-1 overflow-visible">
                 {eventPositions.map((pos) => (
                   <div
@@ -552,51 +590,51 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
                     {pos.showTitle && (
                       <div className="font-semibold leading-tight truncate">
                         {pos.goal.task_title ?? "(untitled)"}
-                      </div>
+                  </div>
                     )}
                     {pos.showTitle && pos.goal.goal_descr && (
                       <div className="text-[11px] opacity-90 truncate">
                         {pos.goal.goal_descr}
-                      </div>
+            </div>
                     )}
-                  </div>
+          </div>
                 ))}
-              </div>
+          </div>
             );
           })}
-        </div>
-      </div>
-    </div>
-  </div>
+            </div>
+                  </div>
+                </div>
+              </div>
 );
 
 const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
             onClick={() =>
               setCurrentDate((p: Date) => new Date(p.getFullYear(), p.getMonth(), p.getDate() - 7))
             }
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
           <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
             This Week
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
             onClick={() =>
               setCurrentDate((p: Date) => new Date(p.getFullYear(), p.getMonth(), p.getDate() + 7))
             }
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
 
         <h2 className="text-lg font-semibold text-gray-900">
           {weekDates[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
@@ -622,8 +660,8 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
             </div>
           );
         })}
-      </div>
-    </div>
+                </div>
+              </div>
 
     <AllDayRow
       days={weekDates}         // pass the whole week array
@@ -632,14 +670,14 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
     />
 
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
-      <div className="flex">
+                <div className="flex">
         <div className="w-16 border-r border-gray-200">
           {hours.map((h: number) => (
             <div key={h} className="h-16 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1">
               {formatHourLabel(h)}
-            </div>
-          ))}
-        </div>
+                      </div>
+                    ))}
+                  </div>
 
         {weekDates.map((d: Date) => (
           <div key={d.toISOString()} className="flex-1 border-r border-gray-200 relative overflow-visible">
@@ -667,23 +705,23 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
                       {pos.showTitle && (
                         <div className="font-semibold leading-tight truncate">
                           {pos.goal.task_title ?? "(untitled)"}
-                        </div>
+                            </div>
                       )}
                       {pos.showTitle && pos.goal.goal_descr && (
                         <div className="text-[11px] opacity-90 truncate">
                           {pos.goal.goal_descr}
                         </div>
                       )}
-                    </div>
-                  ))}
-                </div>
+                      </div>
+                    ))}
+                  </div>
               );
             })}
           </div>
         ))}
-      </div>
-    </div>
-  </>
+                </div>
+              </div>
+            </>
 );
 
 const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskClick }: any) => (
@@ -691,131 +729,131 @@ const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskCli
     <div className="flex flex-col border-b border-gray-200">
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <h2 className="text-2xl font-semibold">
-          {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-        </h2>
+                      {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                    </h2>
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
               setCurrentDate(
                 new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
               )
-            }
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
+                        }
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
 
           <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
             This Month
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
               setCurrentDate(
                 new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
               )
-            }
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
+                        }
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
 
       <div className="grid grid-cols-7 gap-px bg-gray-200">
         {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
           <div key={d} className="bg-gray-50 p-3 text-center text-sm font-medium text-gray-500">
             {d}
-          </div>
-        ))}
-      </div>
-    </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-    <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto">
       <div className="grid grid-cols-7 gap-px bg-gray-200 h-full">
         {getMonthDays(currentDate).map((d: Date) => {
           const inMonth = d.getMonth() === currentDate.getMonth();
           const isToday = d.toDateString() === startOfToday().toDateString();
           const evs = getGoalsForDate(d);
 
-          return (
-            <div
+                      return (
+                        <div
               key={d.toISOString()}
               className={`bg-white p-2 min-h-[110px] ${!inMonth ? "bg-gray-50 text-gray-400" : ""}`}
-            >
-              <div
+                        >
+                          <div
                 className={`text-sm font-medium mb-2 ${isToday
                   ? "bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center"
-                  : ""
-                  }`}
-              >
+                                : ""
+                            }`}
+                          >
                 {d.getDate()}
-              </div>
+                          </div>
 
               {evs.slice(0, 3).map((g: any) => (
-                <div
+                              <div
                   key={g.goal_id}
-                  className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
+                                className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
                   style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
                   onClick={() => handleTaskClick(g)}
-                >
+                              >
                   {g.task_title ?? "(untitled)"}
-                </div>
-              ))}
+                              </div>
+                            ))}
 
               {evs.length > 3 && (
                 <div className="text-xs text-gray-500 font-medium">
                   +{evs.length - 3} more
                 </div>
-              )}
-            </div>
+                            )}
+                          </div>
           );
-        })}
-      </div>
-    </div>
-  </>
+                    })}
+                </div>
+              </div>
+            </>
 );
 
 const YearView = ({ currentDate, setCurrentDate }: any) => (
   <>
     <div className="border-b border-gray-200 p-4 flex items-center justify-between">
       <h2 className="text-2xl font-semibold">{currentDate.getFullYear()}</h2>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
           onClick={() => setCurrentDate(new Date(currentDate.getFullYear() - 1, 0, 1))}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
         <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-          Today
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
+                      Today
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
           onClick={() => setCurrentDate(new Date(currentDate.getFullYear() + 1, 0, 1))}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </Button>
-      </div>
-    </div>
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                </div>
+              </div>
 
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="grid grid-cols-3 gap-6">
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="grid grid-cols-3 gap-6">
         {Array.from({ length: 12 }, (_, m) => {
           const monthDate = new Date(currentDate.getFullYear(), m, 1);
           const monthName = monthDate.toLocaleDateString("en-US", { month: "long" });
           const daysInMonth = new Date(currentDate.getFullYear(), m + 1, 0).getDate();
           const firstDow = monthDate.getDay();
-          return (
-            <div
+                    return (
+                      <div
               key={m}
               className="border border-gray-200 rounded-lg p-4 hover:shadow cursor-pointer"
-              onClick={() => {
+                        onClick={() => {
                 setCurrentDate(new Date(currentDate.getFullYear(), m, 1));
                 // setCurrentView("month"); // You'll need to pass this as a prop
               }}
@@ -834,22 +872,22 @@ const YearView = ({ currentDate, setCurrentDate }: any) => (
                   const isToday =
                     full.toDateString() === startOfToday().toDateString() &&
                     full.getFullYear() === startOfToday().getFullYear();
-                  return (
-                    <div
+                            return (
+                              <div
                       key={d}
                       className={`h-5 flex items-center justify-center ${isToday ? "bg-blue-600 text-white rounded-full" : "text-gray-900 hover:bg-gray-100 rounded"}`}
                     >
                       {d}
-                    </div>
+                              </div>
                   );
-                })}
-              </div>
-            </div>
+                          })}
+                        </div>
+                          </div>
           );
-        })}
-      </div>
-    </div>
-  </>
+                  })}
+                </div>
+              </div>
+            </>
 );
 
 export function CalendarScheduler() {
@@ -1052,8 +1090,8 @@ export function CalendarScheduler() {
                 >
                   <ChevronRight className="w-4 h-4" />
                 </Button>
+                </div>
               </div>
-            </div>
 
             {/* 24-hour grid */}
             <div className="flex-1 overflow-y-auto flex" ref={setTimelineRef}>
@@ -1065,15 +1103,15 @@ export function CalendarScheduler() {
                     className="h-20 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1"
                   >
                     {formatHourLabel(h)}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
 
               {/* events */}
               <div className="flex-1 relative">
                 {hours.map((h) => (
                   <div key={h} className="h-20 border-b border-gray-200 relative">
-                    {calendarEvents
+                          {calendarEvents
                       .filter((e) => {
                         const courseKey = e.course.toLowerCase().replace(/\s+/g, "")
                         const visible = courseVisibility[courseKey] ?? false
@@ -1092,121 +1130,12 @@ export function CalendarScheduler() {
                           {e.title}
                         </div>
                       ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : /* ───────── WEEK VIEW ───────── */ currentView === "week" ? (
-          <>
-            {/* ───────── WEEK HEADER (wrapper) ───────── */}
-            <div className="flex flex-col border-b border-gray-200">
-              {/* ─ row 1 : nav bar ─ */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentDate((p) => new Date(p.getFullYear(), p.getMonth(), p.getDate() - 7))
-                    }
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-                    This Week
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentDate((p) => new Date(p.getFullYear(), p.getMonth(), p.getDate() + 7))
-                    }
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {weekDates[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
-                  {weekDates[6].toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </h2>
-              </div>
-
-              {/* ─ row 2 : day headers + TZ cell ─ */}
-              <div className="flex">
-                {/* TZ label  */}
-                <div className="w-16 border-r border-gray-200 p-4 text-xs text-gray-500 flex-shrink-0">
-                </div>
-
-                {/* weekdays */}
-                {weekDates.map((d) => {
-                  const isToday = d.toDateString() === startOfToday().toDateString();
-                  return (
-                    <div
-                      key={d.toISOString()}
-                      className="flex-1 border-r border-gray-200 p-4 text-center min-w-0"
-                    >
-                      <div className="text-xs text-gray-500 mb-1">
-                        {d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
-                      </div>
-                      <div className={`text-2xl font-semibold ${isToday ? "text-blue-600" : "text-gray-900"}`}>
-                        {d.getDate()}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* week grid */}
-            <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
-              <div className="flex">
-                {/* time column */}
-                <div className="w-16 border-r border-gray-200">
-                  {hours.map((h) => (
-                    <div
-                      key={h}
-                      className="h-16 border-b border-gray-200 p-2 text-xs text-gray-500"
-                    >
-                      {formatHourLabel(h)}
                     </div>
                   ))}
                 </div>
-
-                {/* days */}
-                {weekDates.map((d, dayIdx) => (
-                  <div key={d.toISOString()} className="flex-1 border-r border-gray-200">
-                    {hours.map((h) => (
-                      <div key={h} className="h-16 border-b border-gray-200 relative p-1">
-                        {calendarEvents
-                          .filter((e) => {
-                            const courseKey = e.course.toLowerCase().replace(/\s+/g, "")
-                            const visible = courseVisibility[courseKey] ?? false
-                            return (
-                              visible && e.day === dayIdx && to24Hour(e.time) == h
-                            );
-                          })
-                          .map((e) => (
-                            <div
-                              key={e.id}
-                              className="absolute inset-1 rounded p-2 text-xs text-white font-medium cursor-pointer"
-                              style={{ backgroundColor: e.color }}
-                              onClick={() => handleTaskClick(e)}
-                            >
-                              <div className="font-semibold">{e.title}</div>
-                              <div className="text-xs opacity-90">{e.subtitle}</div>
-                            </div>
-                          ))}
-                      </div>
-                    ))}
-                  </div>
-                ))}
               </div>
-            </div>
-          </>
-          <DayView currentDate={currentDate} setCurrentDate={setCurrentDate} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
-        ) : /* ───────── WEEK VIEW ───────── */ currentView === "week" ? (
+            </>
+                 ) : /* ───────── WEEK VIEW ───────── */ currentView === "week" ? (
           <WeekView currentDate={currentDate} setCurrentDate={setCurrentDate} weekDates={weekDates} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
         ) : /* ───────── MONTH VIEW ───────── */ currentView === "month" ? (
           <MonthView currentDate={currentDate} setCurrentDate={setCurrentDate} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} />
@@ -1226,7 +1155,7 @@ export function CalendarScheduler() {
           >
             + Add Task
           </Button>
-        </div>
+                          </div>
         { /* Dropdown Toggle */}
         <div className="mb-6">
           <Select value={sidebarTab} onValueChange={(val) => setSidebarTab(val as "courses" | "tasks")}>
@@ -1238,7 +1167,7 @@ export function CalendarScheduler() {
               <SelectItem value="courses">My Courses</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+                          </div>
         {sidebarTab === "tasks" ? (
           <>
             {/* Upcoming Tasks list */}
@@ -1284,7 +1213,7 @@ export function CalendarScheduler() {
                 //   );
                 // })
               }
-            </div>
+                        </div>
           </>
         ) : (
           <>
@@ -1295,15 +1224,15 @@ export function CalendarScheduler() {
                 <div key={course.id} className="flex items-center justify-between p-3 rounded-lg bg-[#f8f9fa]">
                   <div className="flex items-center gap-3 flex-1">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: course.color }} />
-                    <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-[#18181b] truncate">{course.name}</div>
-                    </div>
+                                </div>
                     <Switch checked={courseVisibility[course.id]} onCheckedChange={() => toggleCourseVisibility(course.id)} className="ml-2" />
-                  </div>
+                                </div>
                   <Button variant="ghost" size="sm" className="ml-2 text-[#71717a] hover:text-[#18181b] p-1" onClick={() => { setSelectedCourse(course); setShowCourseTasksDialog(true); }}>
                     <Eye className="w-4 h-4" />
                   </Button>
-                </div>
+                              </div>
               ))}
             </div> */}
           </>
@@ -1313,12 +1242,12 @@ export function CalendarScheduler() {
 
       {/* Bottom Task Display Section */}
       {selectedTask && (
-        <div className="fixed bottom-0 left-80 right-80 bg-[#ffffff] border-t border-[#e5e8eb] p-4 z-40">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Task Display</CardTitle>
-            </CardHeader>
-            <CardContent>
+      <div className="fixed bottom-0 left-80 right-80 bg-[#ffffff] border-t border-[#e5e8eb] p-4 z-40">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Task Display</CardTitle>
+          </CardHeader>
+          <CardContent>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 rounded-full" style={{ backgroundColor: selectedTask.color }}></div>
@@ -1341,9 +1270,9 @@ export function CalendarScheduler() {
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+          </CardContent>
+        </Card>
+      </div>
       )}
 
       {/* Settings Dialog */}
@@ -1640,11 +1569,11 @@ export function CalendarScheduler() {
                               </div>
                               <div
                                 className={`px-2 py-1 rounded-full ${task.priority === "high"
-                                  ? "bg-red-100 text-red-700"
-                                  : task.priority === "medium"
-                                    ? "bg-yellow-100 text-yellow-700"
-                                    : "bg-green-100 text-green-700"
-                                  }`}
+                                    ? "bg-red-100 text-red-700"
+                                    : task.priority === "medium"
+                                      ? "bg-yellow-100 text-yellow-700"
+                                      : "bg-green-100 text-green-700"
+                                }`}
                               >
                                 {task.priority} priority
                               </div>
@@ -1672,7 +1601,7 @@ export function CalendarScheduler() {
                               variant="ghost"
                               size="sm"
                               className={`${task.completed
-                                ? "text-[#71717a] hover:text-[#18181b]"
+                                  ? "text-[#71717a] hover:text-[#18181b]"
                                 : "text-green-600 hover:text-green-700"}`}
                               onClick={(e) => {
                                 e.stopPropagation()
