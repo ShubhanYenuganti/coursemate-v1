@@ -14,6 +14,16 @@ interface StudyPlanTabProps {
   courseId: string;
 }
 
+function formatDate(dateString: string) {
+  const [year, month, day] = dateString.split('T')[0].split('-');
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
   const [isScaffoldingOpen, setIsScaffoldingOpen] = useState(false);
@@ -47,7 +57,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
             id: goal.goal_id || goal.id, // Handle both ID formats
           courseId: courseId,
           title: goal.goal_descr,
-          targetDate: goal.due_date || new Date().toISOString(),
+          targetDate: formatDate(goal.due_date || new Date().toISOString()),
           workMinutesPerDay: 60, // Default value
           frequency: 'daily', // Default value
           createdAt: goal.created_at,
