@@ -651,9 +651,52 @@ export function CalendarScheduler() {
       });
       if (!res.ok) throw new Error(`Failed to create task: ${res.status}`);
       alert('Task created successfully!');
-      // Optionally, refresh goals/tasks here
+      
+      // Refresh goals data to show the newly created task
+      const fetchGoals = async () => {
+        try {
+          const goalsRes = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!goalsRes.ok) throw new Error(`Request failed ${goalsRes.status}`);
+          const grouped = await goalsRes.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+          const all: Goal[] = ([] as Goal[]).concat(...Object.values(grouped));
+          const courses: Course[] = [];
+          const courseIds = [...new Set(all.map(g => g.course_id))];
+          courseIds.forEach(courseId => {
+            const courseGoals = all.filter(goal => goal.course_id === courseId);
+            const firstGoal = courseGoals[0];
+            const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
+            courses.push({
+              goals: courseGoals,
+              course_title: courseId,
+              course_description: '',
+              course_id: courseId,
+              color: color
+            });
+          });
+          setCourses(courses);
+          updateCourseTitles(courseIds, token, courses).then(setCourses);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+      
+      // Refresh the goals data
+      fetchGoals();
+      
+      // Close modal and reset form fields
       handleCloseAddTaskModal();
-      // Reset form fields
       setNewTaskName('');
       setNewTaskDueDate('');
       setNewTaskDescription('');
