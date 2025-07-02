@@ -147,7 +147,7 @@ def sync_google_events(user: User, full_sync: bool = True):
             "calendarId": cal_id,
             "maxResults": 2500,
             "singleEvents": True,
-            "showDeleted": False,
+            "showDeleted": True,
         }
         
         if have_token:
@@ -175,34 +175,68 @@ def sync_google_events(user: User, full_sync: bool = True):
                 raise
             
             for item in feed.get("items", []):
-                existing = Goal.query.filter_by(google_event_id=item["id"]).first()
-                if existing:
-                    # Update fields if needed
-                    existing.goal_descr = item.get("summary", "Untitled")
-                    existing.task_descr = item.get("description", "") # treat task_descr as description of google calendar event
-                    
-                    # Parse and convert times to UTC
-                    start_raw = item["start"].get("dateTime") or item["start"].get("date")
-                    end_raw = item["end"].get("dateTime") or item["end"].get("date")
-                    
-                    if "T" in end_raw:
-                        existing.due_date = isoparse(end_raw).astimezone(timezone.utc)
-                    else:
-                        existing.due_date = isoparse(end_raw + "T00:00:00Z").astimezone(timezone.utc)
-                    
-                    if "T" in start_raw:
-                        existing.start_time = isoparse(start_raw).astimezone(timezone.utc)
-                    else:
-                        existing.start_time = isoparse(start_raw + "T00:00:00Z").astimezone(timezone.utc)
-                    
-                    if "T" in end_raw:
-                        existing.end_time = isoparse(end_raw).astimezone(timezone.utc)
-                    else:
-                        existing.end_time = isoparse(end_raw + "T00:00:00Z").astimezone(timezone.utc)
-                    
-                    existing.updated_at = datetime.now(timezone.utc)
+                # Log the event being processed
+                current_app.logger.info(f"Processing event: {item.get('id')} - {item.get('summary')} - Status: {item.get('status')}")
+                
+                # Handle deleted events
+                if item.get("status") == "cancelled":
+                    existing_rows = Goal.query.filter_by(google_event_id=item["id"]).all()
+                    if existing_rows:
+                        current_app.logger.info(f"Deleting {len(existing_rows)} rows for cancelled event: {item.get('id')}")
+                        for existing in existing_rows:
+                            db.session.delete(existing)
+                        db.session.commit()
+                    continue
+                
+                existing_rows = Goal.query.filter_by(google_event_id=item["id"]).all()
+                if existing_rows:
+                    for existing in existing_rows:
+                        # Check if there are actual changes to avoid unnecessary updates
+                        start_raw = item["start"].get("dateTime") or item["start"].get("date")
+                        end_raw = item["end"].get("dateTime") or item["end"].get("date")
+                        
+                        # Parse new times for comparison
+                        if "T" in end_raw:
+                            new_due_date = isoparse(end_raw).astimezone(timezone.utc)
+                        else:
+                            new_due_date = isoparse(end_raw + "T00:00:00Z").astimezone(timezone.utc)
+                        
+                        if "T" in start_raw:
+                            new_start_time = isoparse(start_raw).astimezone(timezone.utc)
+                        else:
+                            new_start_time = isoparse(start_raw + "T00:00:00Z").astimezone(timezone.utc)
+                        
+                        if "T" in end_raw:
+                            new_end_time = isoparse(end_raw).astimezone(timezone.utc)
+                        else:
+                            new_end_time = isoparse(end_raw + "T00:00:00Z").astimezone(timezone.utc)
+                        
+                        new_task_descr = item.get("description", "")
+                        new_goal_descr = f"Imported from {cal_name}"
+                        
+                        # Check if any fields have actually changed
+                        has_changes = (
+                            existing.goal_descr != new_goal_descr or
+                            existing.task_descr != new_task_descr or
+                            existing.due_date != new_due_date or
+                            existing.start_time != new_start_time or
+                            existing.end_time != new_end_time
+                        )
+                        
+                        if has_changes:
+                            current_app.logger.info(f"Updating existing goal for event: {item.get('id')} - {item.get('summary')}")
+                            # Update fields if needed
+                            existing.goal_descr = new_goal_descr
+                            existing.task_descr = new_task_descr
+                            existing.due_date = new_due_date
+                            existing.start_time = new_start_time
+                            existing.end_time = new_end_time
+                            existing.updated_at = datetime.now(timezone.utc)
+                        else:
+                            current_app.logger.debug(f"No changes detected for event: {item.get('id')} - {item.get('summary')}")
                 else:
                     # Create new goal
+                    current_app.logger.info(f"Creating new goal for event: {item.get('id')} - {item.get('summary')}")
                     goal = convert_google_event_to_goal(user.id, course_id, event=item, calendar_name=cal_name, calendar_color=cal_color)
                     db.session.add(goal)
             db.session.commit()
@@ -219,6 +253,10 @@ def sync_google_events(user: User, full_sync: bool = True):
                 user.google_sync_tokens = token_map
                 db.session.commit()
             break
+        # Commit all changes for this calendar at once (faster for incremental sync)
+        db.session.commit()
+    # RECOMMENDATION: Ensure an index exists on Goal.google_event_id for optimal sync performance.
+    
 
 
 def convert_google_event_to_goal(user_id, course_id, event, calendar_name, calendar_color):
@@ -299,6 +337,13 @@ def create_event(goal_id):
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     refresh_google_token(user)
+    
+    # pull incremental updates so local DB matches Google
+    try:
+        sync_google_events(user, full_sync=False)
+    except Exception as e:
+        current_app.logger.exception("Incremental sync failed")
+        return jsonify({"error": str(e)}), 500
 
     goal = Goal.query.get(goal_id)
     if not goal or goal.user_id != current_user_id:
@@ -355,6 +400,8 @@ def create_event(goal_id):
     goal.google_event_id = event["id"]
     goal.google_calendar_id = calendar_id
     db.session.commit()
+    
+
 
     return jsonify({"event_id": event["id"], "calendar_id": calendar_id}), 201
 
