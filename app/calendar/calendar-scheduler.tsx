@@ -345,7 +345,7 @@ export function CalendarScheduler() {
           const filteredGrouped: Record<string, Goal[]> = {};
           Object.keys(grouped).forEach(key => {
             filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-          });
+            });
           setGoalsByDate(filteredGrouped);
           // Optionally, sort the keys for display order
           const ordered = Object.keys(filteredGrouped)
@@ -371,7 +371,7 @@ export function CalendarScheduler() {
           });
           setCourses(courses);
           updateCourseTitles(courseIds, token, courses).then(setCourses);
-          
+
           // Initialize all courses as visible by default
           const initialVisibility: Record<string, boolean> = {};
           courseIds.forEach(courseId => {
@@ -475,7 +475,7 @@ export function CalendarScheduler() {
           const filteredGrouped: Record<string, Goal[]> = {};
           Object.keys(grouped).forEach(key => {
             filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-          });
+            });
           setGoalsByDate(filteredGrouped);
           const ordered = Object.keys(filteredGrouped)
             .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
@@ -755,7 +755,7 @@ export function CalendarScheduler() {
         const filteredGrouped: Record<string, Goal[]> = {};
         Object.keys(grouped).forEach(key => {
           filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-        });
+          });
         setGoalsByDate(filteredGrouped);
         // Optionally, sort the keys for display order
         const ordered = Object.keys(filteredGrouped)
@@ -782,7 +782,7 @@ export function CalendarScheduler() {
         setCourses(courses);
         updateCourseTitles(courseIds, token, courses).then(setCourses);
         console.log('Courses set with colors:', courses);
-        
+
         // Initialize all courses as visible by default
         const initialVisibility: Record<string, boolean> = {};
         courseIds.forEach(courseId => {
@@ -1389,9 +1389,9 @@ export function CalendarScheduler() {
                   // Simplified Regular Task Display
                   <div className="space-y-3">
                     <div className="mb-2">
-                      {selectedGoal.task_descr && (
+                    {selectedGoal.task_descr && (
                         <div className="text-sm text-gray-700 mb-1">{selectedGoal.task_descr}</div>
-                      )}
+                    )}
                     </div>
                     <ul className="text-sm text-gray-800 space-y-1">
                       <li><strong>Status:</strong> <span className={`font-medium ${getStatusColor(calculateStatus(selectedGoal))}`}>{calculateStatus(selectedGoal)}</span></li>
@@ -1404,34 +1404,34 @@ export function CalendarScheduler() {
                     </ul>
                     {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks >= 1 && (
                       <div className="mt-2">
-                        <button
-                          onClick={() => setExpandedTaskId(expandedTaskId === selectedGoal.task_id ? null : selectedGoal.task_id)}
+                          <button
+                            onClick={() => setExpandedTaskId(expandedTaskId === selectedGoal.task_id ? null : selectedGoal.task_id)}
                           className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
-                        >
-                          {expandedTaskId === selectedGoal.task_id ? (
-                            <ChevronDown className="w-4 h-4" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4" />
-                          )}
-                          View Subtasks ({selectedGoal.totalSubtasks})
-                        </button>
-                        {expandedTaskId === selectedGoal.task_id && (
-                          <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                            {selectedGoal.subtasks?.map((subtask, index) => (
-                              <div
-                                key={subtask.subtask_id || index}
-                                className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs cursor-pointer hover:bg-gray-100 transition-colors"
-                                onClick={() => handleSubtaskToggle(subtask)}
-                              >
+                          >
+                            {expandedTaskId === selectedGoal.task_id ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                            View Subtasks ({selectedGoal.totalSubtasks})
+                          </button>
+                          {expandedTaskId === selectedGoal.task_id && (
+                            <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                              {selectedGoal.subtasks?.map((subtask, index) => (
+                                <div
+                                  key={subtask.subtask_id || index}
+                                  className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs cursor-pointer hover:bg-gray-100 transition-colors"
+                                  onClick={() => handleSubtaskToggle(subtask)}
+                                >
                                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${subtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'}`} />
                                 <span className={`flex-1 ${subtask.subtask_completed ? 'line-through text-gray-500' : 'text-gray-700'}`}>{subtask.subtask_descr || `Subtask ${index + 1}`}</span>
-                                {subtask.subtask_type && subtask.subtask_type !== 'other' && (
+                                  {subtask.subtask_type && subtask.subtask_type !== 'other' && (
                                   <span className="text-xs px-1 py-0.5 bg-gray-200 rounded text-gray-600">{subtask.subtask_type}</span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                       </div>
                     )}
                   </div>
@@ -1666,10 +1666,10 @@ export function CalendarScheduler() {
                 </button>
               </div>
 
-              <div className="space-y-6">
+            <div className="space-y-6">
                 {/* Task Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
+              <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Task Name *
                     </label>
@@ -1679,24 +1679,24 @@ export function CalendarScheduler() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       value={newTaskName}
                       onChange={e => setNewTaskName(e.target.value)}
-                    />
-                  </div>
+                />
+              </div>
 
-                  <div>
+              <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Due Date *
                     </label>
                     <input
-                      type="date"
+                    type="date"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       value={newTaskDueDate}
                       onChange={e => setNewTaskDueDate(e.target.value)}
-                    />
-                  </div>
+                  />
                 </div>
+              </div>
 
                 {/* Course Selection */}
-                <div>
+              <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Course *
                   </label>
@@ -1721,7 +1721,7 @@ export function CalendarScheduler() {
                       ))
                     )}
                   </select>
-                </div>
+                      </div>
 
                 {/* Goal Selection */}
                 <div>
@@ -1745,10 +1745,10 @@ export function CalendarScheduler() {
                       ))
                     )}
                   </select>
-                </div>
+              </div>
 
                 {/* Task Description */}
-                <div>
+              <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Task Description
                   </label>
@@ -1759,10 +1759,10 @@ export function CalendarScheduler() {
                     value={newTaskDescription}
                     onChange={e => setNewTaskDescription(e.target.value)}
                   />
-                </div>
+              </div>
 
                 {/* Subtasks */}
-                <div>
+              <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-medium text-gray-900">Subtasks</h3>
                     <button
@@ -1775,9 +1775,9 @@ export function CalendarScheduler() {
                     </button>
                   </div>
                   {newSubtasks.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                      <p>No subtasks yet. Add your first subtask to get started.</p>
-                    </div>
+                  <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                    <p>No subtasks yet. Add your first subtask to get started.</p>
+              </div>
                   ) : (
                     <div className="space-y-4">
                       {newSubtasks.map((subtask, idx) => (
@@ -1797,7 +1797,7 @@ export function CalendarScheduler() {
                                 setNewSubtasks(updated);
                               }}
                             />
-                          </div>
+            </div>
                           <button
                             type="button"
                             className="absolute right-0 -top-2 text-red-500 hover:text-red-700 w-8 h-8 flex items-center justify-center z-10"
@@ -1811,26 +1811,26 @@ export function CalendarScheduler() {
                       ))}
                     </div>
                   )}
-                </div>
+          </div>
 
-                {/* Footer */}
-                <div className="flex gap-3 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={handleCloseAddTaskModal}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              {/* Footer */}
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleCloseAddTaskModal}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+                </button>
+                <button
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                     onClick={handleCreateTask}
-                  >
-                    <Save className="w-4 h-4" />
-                    Create Task
-                  </button>
+                >
+                  <Save className="w-4 h-4" />
+                  Create Task
+                </button>
                 </div>
-              </div>
-            </div>
+          </div>
+      </div>
           </div>
         </div>
       )}

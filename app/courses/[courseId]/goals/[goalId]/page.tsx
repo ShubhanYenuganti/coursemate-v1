@@ -458,16 +458,22 @@ const GoalDetailPage = () => {
         )
       );
       
-      // Update goal completion status based on all tasks
+      // Recalculate goal progress and completedTasks
       if (goal) {
-        const updatedTasks = tasks.map(task => 
-          task.id === updatedTask.id ? updatedTask : task
-        );
-        const allTasksCompleted = updatedTasks.length > 0 && updatedTasks.every(t => t.completed);
-        
+        // Use the updated tasks array
+        const updatedTasks = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
+        const totalTasks = updatedTasks.length;
+        const completedTasks = updatedTasks.filter(t => t.completed).length;
+        const totalSubtasks = updatedTasks.reduce((sum, t) => sum + t.totalSubtasks, 0);
+        const completedSubtasks = updatedTasks.reduce((sum, t) => sum + t.completedSubtasks, 0);
+        const progress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+        const allTasksCompleted = totalTasks > 0 && completedTasks === totalTasks;
         setGoal({
           ...goal,
-          completed: allTasksCompleted
+          completed: allTasksCompleted,
+          completedTasks,
+          totalTasks,
+          progress
         });
       }
       
@@ -602,9 +608,33 @@ const GoalDetailPage = () => {
       const originalGoal = goal;
       const originalTasks = tasks;
       
+      // Determine new completion status
+      const togglingToComplete = !task.completed;
+      
+      // Prepare updated subtasks
+      let updatedSubtasks;
+      if (togglingToComplete) {
+        // Mark all subtasks as complete
+        updatedSubtasks = task.subtasks.map(subtask => ({ ...subtask, completed: true }));
+      } else {
+        // Leave subtasks as-is
+        updatedSubtasks = [...task.subtasks];
+      }
+      
+      // Count completed subtasks
+      const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+      const totalSubtasksCount = updatedSubtasks.length;
+      const newProgress = totalSubtasksCount > 0 
+        ? Math.round((completedSubtasksCount / totalSubtasksCount) * 100)
+        : 0;
+      
       const updatedTask = {
         ...task,
-        completed: !task.completed
+        completed: togglingToComplete,
+        subtasks: updatedSubtasks,
+        completedSubtasks: completedSubtasksCount,
+        totalSubtasks: totalSubtasksCount,
+        progress: newProgress
       };
       
       // Optimistic update - immediately update the UI
@@ -612,14 +642,22 @@ const GoalDetailPage = () => {
         prevTasks.map(t => t.id === updatedTask.id ? updatedTask : t)
       );
       
-      // Optimistically update goal completion status
+      // Recalculate goal progress and completedTasks
       if (goal) {
+        // Use the updated tasks array
         const updatedTasks = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
-        const allTasksCompleted = updatedTasks.length > 0 && updatedTasks.every(t => t.completed);
-        
+        const totalTasks = updatedTasks.length;
+        const completedTasks = updatedTasks.filter(t => t.completed).length;
+        const totalSubtasks = updatedTasks.reduce((sum, t) => sum + t.totalSubtasks, 0);
+        const completedSubtasks = updatedTasks.reduce((sum, t) => sum + t.completedSubtasks, 0);
+        const progress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+        const allTasksCompleted = totalTasks > 0 && completedTasks === totalTasks;
         setGoal({
           ...goal,
-          completed: allTasksCompleted
+          completed: allTasksCompleted,
+          completedTasks,
+          totalTasks,
+          progress
         });
       }
       
@@ -629,7 +667,7 @@ const GoalDetailPage = () => {
           task_id: updatedTask.id,
           task_title: updatedTask.name,
           task_completed: updatedTask.completed,
-          subtasks: updatedTask.subtasks.map(subtask => ({
+          subtasks: updatedSubtasks.map(subtask => ({
             subtask_id: subtask.id,
             subtask_descr: subtask.name,
             subtask_type: subtask.type,

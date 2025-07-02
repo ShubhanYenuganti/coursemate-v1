@@ -357,18 +357,16 @@ def update_goal(goal_id):
             # Instead of deleting tasks that weren't in the update, we'll keep them
             # This allows for incremental additions without losing existing data
             
-            # Check if all tasks are completed to update goal completion status
-            if updated_task_ids:
-                all_tasks_completed = True
-                for task_id in updated_task_ids:
-                    task_rows = [g for g in goals if g.task_id == task_id]
-                    if not all(g.task_completed for g in task_rows):
-                        all_tasks_completed = False
-                        break
-                
-                # Update goal completion status
-                for g in goals:
-                    g.goal_completed = all_tasks_completed
+            # After all updates, check if ALL tasks for the goal are completed (excluding placeholders)
+            all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
+            all_tasks_completed = True if all_task_ids else False
+            for tid in all_task_ids:
+                task_rows = [g for g in goals if g.task_id == tid]
+                if not all(g.task_completed for g in task_rows):
+                    all_tasks_completed = False
+                    break
+            for g in goals:
+                g.goal_completed = all_tasks_completed
         
         db.session.commit()
         
@@ -589,18 +587,16 @@ def update_goal_tasks(goal_id):
             # Instead of deleting tasks that weren't in the update, we'll keep them
             # This allows for incremental additions without losing existing data
             
-            # Check if all tasks are completed to update goal completion status
-            if updated_task_ids:
-                all_tasks_completed = True
-                for task_id in updated_task_ids:
-                    task_rows = [g for g in goals if g.task_id == task_id]
-                    if not all(g.task_completed for g in task_rows):
-                        all_tasks_completed = False
-                        break
-                
-                # Update goal completion status
-                for g in goals:
-                    g.goal_completed = all_tasks_completed
+            # After all updates, check if ALL tasks for the goal are completed (excluding placeholders)
+            all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
+            all_tasks_completed = True if all_task_ids else False
+            for tid in all_task_ids:
+                task_rows = [g for g in goals if g.task_id == tid]
+                if not all(g.task_completed for g in task_rows):
+                    all_tasks_completed = False
+                    break
+            for g in goals:
+                g.goal_completed = all_tasks_completed
         
         db.session.commit()
         
@@ -1177,7 +1173,7 @@ def create_task(goal_id):
                 task_descr=task_descr,
                 task_completed=task_completed,
                 subtask_id=str(uuid.uuid4()),
-                subtask_descr='Default Subtask',
+                subtask_descr='Initial step',
                 subtask_type='other',
                 subtask_completed=False
             )
