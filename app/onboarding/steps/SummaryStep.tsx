@@ -21,7 +21,10 @@ export const SummaryStep: React.FC<{ progress: number }> = ({ progress }) => {
         </div>
         <button
           className="bg-blue-500 hover:bg-blue-600 text-white font-bold w-56 max-w-full mx-auto py-3 rounded-full text-base shadow-md transition mt-6"
-          onClick={() => window.location.href = "/dashboard"}
+          onClick={() => {
+            localStorage.removeItem("onboardingStep");
+            window.location.href = "/dashboard";
+          }}
         >
           Go to Dashboard
         </button>
