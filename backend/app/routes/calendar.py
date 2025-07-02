@@ -358,7 +358,6 @@ def create_event(goal_id):
 
     return jsonify({"event_id": event["id"], "calendar_id": calendar_id}), 201
 
-    
 def get_or_create_calendar(service, cal_name):
     """Return calendarId for `cal_name`; create it if missing."""
     page_token = None
