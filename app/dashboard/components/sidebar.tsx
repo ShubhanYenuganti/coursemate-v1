@@ -37,6 +37,22 @@ export function Sidebar() {
     router.push('/login');
   }
 
+  async function handleDeleteAccount() {
+    if (!window.confirm("Are you sure you want to delete your account? This cannot be undone.")) return;
+    const res = await fetch('/api/users/me', {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+    if (res.ok) {
+      localStorage.removeItem('token');
+      router.push('/signup');
+    } else {
+      alert('Failed to delete account.');
+    }
+  }
+
   const navigation: NavItem[] = [
     {
       name: 'Dashboard',
@@ -84,6 +100,12 @@ export function Sidebar() {
         </div>
         <span className="font-semibold text-gray-800">CourseMate</span>
       </div>
+      <button
+        onClick={handleDeleteAccount}
+        className="mb-3 w-full bg-red-100 text-red-700 font-semibold py-2 rounded hover:bg-red-200 transition"
+      >
+        Delete Account
+      </button>
       <nav className="flex-1">
         {navigation.map((item) => {
           const active = pathname === item.href;

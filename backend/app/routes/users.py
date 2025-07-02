@@ -49,7 +49,6 @@ def delete_user(user_id):
     db.session.commit()
     return jsonify({'message': 'User deleted'})
 
-
 @users_bp.route('/profile', methods=['POST'])
 @jwt_required()
 def update_profile():
@@ -74,3 +73,14 @@ def update_profile():
 
     db.session.commit()
     return jsonify({'message': 'Profile updated successfully'}), 200
+
+@users_bp.route('/me', methods=['DELETE'])
+@jwt_required()
+def delete_me():
+    current_user = get_jwt_identity()
+    user = User.query.get(current_user)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'message': 'Account deleted'}), 200

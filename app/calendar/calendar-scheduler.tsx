@@ -492,35 +492,35 @@ const calculateEventPositions = (goals: Goal[], hourHeight: number, currentHour:
 // Extracted view components to reduce cognitive complexity
 const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
   <div className="flex flex-col h-full">
-    <div className="border-b border-gray-200 p-4 flex items-center justify-between">
-      <h2 className="text-2xl font-semibold">
-        {currentDate.toLocaleDateString("en-US", {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })}
-      </h2>
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-          Today
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentDate(new Date(currentDate.getTime() - 86_400_000))}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentDate(new Date(currentDate.getTime() + 86_400_000))}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </Button>
-      </div>
-    </div>
+            <div className="border-b border-gray-200 p-4 flex items-center justify-between">
+              <h2 className="text-2xl font-semibold">
+                {currentDate.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </h2>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+                  Today
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentDate(new Date(currentDate.getTime() - 86_400_000))}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentDate(new Date(currentDate.getTime() + 86_400_000))}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
 
     <AllDayRow
       days={currentDate}
@@ -532,21 +532,21 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
       <div className="flex">
         <div className="w-16 border-r border-gray-200 flex-shrink-0">
           {hours.map((h: number) => (
-            <div
-              key={h}
-              className="h-20 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1"
-            >
-              {formatHourLabel(h)}
-            </div>
-          ))}
-        </div>
+                  <div
+                    key={h}
+                    className="h-20 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1"
+                  >
+                    {formatHourLabel(h)}
+                  </div>
+                ))}
+              </div>
 
         <div className="flex-1 relative overflow-visible">
           {hours.map((h: number) => {
             const goals = goalsStartingAtHour(currentDate, h, getGoalsForDate);
             const eventPositions = calculateEventPositions(goals, 80, h, currentDate);
 
-            return (
+                        return (
               <div key={h} className="h-20 border-b border-gray-200 relative p-1 overflow-visible">
                 {eventPositions.map((pos) => (
                   <div
@@ -566,7 +566,7 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
                     {pos.showTitle && (
                       <div className="font-semibold leading-tight truncate">
                         {pos.goal.task_title ?? "(untitled)"}
-                      </div>
+                        </div>
                     )}
                     {pos.showTitle && pos.goal.goal_descr && (
                       <div className="text-[11px] opacity-90 truncate">
@@ -578,7 +578,7 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
               </div>
             );
           })}
-        </div>
+            </div>
       </div>
     </div>
   </div>
@@ -586,58 +586,58 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
 
 const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDate, handleTaskClick, setTimelineRef, formatHourLabel }: any) => (
   <>
-    <div className="flex flex-col border-b border-gray-200">
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
+            <div className="flex flex-col border-b border-gray-200">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
               setCurrentDate((p: Date) => new Date(p.getFullYear(), p.getMonth(), p.getDate() - 7))
-            }
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-            This Week
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
+                    }
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+                    This Week
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
               setCurrentDate((p: Date) => new Date(p.getFullYear(), p.getMonth(), p.getDate() + 7))
-            }
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
+                    }
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
 
-        <h2 className="text-lg font-semibold text-gray-900">
-          {weekDates[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
-          {weekDates[6].toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-        </h2>
-      </div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {weekDates[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
+                  {weekDates[6].toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </h2>
+              </div>
 
-      <div className="flex">
+              <div className="flex">
         <div className="w-16 border-r border-gray-200 p-4 text-xs text-gray-500 flex-shrink-0" />
         {weekDates.map((d: Date) => {
-          const isToday = d.toDateString() === startOfToday().toDateString();
-          return (
-            <div
-              key={d.toISOString()}
-              className="flex-1 border-r border-gray-200 p-4 text-center min-w-0"
-            >
-              <div className="text-xs text-gray-500 mb-1">
-                {d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
-              </div>
-              <div className={`text-2xl font-semibold ${isToday ? "text-blue-600" : "text-gray-900"}`}>
-                {d.getDate()}
+                  const isToday = d.toDateString() === startOfToday().toDateString();
+                  return (
+                    <div
+                      key={d.toISOString()}
+                      className="flex-1 border-r border-gray-200 p-4 text-center min-w-0"
+                    >
+                      <div className="text-xs text-gray-500 mb-1">
+                        {d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
+                      </div>
+                      <div className={`text-2xl font-semibold ${isToday ? "text-blue-600" : "text-gray-900"}`}>
+                        {d.getDate()}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          );
-        })}
-      </div>
-    </div>
 
     <AllDayRow
       days={weekDates}         // pass the whole week array
@@ -645,15 +645,15 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
       handleTaskClick={handleTaskClick}
     />
 
-    <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
-      <div className="flex">
-        <div className="w-16 border-r border-gray-200">
+            <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
+              <div className="flex">
+                <div className="w-16 border-r border-gray-200">
           {hours.map((h: number) => (
             <div key={h} className="h-16 border-b border-gray-200 p-2 text-xs text-gray-500 flex items-start justify-end pr-1">
-              {formatHourLabel(h)}
-            </div>
-          ))}
-        </div>
+                      {formatHourLabel(h)}
+                    </div>
+                  ))}
+                </div>
 
         {weekDates.map((d: Date) => (
           <div key={d.toISOString()} className="flex-1 border-r border-gray-200 relative overflow-visible">
@@ -661,7 +661,7 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
               const goals = goalsStartingAtHour(d, h, getGoalsForDate);
               const eventPositions = calculateEventPositions(goals, 64, h, d);
 
-              return (
+                            return (
                 <div key={h} className="h-16 border-b border-gray-200 p-1 relative overflow-visible">
                   {eventPositions.map((pos) => (
                     <div
@@ -681,189 +681,189 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
                       {pos.showTitle && (
                         <div className="font-semibold leading-tight truncate">
                           {pos.goal.task_title ?? "(untitled)"}
-                        </div>
+                            </div>
                       )}
                       {pos.showTitle && pos.goal.goal_descr && (
                         <div className="text-[11px] opacity-90 truncate">
                           {pos.goal.goal_descr}
                         </div>
                       )}
-                    </div>
-                  ))}
+                      </div>
+                    ))}
                 </div>
               );
             })}
-          </div>
-        ))}
-      </div>
-    </div>
-  </>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
 );
 
 const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskClick }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <h2 className="text-2xl font-semibold">
-          {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-        </h2>
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <h2 className="text-2xl font-semibold">
+                  {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                </h2>
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setCurrentDate(
-                new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
-              )
-            }
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentDate(
+                        new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+                      )
+                    }
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
 
-          <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-            This Month
-          </Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+                    This Month
+                  </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setCurrentDate(
-                new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
-              )
-            }
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentDate(
+                        new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+                      )
+                    }
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
 
-      <div className="grid grid-cols-7 gap-px bg-gray-200">
-        {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
+              <div className="grid grid-cols-7 gap-px bg-gray-200">
+                {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
           <div key={d} className="bg-gray-50 p-3 text-center text-sm font-medium text-gray-500">
-            {d}
-          </div>
-        ))}
-      </div>
-    </div>
+                    {d}
+                  </div>
+                ))}
+              </div>
+            </div>
 
-    <div className="flex-1 overflow-y-auto">
-      <div className="grid grid-cols-7 gap-px bg-gray-200 h-full">
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-7 gap-px bg-gray-200 h-full">
         {getMonthDays(currentDate).map((d: Date) => {
-          const inMonth = d.getMonth() === currentDate.getMonth();
-          const isToday = d.toDateString() === startOfToday().toDateString();
+                  const inMonth = d.getMonth() === currentDate.getMonth();
+                  const isToday = d.toDateString() === startOfToday().toDateString();
           const evs = getGoalsForDate(d);
 
-          return (
-            <div
-              key={d.toISOString()}
-              className={`bg-white p-2 min-h-[110px] ${!inMonth ? "bg-gray-50 text-gray-400" : ""}`}
-            >
-              <div
+                  return (
+                    <div
+                      key={d.toISOString()}
+                      className={`bg-white p-2 min-h-[110px] ${!inMonth ? "bg-gray-50 text-gray-400" : ""}`}
+                    >
+                      <div
                 className={`text-sm font-medium mb-2 ${isToday
                   ? "bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center"
                   : ""
                   }`}
-              >
-                {d.getDate()}
-              </div>
+                      >
+                        {d.getDate()}
+                      </div>
 
               {evs.slice(0, 3).map((g: any) => (
-                <div
+                        <div
                   key={g.goal_id}
-                  className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
+                          className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
                   style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
                   onClick={() => handleTaskClick(g)}
-                >
+                        >
                   {g.task_title ?? "(untitled)"}
-                </div>
-              ))}
+                        </div>
+                      ))}
 
-              {evs.length > 3 && (
+                      {evs.length > 3 && (
                 <div className="text-xs text-gray-500 font-medium">
                   +{evs.length - 3} more
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  </>
-);
-
-const YearView = ({ currentDate, setCurrentDate }: any) => (
-  <>
-    <div className="border-b border-gray-200 p-4 flex items-center justify-between">
-      <h2 className="text-2xl font-semibold">{currentDate.getFullYear()}</h2>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentDate(new Date(currentDate.getFullYear() - 1, 0, 1))}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-          Today
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentDate(new Date(currentDate.getFullYear() + 1, 0, 1))}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </Button>
-      </div>
-    </div>
-
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="grid grid-cols-3 gap-6">
-        {Array.from({ length: 12 }, (_, m) => {
-          const monthDate = new Date(currentDate.getFullYear(), m, 1);
-          const monthName = monthDate.toLocaleDateString("en-US", { month: "long" });
-          const daysInMonth = new Date(currentDate.getFullYear(), m + 1, 0).getDate();
-          const firstDow = monthDate.getDay();
-          return (
-            <div
-              key={m}
-              className="border border-gray-200 rounded-lg p-4 hover:shadow cursor-pointer"
-              onClick={() => {
-                setCurrentDate(new Date(currentDate.getFullYear(), m, 1));
-                // setCurrentView("month"); // You'll need to pass this as a prop
-              }}
-            >
-              <h3 className="text-lg font-semibold text-center mb-3">{monthName}</h3>
-              <div className="grid grid-cols-7 text-xs gap-1">
-                {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
-                  <div key={d} className="text-center text-gray-500">{d}</div>
-                ))}
-                {Array.from({ length: firstDow }, (_, i) => (
-                  <div key={i} className="h-5"></div>
-                ))}
-                {Array.from({ length: daysInMonth }, (_, dayIdx) => {
-                  const d = dayIdx + 1;
-                  const full = new Date(currentDate.getFullYear(), m, d);
-                  const isToday =
-                    full.toDateString() === startOfToday().toDateString() &&
-                    full.getFullYear() === startOfToday().getFullYear();
-                  return (
-                    <div
-                      key={d}
-                      className={`h-5 flex items-center justify-center ${isToday ? "bg-blue-600 text-white rounded-full" : "text-gray-900 hover:bg-gray-100 rounded"}`}
-                    >
-                      {d}
+                      )}
                     </div>
                   );
                 })}
               </div>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  </>
+          </>
+);
+
+const YearView = ({ currentDate, setCurrentDate }: any) => (
+          <>
+            <div className="border-b border-gray-200 p-4 flex items-center justify-between">
+              <h2 className="text-2xl font-semibold">{currentDate.getFullYear()}</h2>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentDate(new Date(currentDate.getFullYear() - 1, 0, 1))}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+        <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+                  Today
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentDate(new Date(currentDate.getFullYear() + 1, 0, 1))}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-3 gap-6">
+                {Array.from({ length: 12 }, (_, m) => {
+                  const monthDate = new Date(currentDate.getFullYear(), m, 1);
+                  const monthName = monthDate.toLocaleDateString("en-US", { month: "long" });
+                  const daysInMonth = new Date(currentDate.getFullYear(), m + 1, 0).getDate();
+                  const firstDow = monthDate.getDay();
+                  return (
+                    <div
+                      key={m}
+                      className="border border-gray-200 rounded-lg p-4 hover:shadow cursor-pointer"
+                      onClick={() => {
+                        setCurrentDate(new Date(currentDate.getFullYear(), m, 1));
+                // setCurrentView("month"); // You'll need to pass this as a prop
+                      }}
+                    >
+                      <h3 className="text-lg font-semibold text-center mb-3">{monthName}</h3>
+                      <div className="grid grid-cols-7 text-xs gap-1">
+                        {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
+                          <div key={d} className="text-center text-gray-500">{d}</div>
+                        ))}
+                        {Array.from({ length: firstDow }, (_, i) => (
+                          <div key={i} className="h-5"></div>
+                        ))}
+                        {Array.from({ length: daysInMonth }, (_, dayIdx) => {
+                          const d = dayIdx + 1;
+                          const full = new Date(currentDate.getFullYear(), m, d);
+                          const isToday =
+                            full.toDateString() === startOfToday().toDateString() &&
+                            full.getFullYear() === startOfToday().getFullYear();
+                          return (
+                            <div
+                              key={d}
+                              className={`h-5 flex items-center justify-center ${isToday ? "bg-blue-600 text-white rounded-full" : "text-gray-900 hover:bg-gray-100 rounded"}`}
+                            >
+                              {d}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
 );
 
 export function CalendarScheduler() {
