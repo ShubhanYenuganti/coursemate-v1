@@ -49,6 +49,8 @@ class Goal(db.Model):
     google_source = Column(String(255), nullable=True)
     google_calendar_color = Column(String(7), nullable=True)  # Hex color code (e.g., "#4285f4")
     is_external = Column(Boolean, default=False)
+    google_calendar_id = Column(String, nullable=True)
+    sync_status = Column(String, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="goals")
@@ -57,7 +59,7 @@ class Goal(db.Model):
     def __init__(self, user_id, course_id, goal_id, goal_descr, task_id, task_title, 
                  subtask_id, subtask_descr, due_date=None, goal_completed=False, 
                  task_descr=None, task_completed=False, subtask_type="other", 
-                 subtask_completed=False, google_event_id=None, google_etag=None, google_source=None, google_calendar_color=None, is_external=False, start_time=None, end_time=None):
+                 subtask_completed=False, google_event_id=None, google_etag=None, google_source=None, google_calendar_color=None, is_external=False, start_time=None, end_time=None, sync_status="Not Synced", google_calendar_id=None):
         self.id = str(uuid.uuid4())
         self.user_id = user_id
         self.course_id = course_id
@@ -90,7 +92,9 @@ class Goal(db.Model):
         self.end_time = end_time
         self.created_at = datetime.now(timezone.utc)
         self.updated_at = self.created_at
-
+        self.sync_status = sync_status
+        self.google_calendar_id = google_calendar_id
+        
     @classmethod
     def create_for_goal(cls, user_id, course_id, goal_descr, due_date=None):
         """Create a new goal with a single task and subtask"""
@@ -148,5 +152,7 @@ class Goal(db.Model):
             'google_calendar_color': self.google_calendar_color,
             'is_external': self.is_external,
             'start_time': self._fmt(self.start_time),
-            'end_time': self._fmt(self.end_time)
+            'end_time': self._fmt(self.end_time),
+            'sync_status': self.sync_status,
+            'google_calendar_id': self.google_calendar_id
         } 

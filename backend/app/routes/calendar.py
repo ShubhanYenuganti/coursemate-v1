@@ -292,62 +292,86 @@ def ensure_google_calendar_course(user) -> str:
         db.session.add(course)
         db.session.commit()
     return stub_id
-# Use Google Calendar API to Post a new event to user's calendar
-@calendar_bp.route("/api/calendar/events", methods=["POST"])
+
+@calendar_bp.route("/api/calendar/events/<goal_id>", methods=["POST"])
 @jwt_required()
-def create_event():
-    current_user = get_jwt_identity()
-    user = User.query.get(current_user)
+def create_event(goal_id):
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
     refresh_google_token(user)
-    
-    if not user.google_access_token:
-        return jsonify({"error": "No access token found"}), 400
-    
-    try: 
-        refresh_google_token(user)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    
-    event_data = request.json
-    required_fields = {"summary", "start", "end"}
-    
-    if not required_fields.issubset(event_data):
-        return jsonify({"error": "Missing required fields"}), 400
-    
-    event_payload = {
-        "summary": event_data["summary"],
-        "description": event_data.get("description", ""),
-        "start": {
-            "dateTime": event_data["start"],
-            "timeZone": event_data.get("timeZone", "America/New_York")
-        },
-        "end": {
-            "dateTime": event_data["end"],
-            "timeZone": event_data.get("timeZone", "America/New_York")
-        },
-    }
-    
-    headers = {
-        "Authorization": f"Bearer {user.google_access_token}",
-        "Content-Type": "application/json"
-    }
-    
-    response = requests.post(
-        "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-        json=event_payload,
-        headers=headers
+
+    goal = Goal.query.get(goal_id)
+    if not goal or goal.user_id != current_user_id:
+        return jsonify({"msg": "Goal not found"}), 404
+
+    if (goal.sync_status or "").lower() == "synced" or goal.goal_id == "Google Calendar":
+        return jsonify({"msg": "Event already synced"}), 200
+
+    # Auth credentials
+    creds = Credentials(
+        token=user.google_access_token,
+        refresh_token=user.google_refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=current_app.config["GOOGLE_CLIENT_ID"],
+        client_secret=current_app.config["GOOGLE_CLIENT_SECRET"],
+        scopes=["https://www.googleapis.com/auth/calendar"],
     )
+    service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+
+    # Input data
+    data = request.get_json(force=True)
+    summary = data.get("task_title")
+    description = data.get("task_descr") or goal.task_descr or ""
+    due_str = data.get("due_date")
+    course_title = data.get("course_title")
+
+    if not summary or not due_str or not course_title:
+        return jsonify({"error": "task_title, due_date, and course_title required"}), 400
+
+    # Parse date
+    try:
+        start_date = isoparse(due_str).date()
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid ISO format for due_date"}), 400
+    end_date = start_date + timedelta(days=1)
+
+    calendar_id = get_or_create_calendar(service, course_title)
+
+    event_body = {
+        "summary": summary,
+        "description": description,
+        "start": {"date": start_date.isoformat()},
+        "end": {"date": end_date.isoformat()},
+    }
+
+    try:
+        event = service.events().insert(calendarId=calendar_id, body=event_body).execute()
+    except HttpError as e:
+        if e.resp.status == 409:
+            return jsonify({"msg": "Duplicate event"}), 409
+        return jsonify({"error": str(e)}), 500
+
+    goal.sync_status = "Synced"
+    goal.google_event_id = event["id"]
+    goal.google_calendar_id = calendar_id
+    db.session.commit()
+
+    return jsonify({"event_id": event["id"], "calendar_id": calendar_id}), 201
+
     
-    if response.status_code == 200:
-        return jsonify({"message": "Event created successfully"}), 200
-    else:
-        return jsonify({"error": "Failed to create event"}), response.status_code
-    
-# Sample JSON Request Body for creating an event
-# {
-#   "summary": "Mentorship Session",
-#   "description": "1:1 mentor meeting",
-#   "start": "2025-06-17T15:00:00Z",
-#   "end": "2025-06-17T16:00:00Z",
-#   "timeZone": "America/Los_Angeles"
-# }
+def get_or_create_calendar(service, cal_name):
+    """Return calendarId for `cal_name`; create it if missing."""
+    page_token = None
+    while True:
+        feed = service.calendarList().list(pageToken=page_token).execute()
+        for item in feed.get("items", []):
+            if item.get("summary") == cal_name:
+                return item["id"]
+        page_token = feed.get("nextPageToken")
+        if not page_token:
+            break
+
+    new_cal = service.calendars().insert(
+        body={"summary": cal_name}
+    ).execute()
+    return new_cal["id"]

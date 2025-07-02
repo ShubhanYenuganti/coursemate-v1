@@ -26,6 +26,8 @@ export interface Goal {
     subtasks?: Goal[];
     // Status field
     status?: "Overdue" | "In Progress" | "Completed" | null;
+    sync_status?: "Synced" | "Not Synced" | null;
+    google_calendar_id?: string | null;
 }
 
 export type GoalsByDate = Record<string, Goal[]>
