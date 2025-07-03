@@ -84,3 +84,23 @@ def delete_me():
     db.session.delete(user)
     db.session.commit()
     return jsonify({'message': 'Account deleted'}), 200
+
+@users_bp.route('/onboarding', methods=['POST'])
+@jwt_required()
+def onboarding():
+    current_user = get_jwt_identity()
+    user = User.query.get(current_user)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    if user.onboarded:
+        return jsonify({'error': 'User already onboarded'}), 400
+    data = request.get_json()
+    user.name = data.get('name', user.name)
+    user.email = data.get('email', user.email)
+    user.college = data.get('school', user.college)
+    user.year = data.get('year', user.year)
+    user.major = data.get('major', user.major)
+    # Optionally save profilePic and academicInterests if you have columns for them
+    user.onboarded = True
+    db.session.commit()
+    return jsonify({'message': 'Onboarding complete'}), 200

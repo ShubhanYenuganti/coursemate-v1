@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { FullNameStep } from "./steps/FullNameStep";
 import { SchoolStep } from "./steps/SchoolStep";
 import { YearStep } from "./steps/YearStep";
+import { SelectMajorStep } from "./steps/SelectMajorStep";
 import { ProfilePictureStep } from "./steps/ProfilePictureStep";
 import { AcademicInterestsStep } from "./steps/AcademicInterestsStep";
 import { JoinClassStep } from "./steps/JoinClassStep";
@@ -14,6 +15,7 @@ const onboardingSteps = [
   FullNameStep,
   SchoolStep,
   YearStep,
+  SelectMajorStep,
   ProfilePictureStep,
   AcademicInterestsStep,
   JoinClassStep,

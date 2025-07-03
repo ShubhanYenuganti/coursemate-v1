@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 export interface OnboardingData {
   name?: string;
@@ -8,6 +8,7 @@ export interface OnboardingData {
   profilePic?: string;
   school?: string;
   year?: string;
+  major?: string;
   academicInterests?: string[];
   studyPreferences?: {
     wantsStudyGroup?: boolean;
@@ -39,11 +40,24 @@ export const useOnboarding = () => {
   return ctx;
 };
 
+const LOCAL_STORAGE_KEY = "onboardingData";
+
 export const OnboardingProvider: React.FC<{ children: React.ReactNode; initialData?: OnboardingData }> = ({
   children,
   initialData = {},
 }) => {
-  const [data, setDataState] = useState<OnboardingData>(initialData);
+  const [data, setDataState] = useState<OnboardingData>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) return { ...initialData, ...JSON.parse(saved) };
+    }
+    return initialData;
+  });
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+  }, [data]);
+
   const setData = (newData: Partial<OnboardingData>) =>
     setDataState((prev) => ({ ...prev, ...newData }));
 

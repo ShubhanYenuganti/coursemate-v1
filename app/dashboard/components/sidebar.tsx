@@ -114,7 +114,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={`w-full flex items-center px-5 py-3 text-gray-600 hover:bg-gray-100 hover:text-gray-700 transition-all duration-200 ${active ? 'bg-gray-100 text-gray-700 border-r-4 border-indigo-500' : ''
-                }`}
+              }`}
             >
               <span className="w-5 h-5 mr-3 opacity-70">{item.icon}</span>
               {item.name}
@@ -124,16 +124,16 @@ export function Sidebar() {
       </nav>
       <div className="p-5 border-t border-gray-200">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="w-9 h-9 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold mr-3">
-              NS
-            </div>
+        <div className="flex items-center">
+          <div className="w-9 h-9 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold mr-3">
+            NS
+          </div>
             <div>
-              <div className="font-medium text-gray-800">Nikhil Sharma</div>
-              <div className="text-xs text-gray-600 cursor-pointer hover:text-indigo-500">
-                View Profile
-              </div>
+            <div className="font-medium text-gray-800">Nikhil Sharma</div>
+            <div className="text-xs text-gray-600 cursor-pointer hover:text-indigo-500">
+              View Profile
             </div>
+          </div>
           </div>
           <button
               onClick={handleLogoutClick}
