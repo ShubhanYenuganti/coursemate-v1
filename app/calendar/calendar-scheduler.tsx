@@ -1139,8 +1139,8 @@ export function CalendarScheduler() {
     <div className="flex h-screen bg-[#ffffff]">
       {/* Main Calendar - Made Smaller */}
       {/* ───────────────── Main Section ───────────────── */}
-      <div className="flex-1 pt-20 flex flex-col overflow-hidden">
-        <div className="flex items-center gap-4">
+      <div className="flex-1 flex flex-col overflow-hidden"> {/* Removed pt-20 */}
+        <div className="flex items-center gap-4 px-6 pt-4 pb-2"> {/* Added px-6 pt-4 pb-2 for spacing */}
           <Button
             variant={currentView === "day" ? "default" : "ghost"}
             size="sm"
@@ -1218,17 +1218,18 @@ export function CalendarScheduler() {
       </div>
 
       {/* Right Sidebar */}
-      <div className="w-80 bg-[#ffffff] border-l border-[#e5e8eb] p-6 pt-20 overflow-y-auto">
+      <div className="w-80 bg-[#ffffff] border-l border-[#e5e8eb] p-6 pt-0 overflow-y-auto flex flex-col"> {/* pt-0, flex-col for vertical alignment */}
         {/* Add Task Button */}
-        <div className="mb-6">
+        <div className="mb-6 mt-0 px-6 pt-4"> {/* Match header padding */}
           <Button
             onClick={() => setShowAddTask(true)}
             className="w-full bg-[#0a80ed] hover:bg-[#0369a1] text-white font-medium py-3"
+            style={{ marginTop: 0 }}
           >
             + Add Task
           </Button>
         </div>
-        { /* Dropdown Toggle */}
+        {/* Dropdown Toggle */}
         <div className="mb-6">
           <Select value={sidebarTab} onValueChange={(val) => setSidebarTab(val as "courses" | "tasks")}>
             <SelectTrigger className="w-full">
