@@ -943,6 +943,8 @@ const GoalDetailPage = () => {
                             </svg>
                           </button>
                         ) : (
+                          // Only show checkbox if all subtasks are completed
+                          task.totalSubtasks > 0 && task.completedSubtasks === task.totalSubtasks && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -951,6 +953,7 @@ const GoalDetailPage = () => {
                             className="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors bg-white border-gray-300 hover:border-green-400"
                             title="Mark as complete"
                           />
+                          )
                         )}
                         <h4 className={`font-medium ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{task.name}</h4>
                       </div>

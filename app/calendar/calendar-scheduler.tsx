@@ -10,24 +10,17 @@ import {
   GripVertical,
   Eye,
   Plus,
-  Clock,
-  CheckCircle,
-  Circle,
-  Edit,
   Save,
   ExternalLink,
   RotateCcw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import useAuthRedirect from "@/hooks/useAuthRedirect"
 import { Switch } from "@/components/ui/switch"
-import { Badge } from "@/components/ui/badge"
 import { toast } from "react-hot-toast"
 
 import { DayView } from "./components/DayView"
@@ -58,39 +51,6 @@ function getUtcDate(dateString: string) {
   // Handles both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' formats
   const datePart = dateString.split('T')[0];
   return new Date(datePart + 'T00:00:00Z');
-}
-
-// Helper to regroup and sort goals by date, matching the useEffect logic
-function regroupAndSortGoals(goals: Goal[]): GoalsByDate {
-  // Filter out placeholder tasks
-  const filteredAll = goals.filter(goal => goal.task_id !== 'placeholder');
-  // Regroup by *local* YYYY-MM-DD
-  const grouped: GoalsByDate = {};
-  for (const g of filteredAll) {
-    let key: string;
-    if (!g.start_time && g.due_date) {
-      key = getDateKeyFromDateString(g.due_date);
-    } else if (g.start_time && g.end_time) {
-      key = getLocalDateKey(new Date(g.start_time));
-    } else if (g.due_date) {
-      const utcDate = getUtcDate(g.due_date);
-      key = getLocalDateKey(utcDate ?? new Date());
-    } else {
-      const utcDate = getUtcDate(g.due_date!);
-      key = getLocalDateKey(utcDate ?? new Date());
-    }
-    (grouped[key] ??= []).push(g);
-  }
-  // Sort tasks within each date group
-  Object.keys(grouped).forEach(dateKey => {
-    grouped[dateKey].sort((a, b) => {
-      if (a.task_id !== b.task_id) {
-        return (a.task_id || '').localeCompare(b.task_id || '');
-      }
-      return (a.subtask_id || '').localeCompare(b.subtask_id || '');
-    });
-  });
-  return grouped;
 }
 
 // Refactor updateCourseTitles to accept courses array and return new array
