@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { format, isToday, isBefore, isAfter, parseISO } from 'date-fns';
 import { courseService, CourseData } from '../../../lib/api/courseService';
 import { taskService, Task as TaskType } from '../../../lib/api/taskService';
+import { getSubtasksForTask } from '../../courses/components/studyplan/mockData';
+import { ChevronDown, ChevronRight, CheckCircle, Circle } from 'lucide-react';
 
 export interface Task {
   id: string;
@@ -49,6 +51,7 @@ const TodaysChecklist: React.FC = () => {
     color: DEFAULT_COLORS[0],
     time: '',
   });
+  const [expandedTasks, setExpandedTasks] = useState<{ [taskId: string]: boolean }>({});
 
   // Fetch user courses on component mount
   useEffect(() => {
@@ -68,12 +71,7 @@ const TodaysChecklist: React.FC = () => {
     const fetchTasks = async () => {
       setIsLoading(true);
       try {
-        console.log('🔍 Fetching tasks from database...');
-        // Always fetch all tasks first, then filter on frontend
         const apiTasks = await taskService.getTasks('all');
-        console.log('📋 Tasks fetched from database:', apiTasks);
-        
-        // Transform API tasks to component format
         const transformedTasks: Task[] = apiTasks.map(task => ({
           id: task.id,
           title: task.title,
@@ -83,8 +81,6 @@ const TodaysChecklist: React.FC = () => {
           color: task.color,
           time: format(parseISO(task.due_date), 'MMM d'),
         }));
-
-        console.log('🔄 Transformed tasks:', transformedTasks);
         setTasks(transformedTasks);
       } catch (error) {
         console.error('❌ Failed to fetch tasks:', error);
@@ -92,30 +88,16 @@ const TodaysChecklist: React.FC = () => {
         setIsLoading(false);
       }
     };
-
     fetchTasks();
-  }, []); // Only fetch once when component mounts, not when filter changes
+  }, []);
 
-  // Filter courses based on search term
   const filteredCourses = userCourses.filter(course =>
     course.title.toLowerCase().includes(courseSearchTerm.toLowerCase()) ||
     course.subject.toLowerCase().includes(courseSearchTerm.toLowerCase())
   );
 
-  const handleTaskToggle = async (taskId: string, checked: boolean) => {
-    try {
-      console.log('🔄 Toggling task:', taskId, 'to:', checked);
-      await taskService.toggleTask(taskId);
-      await refreshTasks();
-      console.log('✅ Task toggled successfully');
-    } catch (error) {
-      console.error('❌ Failed to toggle task:', error);
-    }
-  };
-
   // Date helpers
   const todayDate = new Date();
-
   const filterTasks = (tasks: Task[]) => {
     return tasks.filter(task => {
       const due = parseISO(task.dueDate);
@@ -129,13 +111,32 @@ const TodaysChecklist: React.FC = () => {
       return false;
     });
   };
-
   const filteredTasks = filterTasks(tasks);
-
-  // Helper function to check if a task is overdue
   const isTaskOverdue = (task: Task) => {
     const due = parseISO(task.dueDate);
     return isBefore(due, todayDate) && !isToday(due);
+  };
+
+  // Toggle expand/collapse for a task
+  const toggleTaskExpand = (taskId: string) => {
+    setExpandedTasks(prev => ({ ...prev, [taskId]: !prev[taskId] }));
+  };
+
+  // Toggle subtask completion (mock, for demo)
+  const [subtaskState, setSubtaskState] = useState<{ [subtaskId: string]: boolean }>({});
+  const handleSubtaskToggle = (subtaskId: string) => {
+    setSubtaskState(prev => ({ ...prev, [subtaskId]: !prev[subtaskId] }));
+  };
+
+  const handleTaskToggle = async (taskId: string, checked: boolean) => {
+    try {
+      console.log('🔄 Toggling task:', taskId, 'to:', checked);
+      await taskService.toggleTask(taskId);
+      await refreshTasks();
+      console.log('✅ Task toggled successfully');
+    } catch (error) {
+      console.error('❌ Failed to toggle task:', error);
+    }
   };
 
   const handleOpenModal = () => {
@@ -291,43 +292,57 @@ const TodaysChecklist: React.FC = () => {
       {filteredTasks.length > 0 ? (
         filteredTasks.map((task) => {
           const overdue = isTaskOverdue(task);
+          const subtasks = getSubtasksForTask(task.id);
           return (
-            <div key={task.id} className={`flex items-center py-3 border-b border-gray-100 last:border-b-0 ${overdue ? 'bg-red-50 border-red-200' : ''}`}>
-              <div
-                onClick={() => handleTaskToggle(task.id, !task.completed)}
-                className={`w-5 h-5 border-2 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
-                  task.completed ? 'bg-emerald-500 border-emerald-500 text-white' : overdue ? 'border-red-400 hover:border-red-500' : 'hover:border-emerald-400'
-                }`}
-              >
-                {task.completed && '✓'}
-              </div>
-              <div className="flex-1">
-                <div className={`font-medium ${task.completed ? 'text-gray-500 line-through' : overdue ? 'text-red-700' : 'text-gray-800'}`}>
-                  {task.title}
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: task.color || '#6b7280' }}
-                  />
-                  <span className={`text-xs ${overdue ? 'text-red-600' : 'text-gray-600'}`}>{task.course}</span>
-                  {overdue && (
-                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
-                      OVERDUE
-                    </span>
+            <div key={task.id} className={`mb-2 rounded-lg border ${overdue ? 'bg-red-50 border-red-200' : 'border-gray-100'} transition-all`}>
+              <div className="flex items-center py-4 px-3 cursor-pointer" onClick={() => toggleTaskExpand(task.id)}>
+                <span className="mr-2">
+                  {expandedTasks[task.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </span>
+                <div className="flex-1">
+                  <div className={`font-medium ${overdue ? 'text-red-700' : 'text-gray-800'}`}>{task.title}</div>
+                  {/* Progress Bar for Subtasks */}
+                  {subtasks.length > 0 && (
+                    <div className="w-full h-2 bg-gray-200 rounded-full my-2">
+                      <div
+                        className="h-2 bg-green-500 rounded-full transition-all"
+                        style={{ width: `${(subtasks.filter(st => subtaskState[st.id] || st.completed).length / subtasks.length) * 100}%` }}
+                      />
+                    </div>
                   )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: task.color || '#6b7280' }} />
+                    <span className={`text-xs ${overdue ? 'text-red-600' : 'text-gray-600'}`}>{task.course}</span>
+                    {overdue && (
+                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">OVERDUE</span>
+                    )}
+                  </div>
                 </div>
+                <div className={`text-xs ml-auto ${overdue ? 'text-red-600 font-medium' : 'text-gray-600'}`}>{task.time}</div>
               </div>
-              <div className={`text-xs ml-auto ${overdue ? 'text-red-600 font-medium' : 'text-gray-600'}`}>{task.time}</div>
-              {/* Edit button */}
-              <button
-                className="ml-3 text-gray-400 hover:text-indigo-500 p-1 rounded transition-colors"
-                aria-label="Edit Task"
-                onClick={() => handleEditClick(task)}
-                type="button"
-              >
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828A2 2 0 019 17H7v-2a2 2 0 01.586-1.414z" /></svg>
-              </button>
+              {/* Subtasks Dropdown */}
+              {expandedTasks[task.id] && subtasks.length > 0 && (
+                <div className="pl-10 pr-4 pb-4">
+                  <div className="space-y-2">
+                    {subtasks.map(subtask => (
+                      <div key={subtask.id} className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleSubtaskToggle(subtask.id)}
+                          className="flex-shrink-0 mt-0.5"
+                        >
+                          {subtaskState[subtask.id] || subtask.completed ? (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <Circle className="w-5 h-5 text-gray-300" />
+                          )}
+                        </button>
+                        <span className={`text-sm ${subtaskState[subtask.id] || subtask.completed ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{subtask.name}</span>
+                        <span className="text-xs text-gray-400">({subtask.estimatedTimeMinutes} min)</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })
