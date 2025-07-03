@@ -7,6 +7,8 @@ from app.models.course import Course
 from app.init import db
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import SQLAlchemyError
+from app.routes.calendar import sync_task_to_google_calendar, delete_task_from_google_calendar
+from app.models.user import User
 
 goals_bp = Blueprint('goals', __name__)
 
@@ -705,10 +707,22 @@ def save_tasks_and_subtasks(goal_id):
         
         db.session.commit()
         
-        # Return the created rows
-        result = [row.to_dict() for row in new_rows]
-        current_app.logger.info(f"Created {len(new_rows)} rows for goal {goal_id}")
-        return jsonify(result), 201
+        # Sync to Google Calendar if user has Google Calendar connected
+        try:
+            user = User.query.get(user_id)
+            if user and user.google_access_token:
+                # Get course title for the calendar
+                course = Course.query.get(reference_goal.course_id)
+                course_title = course.title if course else str(reference_goal.course_id)
+                
+                # Sync the first created task to Google Calendar
+                if new_rows:
+                    sync_task_to_google_calendar(user, new_rows[0], course_title)
+        except Exception as e:
+            current_app.logger.error(f"Failed to sync new task to Google Calendar: {str(e)}")
+            # Don't fail the request if Google Calendar sync fails
+        
+        return jsonify([row.to_dict() for row in new_rows]), 201
         
     except SQLAlchemyError as e:
         db.session.rollback()
@@ -737,6 +751,19 @@ def delete_task(goal_id, task_id):
         task_rows = Goal.query.filter_by(goal_id=goal_id, task_id=task_id, user_id=user_id).all()
         if not task_rows:
             return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        # Delete from Google Calendar if the task has a Google Calendar event
+        try:
+            user = User.query.get(user_id)
+            if user and user.google_access_token:
+                # Check if any of the task rows has a Google Calendar event
+                for row in task_rows:
+                    if row.google_event_id and row.sync_status == "Synced":
+                        delete_task_from_google_calendar(user, row)
+                        break  # Only need to delete once since it's the same event
+        except Exception as e:
+            current_app.logger.error(f"Failed to delete task from Google Calendar: {str(e)}")
+            # Continue with deletion even if Google Calendar sync fails
         
         # Delete all rows for this task
         deleted_count = 0
@@ -779,6 +806,27 @@ def delete_subtask(subtask_id):
         # Delete the subtask
         db.session.delete(subtask)
         db.session.commit()
+        
+        # Sync to Google Calendar if user has Google Calendar connected
+        try:
+            user = User.query.get(user_id)
+            if user and user.google_access_token:
+                # Get course title for the calendar
+                course = Course.query.get(subtask.course_id)
+                course_title = course.title if course else str(subtask.course_id)
+                
+                # Get a remaining subtask to sync (or create a representative task row)
+                remaining_subtasks = Goal.query.filter_by(goal_id=goal_id, task_id=task_id).all()
+                if remaining_subtasks:
+                    # Use the first remaining subtask to sync the updated task
+                    sync_task_to_google_calendar(user, remaining_subtasks[0], course_title)
+                else:
+                    # If no subtasks remain, we might want to delete the Google Calendar event
+                    # For now, we'll just log this case
+                    current_app.logger.info(f"No subtasks remaining for task {task_id}, consider deleting Google Calendar event")
+        except Exception as e:
+            current_app.logger.error(f"Failed to sync subtask deletion to Google Calendar: {str(e)}")
+            # Don't fail the request if Google Calendar sync fails
         
         # Check if this was the last subtask for the task
         remaining_subtasks = Goal.query.filter_by(goal_id=goal_id, task_id=task_id).count()
@@ -861,6 +909,20 @@ def update_subtask(subtask_id):
         subtask.updated_at = datetime.utcnow()
         db.session.commit()
         
+        # Sync to Google Calendar if user has Google Calendar connected
+        try:
+            user = User.query.get(user_id)
+            if user and user.google_access_token:
+                # Get course title for the calendar
+                course = Course.query.get(subtask.course_id)
+                course_title = course.title if course else str(subtask.course_id)
+                
+                # Sync the updated task to Google Calendar (using the main task row)
+                sync_task_to_google_calendar(user, subtask, course_title)
+        except Exception as e:
+            current_app.logger.error(f"Failed to sync subtask to Google Calendar: {str(e)}")
+            # Don't fail the request if Google Calendar sync fails
+        
         return jsonify(subtask.to_dict()), 200
         
     except SQLAlchemyError as e:
@@ -917,6 +979,20 @@ def create_subtask(task_id):
         
         db.session.add(new_subtask)
         db.session.commit()
+        
+        # Sync to Google Calendar if user has Google Calendar connected
+        try:
+            user = User.query.get(user_id)
+            if user and user.google_access_token:
+                # Get course title for the calendar
+                course = Course.query.get(task_row.course_id)
+                course_title = course.title if course else str(task_row.course_id)
+                
+                # Sync the updated task to Google Calendar (using the main task row)
+                sync_task_to_google_calendar(user, new_subtask, course_title)
+        except Exception as e:
+            current_app.logger.error(f"Failed to sync new subtask to Google Calendar: {str(e)}")
+            # Don't fail the request if Google Calendar sync fails
         
         # Return the created subtask
         result = new_subtask.to_dict()
@@ -976,6 +1052,20 @@ def create_empty_task(goal_id):
         
         db.session.add(new_task)
         db.session.commit()
+        
+        # Sync to Google Calendar if user has Google Calendar connected
+        try:
+            user = User.query.get(user_id)
+            if user and user.google_access_token:
+                # Get course title for the calendar
+                course = Course.query.get(reference_goal.course_id)
+                course_title = course.title if course else str(reference_goal.course_id)
+                
+                # Sync the new task to Google Calendar
+                sync_task_to_google_calendar(user, new_task, course_title)
+        except Exception as e:
+            current_app.logger.error(f"Failed to sync new empty task to Google Calendar: {str(e)}")
+            # Don't fail the request if Google Calendar sync fails
         
         return jsonify({
             'message': 'Empty task created successfully',
@@ -1097,6 +1187,21 @@ def update_task(task_id):
         
         task.updated_at = now
         db.session.commit()
+        
+        # Sync to Google Calendar if user has Google Calendar connected
+        try:
+            user = User.query.get(user_id)
+            if user and user.google_access_token:
+                # Get course title for the calendar
+                course = Course.query.get(task.course_id)
+                course_title = course.title if course else str(task.course_id)
+                
+                # Sync the updated task to Google Calendar
+                sync_task_to_google_calendar(user, task, course_title)
+        except Exception as e:
+            current_app.logger.error(f"Failed to sync task to Google Calendar: {str(e)}")
+            # Don't fail the request if Google Calendar sync fails
+        
         return jsonify(task.to_dict()), 200
         
     except SQLAlchemyError as e:
@@ -1181,6 +1286,22 @@ def create_task(goal_id):
             created_rows.append(new_row)
 
         db.session.commit()
+        
+        # Sync to Google Calendar if user has Google Calendar connected
+        try:
+            user = User.query.get(user_id)
+            if user and user.google_access_token:
+                # Get course title for the calendar
+                course = Course.query.get(ref_goal.course_id)
+                course_title = course.title if course else str(ref_goal.course_id)
+                
+                # Sync the first created task to Google Calendar
+                if created_rows:
+                    sync_task_to_google_calendar(user, created_rows[0], course_title)
+        except Exception as e:
+            current_app.logger.error(f"Failed to sync new task to Google Calendar: {str(e)}")
+            # Don't fail the request if Google Calendar sync fails
+        
         return jsonify([row.to_dict() for row in created_rows]), 201
 
     except SQLAlchemyError as e:

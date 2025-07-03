@@ -95,32 +95,6 @@ export function CalendarScheduler() {
   const [goalsByDate, setGoalsByDate] = useState<GoalsByDate>({});
   const [courses, setCourses] = useState<Course[]>([]);
 
-  // Helper to sync a single group
-  async function syncTaskGroup(group: any, courses: any[], token: string, api: string) {
-    const rep = group.subtasks[0];
-    if (!rep || !rep.id) return false;
-    let taskDescr = group.taskDescr || "";
-    const subtaskDescriptions = group.subtasks.map((st: any) => st.subtask_descr).filter(Boolean);
-    if (subtaskDescriptions.length > 0) {
-      if (taskDescr) taskDescr += "\n";
-      taskDescr += subtaskDescriptions.join("\n");
-    }
-    const res = await fetch(`${api}/api/calendar/events/${rep.id}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        task_title: group.taskTitle,
-        task_descr: taskDescr,
-        due_date: rep.due_date,
-        course_title: courses.find((c: any) => c.course_id === rep.course_id)?.course_title || rep.course_id
-      })
-    });
-    return res.ok;
-  }
-
   // SYNC BUTTON HANDLER
   const handleSyncAll = async () => {
     setSyncing(true);
@@ -128,17 +102,67 @@ export function CalendarScheduler() {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Not authenticated");
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const allGoals: Goal[] = Object.values(goalsByDate).flat();
-      const nonGoogleGoals = allGoals.filter(g => g.goal_id !== "Google Calendar");
-      const groupedTasks = groupTasksByTaskId(nonGoogleGoals);
-      let successCount = 0;
-      let failCount = 0;
-      for (const group of groupedTasks) {
-        const ok = await syncTaskGroup(group, courses, token, api);
-        if (ok) successCount++;
-        else failCount++;
+      
+      // Call the new Google Calendar sync endpoint
+      const response = await fetch(`${api}/api/calendar/sync`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
       }
-      toast.success(`Sync complete: ${successCount} succeeded, ${failCount} failed.`);
+
+      const result = await response.json();
+      toast.success(result.message || "Google Calendar sync completed successfully");
+      
+      // Refresh the goals data to show any new events from Google Calendar
+      const fetchGoals = async () => {
+        try {
+          const goalsRes = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!goalsRes.ok) throw new Error(`Request failed ${goalsRes.status}`);
+          const grouped = await goalsRes.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+          const all: Goal[] = ([] as Goal[]).concat(...Object.values(grouped));
+          const courses: Course[] = [];
+          const courseIds = [...new Set(all.map(g => g.course_id))];
+          courseIds.forEach(courseId => {
+            const courseGoals = all.filter(goal => goal.course_id === courseId);
+            const firstGoal = courseGoals[0];
+            const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
+            courses.push({
+              goals: courseGoals,
+              course_title: courseId,
+              course_description: '',
+              course_id: courseId,
+              color: color
+            });
+          });
+          setCourses(courses);
+          updateCourseTitles(courseIds, token, courses).then(setCourses);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      // Refresh the goals data
+      fetchGoals();
+      
     } catch (err: any) {
       toast.error("Sync failed: " + (err.message || err));
     } finally {
