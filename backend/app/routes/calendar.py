@@ -88,6 +88,7 @@ def calendar_callback():
 # Helper: Refresh token if expired
 def refresh_google_token(user: User):
     if not user.google_refresh_token:
+        print(f"No refresh token found for user {user.id}")
         raise ValueError("No refresh token found")
     
     if user.token_expiry and user.token_expiry > datetime.now(timezone.utc):
@@ -104,6 +105,7 @@ def refresh_google_token(user: User):
 
     response = requests.post(token_url, data=data)
     if response.status_code != 200:
+        print(f"Failed to refresh token for user {user.id}: {response.status_code}")
         raise ValueError("Failed to refresh token")
     
     new_token = response.json()
@@ -111,6 +113,7 @@ def refresh_google_token(user: User):
     user.token_expiry = (datetime.now(timezone.utc)
                         + timedelta(seconds=new_token["expires_in"]))
     db.session.commit()
+    print(f"Successfully refreshed token for user {user.id}")
     
     
 def sync_google_events(user: User, full_sync: bool = True):
@@ -467,8 +470,7 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
                 # Commit the database changes
                 db.session.commit()
                 
-                current_app.logger.info("Updated Google Calendar event %s for task %s", 
-                                      updated_event["id"], task.task_id)
+                print(f"Updated Google Calendar event {updated_event['id']} in calendar {calendar_id} for task {task.task_id}")
                 return True
             except HttpError as e:
                 if e.resp.status == 404:
@@ -559,8 +561,7 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
             # Commit the database changes
             db.session.commit()
             
-            current_app.logger.info("Created Google Calendar event %s for task %s", 
-                                  new_event["id"], task.task_id)
+            print(f"Created Google Calendar event {new_event['id']} in calendar {calendar_id} for task {task.task_id}")
             return True
             
         except HttpError as e:
@@ -571,17 +572,25 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
         current_app.logger.exception("Error syncing task to Google Calendar: %s", str(e))
         return False
 
-def delete_task_from_google_calendar(user: User, task: Goal):
+def delete_task_from_google_calendar(user: User, task):
     """
     Delete a task's corresponding event from Google Calendar.
+    task can be either a Goal object or a simple object with google_event_id and google_calendar_id attributes.
     """
     try:
-        if not task.google_event_id or task.sync_status != "Synced":
+        # Extract event ID and calendar ID from task object
+        google_event_id = getattr(task, 'google_event_id', None)
+        google_calendar_id = getattr(task, 'google_calendar_id', None)
+        
+        if not google_event_id:
+            print(f"No Google Calendar event ID found for deletion")
             return True  # Nothing to delete
+        
+        print(f"Attempting to delete event {google_event_id} from calendar {google_calendar_id or 'primary'}")
         
         refresh_google_token(user)
         if not user.google_access_token:
-            current_app.logger.warning("No Google access token for user %s", user.id)
+            print(f"No Google access token for user {user.id}")
             return False
         
         # Build credentials
@@ -595,27 +604,55 @@ def delete_task_from_google_calendar(user: User, task: Goal):
         )
         service = build("calendar", "v3", credentials=creds, cache_discovery=False)
         
+        # Try to delete from the specific calendar first
+        calendar_to_try = google_calendar_id or "primary"
         try:
             service.events().delete(
-                calendarId=task.google_calendar_id or "primary",
-                eventId=task.google_event_id
+                calendarId=calendar_to_try,
+                eventId=google_event_id
             ).execute()
             
-            current_app.logger.info("Deleted Google Calendar event %s for task %s", 
-                                  task.google_event_id, task.task_id)
+            print(f"Successfully deleted Google Calendar event: {google_event_id} from {calendar_to_try}")
             return True
             
         except HttpError as e:
             if e.resp.status == 404:
-                # Event already deleted
-                current_app.logger.info("Google Calendar event %s already deleted", task.google_event_id)
-                return True
+                print(f"Event {google_event_id} not found in calendar {calendar_to_try}, searching other calendars...")
+                
+                # If not found in the specific calendar, search all calendars
+                try:
+                    calendar_list = service.calendarList().list().execute()
+                    calendars = calendar_list.get("items", [])
+                    
+                    for cal in calendars:
+                        cal_id = cal["id"]
+                        try:
+                            # Try to delete from this calendar
+                            service.events().delete(
+                                calendarId=cal_id,
+                                eventId=google_event_id
+                            ).execute()
+                            print(f"Successfully deleted Google Calendar event: {google_event_id} from calendar {cal_id}")
+                            return True
+                        except HttpError as inner_e:
+                            if inner_e.resp.status == 404:
+                                continue  # Event not in this calendar, try next
+                            else:
+                                print(f"Error deleting from calendar {cal_id}: {str(inner_e)}")
+                                break
+                    
+                    print(f"Event {google_event_id} not found in any calendar")
+                    return True  # Consider it deleted if not found anywhere
+                    
+                except Exception as search_e:
+                    print(f"Error searching calendars: {str(search_e)}")
+                    return False
             else:
-                current_app.logger.error("Failed to delete Google Calendar event: %s", str(e))
+                print(f"Failed to delete Google Calendar event {google_event_id}: {str(e)}")
                 return False
                 
     except Exception as e:
-        current_app.logger.exception("Error deleting task from Google Calendar: %s", str(e))
+        print(f"Error deleting task from Google Calendar: {str(e)}")
         return False
 
 @calendar_bp.route("/api/calendar/sync", methods=["POST"])

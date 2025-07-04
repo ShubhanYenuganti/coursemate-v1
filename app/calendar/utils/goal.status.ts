@@ -15,10 +15,11 @@ export const calculateStatus = (goal: Goal): "Overdue" | "In Progress" | "Comple
     // If task is not completed, check if it's overdue
     if (goal.due_date) {
         const dueDate = new Date(goal.due_date);
-        const currentDate = new Date();
-
-        // If due date is in the past, it's overdue
-        if (dueDate < currentDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // startOfToday equivalent
+        
+        // If due date is before today (not including today), it's overdue
+        if (dueDate < today) {
             return "Overdue";
         }
     }
