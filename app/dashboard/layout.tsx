@@ -8,42 +8,33 @@ import { useRouter } from "next/navigation";
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [checking, setChecking] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     const checkOnboarded = async () => {
       const token = localStorage.getItem("token");
-      if (!token) {
-        setChecking(false);
-        return;
-      }
+      if (!token) return;
       const res = await fetch("/api/users/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) {
-        setChecking(false);
-        return;
-      }
+      if (!res.ok) return;
       const user = await res.json();
       if (user.onboarded === false) {
         setRedirecting(true);
         setTimeout(() => {
           router.replace("/onboarding");
         }, 1200);
-      } else {
-        setChecking(false);
       }
     };
     checkOnboarded();
   }, [router]);
 
-  if (checking || redirecting) {
+  if (redirecting) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4 bg-gray-50">
         <div className="w-12 h-12 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
         <p className="text-muted-foreground text-lg font-medium">
-          {redirecting ? "Redirecting to onboarding..." : "Checking onboarding status..."}
+          Redirecting to onboarding...
         </p>
       </div>
     );
