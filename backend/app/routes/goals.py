@@ -872,25 +872,12 @@ def save_tasks_and_subtasks(goal_id):
         
         db.session.commit()
         
-        # Sync to Google Calendar if user has Google Calendar connected
-        try:
-            user = User.query.get(user_id)
-            if user and user.google_access_token:
-                # Get course title for the calendar
-                course = Course.query.get(reference_goal.course_id)
-                course_title = course.title if course else str(reference_goal.course_id)
-                
-                # Sync all created tasks to Google Calendar
-                if new_rows:
-                    # Get unique task IDs to avoid syncing the same task multiple times
-                    unique_task_ids = set(row.task_id for row in new_rows)
-                    for task_id in unique_task_ids:
-                        # Get the first row for each task to sync
-                        task_row = next(row for row in new_rows if row.task_id == task_id)
-                        sync_task_to_google_calendar(user, task_row, course_title)
-        except Exception as e:
-            current_app.logger.error(f"Failed to sync new tasks to Google Calendar: {str(e)}")
-            # Don't fail the request if Google Calendar sync fails
+        # Queue Google Calendar sync for all created tasks in background
+        if new_rows:
+            # Get unique task IDs to avoid syncing the same task multiple times
+            unique_task_ids = set(row.task_id for row in new_rows)
+            for task_id in unique_task_ids:
+                queue_google_calendar_sync("sync", user_id, task_id, reference_goal.course_id)
         
         return jsonify([row.to_dict() for row in new_rows]), 201
         

@@ -398,8 +398,13 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
         # Get or create calendar for this course
         calendar_id = get_or_create_calendar(service, course_title)
         
-        # Prepare event data
-        summary = task.task_title or "Untitled Task"
+        # Prepare event data - make title unique by including goal context
+        base_title = task.task_title or "Untitled Task"
+        # Include goal description to make it unique across different goals
+        if task.goal_descr and task.goal_descr != base_title:
+            summary = f"{base_title} ({task.goal_descr})"
+        else:
+            summary = base_title
         description = task.task_descr or ""
         
         # Add subtask information to description if available
@@ -516,9 +521,7 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
                     for event in events.get("items", []):
                         # Check if this event belongs to our task
                         event_props = event.get("extendedProperties", {}).get("private", {})
-                        if (event_props.get("task_id") == task.task_id or 
-                            event_props.get("source") == "coursemate-app" and 
-                            event.get("summary") == task.task_title):
+                        if event_props.get("task_id") == task.task_id:
                             # Delete this event (skip if it's the one we already deleted)
                             if event["id"] != task.google_event_id:
                                 service.events().delete(
