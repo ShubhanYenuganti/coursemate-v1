@@ -637,6 +637,10 @@ def update_goal_tasks(goal_id):
                         task_row.task_descr = task_data['task_descr']
                     if 'task_completed' in task_data:
                         task_row.task_completed = task_data['task_completed']
+                    if 'task_due_date' in task_data:
+                        task_row.task_due_date = task_data['task_due_date']
+                    if 'task_descr' in task_data:
+                        task_row.task_descr = task_data['task_descr']
                 
                 # Handle subtask updates
                 if 'subtasks' in task_data:
@@ -701,6 +705,7 @@ def update_goal_tasks(goal_id):
                             task_title=task_data.get('task_title', 'New Task'),
                             task_descr=task_data.get('task_descr', ''),
                             task_completed=task_data.get('task_completed', False),
+                            task_due_date=task_data.get('task_due_date', None),
                             subtask_id=subtask_data.get('subtask_id', str(uuid.uuid4())),
                             subtask_descr=subtask_data.get('subtask_descr', 'New Subtask'),
                             subtask_type=subtask_data.get('subtask_type', 'other'),
@@ -721,6 +726,7 @@ def update_goal_tasks(goal_id):
                         task_title=task_data.get('task_title', 'New Task'),
                         task_descr=task_data.get('task_descr', ''),
                         task_completed=task_data.get('task_completed', False),
+                        task_due_date=task_data.get('task_due_date', None),
                         subtask_id=str(uuid.uuid4()),
                         subtask_descr='Default Subtask',
                         subtask_type='other',

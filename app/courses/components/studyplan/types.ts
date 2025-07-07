@@ -56,4 +56,6 @@ export interface TaskWithProgress extends Task {
   totalSubtasks: number;
   completedSubtasks: number;
   subtasks: Subtask[];
+  description: string;
+  scheduledDate: string;
 } 

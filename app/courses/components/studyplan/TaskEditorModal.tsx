@@ -245,18 +245,6 @@ const TaskEditorModal: React.FC<TaskEditorModalProps> = ({ isOpen, onClose, task
                         </div>
                       </div>
                     </div>
-                    
-                    <div className="mt-3 flex items-center">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={subtask.completed}
-                          onChange={(e) => handleSubtaskChange(subtask.id, 'completed', e.target.checked)}
-                          className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700">Mark as completed</span>
-                      </label>
-                    </div>
                   </div>
                 ))}
               </div>

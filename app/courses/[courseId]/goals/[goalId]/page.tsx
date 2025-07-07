@@ -426,6 +426,8 @@ const GoalDetailPage = () => {
           task_id: updatedTask.id,
           task_title: updatedTask.name,
           task_completed: updatedTask.completed,
+          task_due_date: updatedTask.scheduledDate,
+          task_descr: updatedTask.description,
           subtasks: updatedTask.subtasks.map(subtask => ({
             subtask_id: subtask.id,
             subtask_descr: subtask.name,
