@@ -795,11 +795,38 @@ export function CalendarScheduler() {
         Object.keys(grouped).forEach(key => {
           filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
         });
-        setGoalsByDate(filteredGrouped);
+
+        // Reprocess the data to group calendar events by their start_time instead of goal date
+        const reprocessedGrouped: Record<string, Goal[]> = {};
+        
+        Object.values(filteredGrouped).flat().forEach(goal => {
+          let key: string;
+          
+          // For calendar events, use start_time for grouping
+          if (goal.start_time && goal.end_time) {
+            key = getLocalDateKey(new Date(goal.start_time));
+          } 
+          // For non-calendar tasks, use task_due_date if available, otherwise fall back to due_date
+          else if (goal.task_due_date) {
+            key = getDateKeyFromDateString(goal.task_due_date);
+          } else if (goal.due_date) {
+            key = getDateKeyFromDateString(goal.due_date);
+          } else {
+            // Fallback to current date if no date is available
+            key = getLocalDateKey(new Date());
+          }
+          
+          if (!reprocessedGrouped[key]) {
+            reprocessedGrouped[key] = [];
+          }
+          reprocessedGrouped[key].push(goal);
+        });
+
+        setGoalsByDate(reprocessedGrouped);
         // Optionally, sort the keys for display order
-        const ordered = Object.keys(filteredGrouped)
+        const ordered = Object.keys(reprocessedGrouped)
           .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
-          .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          .reduce((acc, k) => { acc[k] = reprocessedGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
         setSortedGoalsByDate(ordered);
 
         // set courses by grouping goals by course_id - set colors immediately
@@ -980,16 +1007,19 @@ export function CalendarScheduler() {
       .filter(goal => goal.goal_id !== "Google Calendar") // Exclude Google Calendar events
       .forEach(goal => {
         let key: string;
-        if (!goal.start_time && goal.due_date) {
-          key = getDateKeyFromDateString(goal.due_date);
-        } else if (goal.start_time && goal.end_time) {
+        
+        // For calendar events, use the existing logic
+        if (goal.start_time && goal.end_time) {
           key = getLocalDateKey(new Date(goal.start_time));
+        } 
+        // For non-calendar tasks, use task_due_date if available, otherwise fall back to due_date
+        else if (goal.task_due_date) {
+          key = getDateKeyFromDateString(goal.task_due_date);
         } else if (goal.due_date) {
-          const utcDate = getUtcDate(goal.due_date);
-          key = getLocalDateKey(utcDate ?? new Date());
+          key = getDateKeyFromDateString(goal.due_date);
         } else {
-          const utcDate = getUtcDate(goal.due_date!);
-          key = getLocalDateKey(utcDate ?? new Date());
+          // Fallback to current date if no date is available
+          key = getLocalDateKey(new Date());
         }
         (filteredGoalsByDate[key] ??= []).push(goal);
       });
@@ -1052,7 +1082,14 @@ export function CalendarScheduler() {
 
         {isExpanded && (
           <div className="px-4 pt-4 pb-4 space-y-3 border-t border-[#e5e8eb]">
-            {taskEntries.map(([date, goals]) => {
+            {taskEntries
+              .sort(([dateA], [dateB]) => {
+                // Sort by date (ascending)
+                const dateAObj = new Date(dateA + 'T00:00:00');
+                const dateBObj = new Date(dateB + 'T00:00:00');
+                return dateAObj.getTime() - dateBObj.getTime();
+              })
+              .map(([date, goals]) => {
               const groupedTasks = groupTasksByTaskId(goals);
               const taskDate = new Date(date + 'T00:00:00');
               const isPastDue = taskDate < startOfToday() && taskDate.toDateString() !== startOfToday().toDateString();
@@ -1432,7 +1469,7 @@ export function CalendarScheduler() {
                     <ul className="text-sm text-gray-800 space-y-1">
                       <li><strong>Status:</strong> <span className={`font-medium ${getStatusColor(calculateStatus(selectedGoal))}`}>{calculateStatus(selectedGoal)}</span></li>
                       <li><strong>Assigned:</strong> {formatDate(selectedGoal.updated_at || '')}</li>
-                      <li><strong>Due:</strong> {formatDate(selectedGoal.due_date || '')}</li>
+                      <li><strong>Due:</strong> {formatDate(selectedGoal.task_due_date || selectedGoal.due_date || '')}</li>
                       {/* Progress Bar and Subtasks Dropdown */}
                       {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks >= 1 && (
                         <li><strong>Progress:</strong> {selectedGoal.completedSubtasks}/{selectedGoal.totalSubtasks} subtasks ({selectedGoal.progress || 0}%)</li>

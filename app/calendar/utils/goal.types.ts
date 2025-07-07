@@ -5,6 +5,7 @@ export interface Goal {
     goal_id: string;
     goal_descr: string | null;
     due_date: string | null;          // ISO-8601 string (e.g. "2025-06-30T00:00:00")
+    task_due_date: string | null;     // ISO-8601 string for task-specific due date
     goal_completed: boolean;
     task_id: string | null;
     task_title: string | null;
