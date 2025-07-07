@@ -880,11 +880,16 @@ def save_tasks_and_subtasks(goal_id):
                 course = Course.query.get(reference_goal.course_id)
                 course_title = course.title if course else str(reference_goal.course_id)
                 
-                # Sync the first created task to Google Calendar
+                # Sync all created tasks to Google Calendar
                 if new_rows:
-                    sync_task_to_google_calendar(user, new_rows[0], course_title)
+                    # Get unique task IDs to avoid syncing the same task multiple times
+                    unique_task_ids = set(row.task_id for row in new_rows)
+                    for task_id in unique_task_ids:
+                        # Get the first row for each task to sync
+                        task_row = next(row for row in new_rows if row.task_id == task_id)
+                        sync_task_to_google_calendar(user, task_row, course_title)
         except Exception as e:
-            current_app.logger.error(f"Failed to sync new task to Google Calendar: {str(e)}")
+            current_app.logger.error(f"Failed to sync new tasks to Google Calendar: {str(e)}")
             # Don't fail the request if Google Calendar sync fails
         
         return jsonify([row.to_dict() for row in new_rows]), 201
@@ -1225,8 +1230,18 @@ def get_goals_by_user():
         grouped: dict[str, list[dict]] = defaultdict(list)
 
         for g in goals:
-            # Pick your date field here
-            end_dt = getattr(g, "due_date", None)   # <─ change if it's called due_date
+            # For calendar events, use start_time for grouping
+            # For non-calendar tasks, use task_due_date if available, otherwise fall back to due_date
+            if g.start_time and g.end_time:
+                # Calendar event - use start_time
+                end_dt = g.start_time
+            elif hasattr(g, 'task_due_date') and g.task_due_date:
+                # Non-calendar task with task_due_date
+                end_dt = g.task_due_date
+            else:
+                # Fall back to due_date
+                end_dt = getattr(g, "due_date", None)
+            
             if end_dt is None:
                 key = "unscheduled"
             else:
@@ -1277,6 +1292,9 @@ def update_task(task_id):
         
         if 'task_descr' in data:
             task.task_descr = data['task_descr']
+        
+        if 'task_due_date' in data:
+            task.task_due_date = data['task_due_date']
         
         if 'task_completed' in data:
             task.task_completed = data['task_completed']
@@ -1382,6 +1400,7 @@ def create_task(goal_id):
                     goal_id=goal_id,
                     goal_descr=ref_goal.goal_descr,
                     due_date=task_due_date,
+                    task_due_date=task_due_date,
                     goal_completed=ref_goal.goal_completed,
                     task_id=task_id,
                     task_title=task_title,
@@ -1403,6 +1422,7 @@ def create_task(goal_id):
                 goal_id=goal_id,
                 goal_descr=ref_goal.goal_descr,
                 due_date=task_due_date,
+                task_due_date=task_due_date,
                 goal_completed=ref_goal.goal_completed,
                 task_id=task_id,
                 task_title=task_title,

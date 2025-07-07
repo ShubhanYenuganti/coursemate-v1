@@ -423,16 +423,17 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
             status = "✓" if task.subtask_completed else "○"
             description += f"• {status} {task.subtask_descr}\n"
         
-        # Parse due date
-        if not task.due_date:
+        # Parse due date - use task_due_date if available, otherwise fall back to due_date
+        due_date = task.task_due_date if hasattr(task, 'task_due_date') and task.task_due_date else task.due_date
+        if not due_date:
             current_app.logger.warning("Task %s has no due date, skipping Google Calendar sync", task.task_id)
             return False
         
         # Convert to date for all-day event
-        if isinstance(task.due_date, datetime):
-            start_date = task.due_date.date()
+        if isinstance(due_date, datetime):
+            start_date = due_date.date()
         else:
-            start_date = task.due_date
+            start_date = due_date
         end_date = start_date + timedelta(days=1)
         
         event_body = {
