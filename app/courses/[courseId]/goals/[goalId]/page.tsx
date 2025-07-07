@@ -1008,16 +1008,18 @@ const GoalDetailPage = () => {
                     <div className="border-t border-gray-200 p-4">
                       <SubtaskList 
                         taskId={task.id} 
-                        subtasks={task.subtasks}
+                        subtasks={task.subtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0))}
                         onSubtaskDeleted={(subtaskId) => {
                           // Update the local task state to reflect the deleted subtask
                           const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
+                          // Keep the order after deletion
+                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
                           const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
                           const totalSubtasksCount = updatedSubtasks.length;
                           
                           const updatedTask = {
                             ...task,
-                            subtasks: updatedSubtasks,
+                            subtasks: sortedSubtasks,
                             totalSubtasks: totalSubtasksCount,
                             completedSubtasks: completedSubtasksCount,
                             // Automatically complete task if all subtasks are done
@@ -1035,12 +1037,14 @@ const GoalDetailPage = () => {
                         onSubtaskAdded={(newSubtask) => {
                           // Update the local task state to reflect the added subtask
                           const updatedSubtasks = [...task.subtasks, newSubtask];
+                          // Keep the order after addition
+                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
                           const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
                           const totalSubtasksCount = updatedSubtasks.length;
                           
                           const updatedTask = {
                             ...task,
-                            subtasks: updatedSubtasks,
+                            subtasks: sortedSubtasks,
                             totalSubtasks: totalSubtasksCount,
                             completedSubtasks: completedSubtasksCount,
                             // Automatically complete task if all subtasks are done
@@ -1060,13 +1064,15 @@ const GoalDetailPage = () => {
                           const updatedSubtasks = task.subtasks.map(subtask => 
                             subtask.id === subtaskId ? { ...subtask, completed } : subtask
                           );
+                          // Keep the order after toggle
+                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
                           
                           const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
                           const totalSubtasksCount = updatedSubtasks.length;
                           
                           const updatedTask = {
                             ...task,
-                            subtasks: updatedSubtasks,
+                            subtasks: sortedSubtasks,
                             completedSubtasks: completedSubtasksCount,
                             // Automatically complete task if all subtasks are done
                             completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0

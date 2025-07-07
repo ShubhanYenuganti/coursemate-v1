@@ -29,6 +29,7 @@ export interface Subtask {
   completed: boolean;
   createdAt: string;
   updatedAt: string;
+  subtask_order?: number;
 }
 
 export interface StudyPlanStats {

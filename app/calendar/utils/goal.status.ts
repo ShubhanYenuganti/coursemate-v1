@@ -17,7 +17,7 @@ export const calculateStatus = (goal: Goal): "Overdue" | "In Progress" | "Comple
         const dueDate = new Date(goal.due_date);
         const today = new Date();
         today.setHours(0, 0, 0, 0); // startOfToday equivalent
-        
+
         // If due date is before today (not including today), it's overdue
         if (dueDate < today) {
             return "Overdue";

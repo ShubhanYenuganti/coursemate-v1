@@ -12,6 +12,7 @@ from app.models.user import User
 import threading
 import queue
 import time
+from sqlalchemy import asc
 
 # Background task queue for Google Calendar sync
 sync_queue = queue.Queue()
@@ -268,7 +269,8 @@ def create_goal(course_id):
                             task_descr=task_descr,
                             subtask_id=str(uuid.uuid4()),
                             subtask_descr=subtask_data.get('subtask_descr', 'New Subtask'),
-                            subtask_type=subtask_data.get('subtask_type', 'other')
+                            subtask_type=subtask_data.get('subtask_type', 'other'),
+                            subtask_order=subtask_data.get('subtask_order', None)
                         )
                         rows_to_add.append(subtask)
                 else:
@@ -284,7 +286,8 @@ def create_goal(course_id):
                         task_descr=task_descr,
                         subtask_id=str(uuid.uuid4()),
                         subtask_descr='Default Subtask',
-                        subtask_type='other'
+                        subtask_type='other',
+                        subtask_order=0
                     )
                     rows_to_add.append(subtask)
         elif not skip_default_task:
@@ -432,7 +435,8 @@ def update_goal(goal_id):
                                     subtask_id=subtask_data.get('subtask_id', str(uuid.uuid4())),
                                     subtask_descr=subtask_data.get('subtask_descr', 'New Subtask'),
                                     subtask_type=subtask_data.get('subtask_type', 'other'),
-                                    subtask_completed=subtask_data.get('subtask_completed', False)
+                                    subtask_completed=subtask_data.get('subtask_completed', False),
+                                    subtask_order=subtask_data.get('subtask_order', None)
                                 )
                                 db.session.add(new_subtask)
                         
@@ -460,7 +464,8 @@ def update_goal(goal_id):
                                 subtask_id=subtask_data.get('subtask_id', str(uuid.uuid4())),
                                 subtask_descr=subtask_data.get('subtask_descr', 'New Subtask'),
                                 subtask_type=subtask_data.get('subtask_type', 'other'),
-                                subtask_completed=subtask_data.get('subtask_completed', False)
+                                subtask_completed=subtask_data.get('subtask_completed', False),
+                                subtask_order=subtask_data.get('subtask_order', None)
                             )
                             db.session.add(new_subtask)
                     else:
@@ -479,7 +484,8 @@ def update_goal(goal_id):
                             subtask_id=str(uuid.uuid4()),
                             subtask_descr='Default Subtask',
                             subtask_type='other',
-                            subtask_completed=False
+                            subtask_completed=False,
+                            subtask_order=0
                         )
                         db.session.add(new_subtask)
             
@@ -669,7 +675,8 @@ def update_goal_tasks(goal_id):
                                 subtask_id=subtask_data.get('subtask_id', str(uuid.uuid4())),
                                 subtask_descr=subtask_data.get('subtask_descr', 'New Subtask'),
                                 subtask_type=subtask_data.get('subtask_type', 'other'),
-                                subtask_completed=subtask_data.get('subtask_completed', False)
+                                subtask_completed=subtask_data.get('subtask_completed', False),
+                                subtask_order=subtask_data.get('subtask_order', None)
                             )
                             db.session.add(new_subtask)
                     
@@ -697,7 +704,8 @@ def update_goal_tasks(goal_id):
                             subtask_id=subtask_data.get('subtask_id', str(uuid.uuid4())),
                             subtask_descr=subtask_data.get('subtask_descr', 'New Subtask'),
                             subtask_type=subtask_data.get('subtask_type', 'other'),
-                            subtask_completed=subtask_data.get('subtask_completed', False)
+                            subtask_completed=subtask_data.get('subtask_completed', False),
+                            subtask_order=subtask_data.get('subtask_order', None)
                         )
                         db.session.add(new_subtask)
                 else:
@@ -716,7 +724,8 @@ def update_goal_tasks(goal_id):
                         subtask_id=str(uuid.uuid4()),
                         subtask_descr='Default Subtask',
                         subtask_type='other',
-                        subtask_completed=False
+                        subtask_completed=False,
+                        subtask_order=0
                     )
                     db.session.add(new_subtask)
             
@@ -825,7 +834,8 @@ def save_tasks_and_subtasks(goal_id):
                         subtask_descr=subtask_descr,
                         subtask_type=subtask_type,
                         subtask_completed=subtask_completed,
-                        task_due_date=task_due_date
+                        task_due_date=task_due_date,
+                        subtask_order=subtask_data.get('subtask_order', None)
                     )
                     db.session.add(subtask)
                     new_rows.append(subtask)
@@ -848,7 +858,8 @@ def save_tasks_and_subtasks(goal_id):
                     subtask_descr='Default Subtask',
                     subtask_type='other',
                     subtask_completed=False,
-                    task_due_date=task_due_date
+                    task_due_date=task_due_date,
+                    subtask_order=0
                 )
                 db.session.add(subtask)
                 new_rows.append(subtask)
@@ -1097,7 +1108,8 @@ def create_subtask(task_id):
             subtask_id=subtask_id,
             subtask_descr=data['subtask_descr'],
             subtask_type=data.get('subtask_type', 'other'),
-            subtask_completed=data.get('subtask_completed', False)
+            subtask_completed=data.get('subtask_completed', False),
+            subtask_order=data.get('subtask_order', None)
         )
         
         db.session.add(new_subtask)
@@ -1372,7 +1384,8 @@ def create_task(goal_id):
                     subtask_id=str(uuid.uuid4()),
                     subtask_descr=subtask_descr,
                     subtask_type=subtask_type,
-                    subtask_completed=subtask_completed
+                    subtask_completed=subtask_completed,
+                    subtask_order=data.get('subtask_order', None)
                 )
                 db.session.add(new_row)
                 created_rows.append(new_row)
@@ -1392,7 +1405,8 @@ def create_task(goal_id):
                 subtask_id=str(uuid.uuid4()),
                 subtask_descr='Initial step',
                 subtask_type='other',
-                subtask_completed=False
+                subtask_completed=False,
+                subtask_order=0
             )
             db.session.add(new_row)
             created_rows.append(new_row)
@@ -1439,3 +1453,13 @@ def test_background_sync():
     except Exception as e:
         current_app.logger.error(f"Test sync failed: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+# Helper to reindex subtask_order for all subtasks of a task
+
+def reindex_subtasks(task_id, user_id):
+    from app.models.goal import Goal
+    from sqlalchemy import asc
+    subtasks = Goal.query.filter_by(task_id=task_id, user_id=user_id).order_by(asc(Goal.subtask_order), asc(Goal.created_at)).all()
+    for idx, subtask in enumerate(subtasks):
+        subtask.subtask_order = idx
+    db.session.commit()

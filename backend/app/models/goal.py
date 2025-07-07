@@ -66,6 +66,7 @@ class Goal(db.Model):
     task_actual_time_seconds = Column(db.Integer, nullable=True)
     started_by_subtask = Column(String, nullable=True)
     task_has_ever_been_completed = Column(Boolean, default=False)
+    subtask_order = Column(db.Integer, nullable=True)
     
     def __init__(self, user_id, course_id, goal_id, goal_descr, task_id, task_title, 
                  subtask_id, subtask_descr, due_date=None, goal_completed=False, 
@@ -76,7 +77,7 @@ class Goal(db.Model):
                  task_due_date=None, task_engagement_start=None, task_engagement_end=None, 
                  task_estimated_time_minutes=None, task_actual_time_minutes=None, 
                  task_is_being_tracked=False, task_actual_time_seconds=None, started_by_subtask=None,
-                 task_has_ever_been_completed=False):
+                 task_has_ever_been_completed=False, subtask_order=None):
         self.id = str(uuid.uuid4())
         self.user_id = user_id
         self.course_id = course_id
@@ -119,6 +120,10 @@ class Goal(db.Model):
         self.task_estimated_time_minutes = task_estimated_time_minutes
         self.task_actual_time_minutes = task_actual_time_minutes
         self.task_is_being_tracked = task_is_being_tracked
+        self.task_actual_time_seconds = task_actual_time_seconds
+        self.started_by_subtask = started_by_subtask
+        self.task_has_ever_been_completed = task_has_ever_been_completed
+        self.subtask_order = subtask_order
         
     @classmethod
     def create_for_goal(cls, user_id, course_id, goal_descr, due_date=None):
@@ -188,5 +193,6 @@ class Goal(db.Model):
             'task_is_being_tracked': self.task_is_being_tracked,
             'task_actual_time_seconds': self.task_actual_time_seconds,
             'started_by_subtask': self.started_by_subtask,
-            'task_has_ever_been_completed': self.task_has_ever_been_completed
+            'task_has_ever_been_completed': self.task_has_ever_been_completed,
+            'subtask_order': self.subtask_order
         } 

@@ -162,12 +162,14 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
       
       const finalSubtasks = validSubtasks.map((subtask, index) => {
         const newTaskId = taskIdMapping.get(subtask.taskId);
-        console.log(`Subtask ${subtask.id}: old taskId=${subtask.taskId}, new taskId=${newTaskId}`);
-        
+        // Find the order of this subtask among its siblings
+        const siblings = validSubtasks.filter(s => s.taskId === subtask.taskId);
+        const subtaskOrder = siblings.findIndex(s => s.id === subtask.id);
         return {
           ...subtask,
           id: `subtask-${Date.now()}-${index}`,
-          taskId: newTaskId || subtask.taskId
+          taskId: newTaskId || subtask.taskId,
+          subtask_order: subtaskOrder
         };
       });
       
