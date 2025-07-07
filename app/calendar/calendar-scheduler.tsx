@@ -583,7 +583,6 @@ const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleTa
           {hours.map((h: number) => {
             const goals = goalsStartingAtHour(currentDate, h, getGoalsForDate);
             const eventPositions = calculateEventPositions(goals, 80, h, currentDate);
-
                 return (
               <div key={h} className="h-20 border-b border-gray-200 relative p-1 overflow-visible">
                 {eventPositions.map((pos) => (
@@ -650,26 +649,30 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
                     </Button>
                   </div>
 
-        <h2 className="text-lg font-semibold text-gray-900">
-          {weekDates[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
-          {weekDates[6].toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-        </h2>
-      </div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {weekDates[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
+                  {weekDates[6].toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </h2>
+              </div>
 
-      <div className="flex">
+              <div className="flex">
         <div className="w-16 border-r border-gray-200 p-4 text-xs text-gray-500 flex-shrink-0" />
         {weekDates.map((d: Date) => {
-          const isToday = d.toDateString() === startOfToday().toDateString();
-          return (
-            <div
-              key={d.toISOString()}
-              className="flex-1 border-r border-gray-200 p-4 text-center min-w-0"
-            >
-              <div className="text-xs text-gray-500 mb-1">
-                {d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
-              </div>
-              <div className={`text-2xl font-semibold ${isToday ? "text-blue-600" : "text-gray-900"}`}>
-                {d.getDate()}
+                  const isToday = d.toDateString() === startOfToday().toDateString();
+                  return (
+                    <div
+                      key={d.toISOString()}
+                      className="flex-1 border-r border-gray-200 p-4 text-center min-w-0"
+                    >
+                      <div className="text-xs text-gray-500 mb-1">
+                        {d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
+                      </div>
+                      <div className={`text-2xl font-semibold ${isToday ? "text-blue-600" : "text-gray-900"}`}>
+                        {d.getDate()}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
@@ -699,7 +702,7 @@ const WeekView = ({ currentDate, setCurrentDate, weekDates, hours, getGoalsForDa
               const goals = goalsStartingAtHour(d, h, getGoalsForDate);
               const eventPositions = calculateEventPositions(goals, 64, h, d);
 
-              return (
+                            return (
                 <div key={h} className="h-16 border-b border-gray-200 p-1 relative overflow-visible">
                   {eventPositions.map((pos) => (
                     <div
@@ -759,9 +762,9 @@ const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskCli
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
 
-          <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
-            This Month
-          </Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentDate(startOfToday())}>
+                    This Month
+                  </Button>
 
                       <Button
                         variant="outline"
@@ -777,8 +780,8 @@ const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskCli
                     </div>
                   </div>
 
-      <div className="grid grid-cols-7 gap-px bg-gray-200">
-        {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
+              <div className="grid grid-cols-7 gap-px bg-gray-200">
+                {["Su", "M", "Tu", "W", "Th", "F", "Sa"].map((d) => (
           <div key={d} className="bg-gray-50 p-3 text-center text-sm font-medium text-gray-500">
             {d}
                       </div>
@@ -789,8 +792,8 @@ const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskCli
                 <div className="flex-1 overflow-y-auto">
       <div className="grid grid-cols-7 gap-px bg-gray-200 h-full">
         {getMonthDays(currentDate).map((d: Date) => {
-          const inMonth = d.getMonth() === currentDate.getMonth();
-          const isToday = d.toDateString() === startOfToday().toDateString();
+                  const inMonth = d.getMonth() === currentDate.getMonth();
+                  const isToday = d.toDateString() === startOfToday().toDateString();
           const evs = getGoalsForDate(d);
 
                       return (
@@ -818,7 +821,7 @@ const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleTaskCli
                               </div>
                             ))}
 
-              {evs.length > 3 && (
+                      {evs.length > 3 && (
                 <div className="text-xs text-gray-500 font-medium">
                   +{evs.length - 3} more
                 </div>

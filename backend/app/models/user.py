@@ -20,6 +20,7 @@ class User(db.Model):
     college = db.Column(db.String(200), nullable=True)
     year = db.Column(db.String(20), nullable=True)  # Using string to allow values like "freshman", "sophomore", etc.
     major = db.Column(db.String(100), nullable=True)
+    onboarded = db.Column(db.Boolean, default=False)
     
     # Email verification fields
     email_verified = db.Column(db.Boolean, default=False)
