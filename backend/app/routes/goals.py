@@ -798,6 +798,7 @@ def save_tasks_and_subtasks(goal_id):
             task_title = task_data.get('task_title', 'New Task')
             task_descr = task_data.get('task_descr', '')
             task_completed = task_data.get('completed', False)
+            task_due_date = task_data.get('scheduledDate', None)
             
             current_app.logger.info(f"Processing task: {task_title}")
             
@@ -823,7 +824,8 @@ def save_tasks_and_subtasks(goal_id):
                         subtask_id=str(uuid.uuid4()),
                         subtask_descr=subtask_descr,
                         subtask_type=subtask_type,
-                        subtask_completed=subtask_completed
+                        subtask_completed=subtask_completed,
+                        task_due_date=task_due_date
                     )
                     db.session.add(subtask)
                     new_rows.append(subtask)
@@ -845,7 +847,8 @@ def save_tasks_and_subtasks(goal_id):
                     subtask_id=str(uuid.uuid4()),
                     subtask_descr='Default Subtask',
                     subtask_type='other',
-                    subtask_completed=False
+                    subtask_completed=False,
+                    task_due_date=task_due_date
                 )
                 db.session.add(subtask)
                 new_rows.append(subtask)

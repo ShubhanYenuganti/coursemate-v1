@@ -55,11 +55,28 @@ class Goal(db.Model):
     # Relationships
     user = relationship("User", back_populates="goals")
     course = relationship("Course", back_populates="goals")
-
+    
+    # Additional fields added
+    task_due_date = Column(DateTime(timezone=True), nullable=True)
+    task_engagement_start = Column(DateTime(timezone=True), nullable=True)
+    task_engagement_end = Column(DateTime(timezone=True), nullable=True)
+    task_estimated_time_minutes = Column(db.Integer, nullable=True)
+    task_actual_time_minutes = Column(db.Integer, nullable=True)
+    task_is_being_tracked = Column(Boolean, default=False)
+    task_actual_time_seconds = Column(db.Integer, nullable=True)
+    started_by_subtask = Column(String, nullable=True)
+    task_has_ever_been_completed = Column(Boolean, default=False)
+    
     def __init__(self, user_id, course_id, goal_id, goal_descr, task_id, task_title, 
                  subtask_id, subtask_descr, due_date=None, goal_completed=False, 
                  task_descr=None, task_completed=False, subtask_type="other", 
-                 subtask_completed=False, google_event_id=None, google_etag=None, google_source=None, google_calendar_color=None, is_external=False, start_time=None, end_time=None, sync_status="Not Synced", google_calendar_id=None):
+                 subtask_completed=False, google_event_id=None, google_etag=None, 
+                 google_source=None, google_calendar_color=None, is_external=False,
+                 start_time=None, end_time=None, sync_status="Not Synced", google_calendar_id=None, 
+                 task_due_date=None, task_engagement_start=None, task_engagement_end=None, 
+                 task_estimated_time_minutes=None, task_actual_time_minutes=None, 
+                 task_is_being_tracked=False, task_actual_time_seconds=None, started_by_subtask=None,
+                 task_has_ever_been_completed=False):
         self.id = str(uuid.uuid4())
         self.user_id = user_id
         self.course_id = course_id
@@ -94,6 +111,14 @@ class Goal(db.Model):
         self.updated_at = self.created_at
         self.sync_status = sync_status
         self.google_calendar_id = google_calendar_id
+        
+        # Additional fields added
+        self.task_due_date = task_due_date
+        self.task_engagement_start = task_engagement_start
+        self.task_engagement_end = task_engagement_end
+        self.task_estimated_time_minutes = task_estimated_time_minutes
+        self.task_actual_time_minutes = task_actual_time_minutes
+        self.task_is_being_tracked = task_is_being_tracked
         
     @classmethod
     def create_for_goal(cls, user_id, course_id, goal_descr, due_date=None):
@@ -154,5 +179,14 @@ class Goal(db.Model):
             'start_time': self._fmt(self.start_time),
             'end_time': self._fmt(self.end_time),
             'sync_status': self.sync_status,
-            'google_calendar_id': self.google_calendar_id
+            'google_calendar_id': self.google_calendar_id,
+            'task_due_date': self._fmt(self.task_due_date),
+            'task_engagement_start': self._fmt(self.task_engagement_start),
+            'task_engagement_end': self._fmt(self.task_engagement_end),
+            'task_estimated_time_minutes': self.task_estimated_time_minutes,
+            'task_actual_time_minutes': self.task_actual_time_minutes,
+            'task_is_being_tracked': self.task_is_being_tracked,
+            'task_actual_time_seconds': self.task_actual_time_seconds,
+            'started_by_subtask': self.started_by_subtask,
+            'task_has_ever_been_completed': self.task_has_ever_been_completed
         } 
