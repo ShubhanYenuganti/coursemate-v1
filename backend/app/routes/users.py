@@ -18,7 +18,8 @@ def get_me():
         'created_at': user.created_at,
         'college': user.college,
         'year': user.year,
-        'major': user.major
+        'major': user.major,
+        'onboarded': user.onboarded,
     })
 
 @users_bp.route('/', methods=['GET'])
