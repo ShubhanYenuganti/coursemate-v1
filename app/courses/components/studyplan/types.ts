@@ -29,6 +29,7 @@ export interface Subtask {
   completed: boolean;
   createdAt: string;
   updatedAt: string;
+  task_due_date?: string;
   subtask_order?: number;
 }
 

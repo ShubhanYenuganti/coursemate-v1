@@ -428,11 +428,12 @@ const GoalDetailPage = () => {
           task_completed: updatedTask.completed,
           task_due_date: updatedTask.scheduledDate,
           task_descr: updatedTask.description,
-          subtasks: updatedTask.subtasks.map(subtask => ({
+          subtasks: updatedTask.subtasks.map((subtask, index) => ({
             subtask_id: subtask.id,
             subtask_descr: subtask.name,
             subtask_type: subtask.type,
-            subtask_completed: subtask.completed
+            subtask_completed: subtask.completed,
+            subtask_order: subtask.subtask_order !== undefined ? subtask.subtask_order : index
           }))
         }]
       };
@@ -669,11 +670,12 @@ const GoalDetailPage = () => {
           task_id: updatedTask.id,
           task_title: updatedTask.name,
           task_completed: updatedTask.completed,
-          subtasks: updatedSubtasks.map(subtask => ({
+          subtasks: updatedSubtasks.map((subtask, index) => ({
             subtask_id: subtask.id,
             subtask_descr: subtask.name,
             subtask_type: subtask.type,
-            subtask_completed: subtask.completed
+            subtask_completed: subtask.completed,
+            subtask_order: subtask.subtask_order !== undefined ? subtask.subtask_order : index
           }))
         }]
       };
@@ -1011,6 +1013,7 @@ const GoalDetailPage = () => {
                       <SubtaskList 
                         taskId={task.id} 
                         subtasks={task.subtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0))}
+                        taskDueDate={task.scheduledDate}
                         onSubtaskDeleted={(subtaskId) => {
                           // Update the local task state to reflect the deleted subtask
                           const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);

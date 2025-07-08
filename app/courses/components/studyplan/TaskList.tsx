@@ -87,7 +87,9 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
           estimatedTimeMinutes: 15, // Default value
           completed: item.subtask_completed,
           createdAt: item.created_at,
-          updatedAt: item.updated_at
+          updatedAt: item.updated_at,
+          task_due_date: item.task_due_date,
+          subtask_order: item.subtask_order
         });
       });
       
@@ -183,6 +185,7 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
           id: 'deleted',
           goalId: goalId,
           name: 'deleted',
+          description: "",
           scheduledDate: new Date().toISOString(),
           completed: false,
           createdAt: new Date().toISOString(),
@@ -222,6 +225,7 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
               id: `new-${Date.now()}`,
               goalId: goalId,
               name: "New Task",
+              description: "",
               scheduledDate: new Date().toISOString(),
               completed: false,
               createdAt: new Date().toISOString(),

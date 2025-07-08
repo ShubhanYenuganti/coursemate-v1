@@ -84,8 +84,11 @@ export const groupTasksByTaskId = (goals: Goal[]) => {
 
     // Calculate progress for each group
     Object.values(groupedTasks).forEach(group => {
-        // Sort subtasks by created_at (or subtask_id as fallback) to match backend/API order
+        // Sort subtasks by subtask_order (or created_at as fallback) to match user-defined order
         group.subtasks.sort((a, b) => {
+            if (a.subtask_order !== undefined && b.subtask_order !== undefined) {
+                return a.subtask_order - b.subtask_order;
+            }
             if (a.created_at && b.created_at) {
                 return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
             }

@@ -568,8 +568,8 @@ def get_goal_tasks(goal_id):
         # Get current user from JWT
         user_id = get_jwt_identity()
         
-        # Get all rows for this goal
-        goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
+        # Get all rows for this goal, ordered by subtask_order
+        goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).order_by(asc(Goal.subtask_order)).all()
         
         if not goals:
             return jsonify({'error': 'Goal not found or you do not have access'}), 404
@@ -638,7 +638,24 @@ def update_goal_tasks(goal_id):
                     if 'task_completed' in task_data:
                         task_row.task_completed = task_data['task_completed']
                     if 'task_due_date' in task_data:
-                        task_row.task_due_date = task_data['task_due_date']
+                        if task_data['task_due_date']:
+                            try:
+                                if isinstance(task_data['task_due_date'], str):
+                                    # Handle different date formats
+                                    if 'T' in task_data['task_due_date']:
+                                        task_row.task_due_date = datetime.fromisoformat(task_data['task_due_date'].replace('Z', '+00:00'))
+                                    else:
+                                        # Assume YYYY-MM-DD format
+                                        task_row.task_due_date = datetime.fromisoformat(task_data['task_due_date'] + 'T00:00:00')
+                                else:
+                                    task_row.task_due_date = task_data['task_due_date']
+                                print(f"Updated task_due_date for task {task_id}: {task_row.task_due_date}")
+                            except Exception as e:
+                                current_app.logger.error(f"Error parsing task_due_date: {task_data['task_due_date']}, error: {e}")
+                                # Keep existing value if parsing fails
+                        else:
+                            task_row.task_due_date = None
+                            print(f"Set task_due_date to None for task {task_id}")
                     if 'task_descr' in task_data:
                         task_row.task_descr = task_data['task_descr']
                 
@@ -676,12 +693,14 @@ def update_goal_tasks(goal_id):
                                 task_title=task_rows[0].task_title,
                                 task_descr=task_rows[0].task_descr,
                                 task_completed=task_rows[0].task_completed,
+                                task_due_date=task_rows[0].task_due_date,
                                 subtask_id=subtask_data.get('subtask_id', str(uuid.uuid4())),
                                 subtask_descr=subtask_data.get('subtask_descr', 'New Subtask'),
                                 subtask_type=subtask_data.get('subtask_type', 'other'),
                                 subtask_completed=subtask_data.get('subtask_completed', False),
                                 subtask_order=subtask_data.get('subtask_order', None)
                             )
+                            print(f"Created new subtask with task_due_date: {task_rows[0].task_due_date}")
                             db.session.add(new_subtask)
                     
                     # Delete subtasks that weren't in the update
@@ -957,6 +976,8 @@ def delete_subtask(subtask_id):
         
         # Delete the subtask
         db.session.delete(subtask)
+        # Reindex subtask_order for all remaining subtasks of this task
+        reindex_subtasks(task_id, user_id)
         db.session.commit()
         
         # Always sync to Google Calendar to update the event
@@ -1004,6 +1025,9 @@ def update_subtask(subtask_id):
         
         if 'subtask_type' in data:
             subtask.subtask_type = data['subtask_type']
+        
+        if 'subtask_order' in data:
+            subtask.subtask_order = data['subtask_order']
         
         if 'subtask_completed' in data:
             subtask.subtask_completed = data['subtask_completed']
@@ -1053,6 +1077,7 @@ def update_subtask(subtask_id):
                 "subtask_id": subtask.subtask_id,
                 "subtask_descr": subtask.subtask_descr,
                 "subtask_completed": subtask.subtask_completed,
+                "subtask_order": subtask.subtask_order,
                 "updated_at": subtask.updated_at.isoformat() if subtask.updated_at else None
             }
         }), 200
@@ -1083,6 +1108,9 @@ def create_subtask(task_id):
         
         data = request.get_json()
         
+        # Debug logging
+        print(f"Creating subtask for task {task_id} with data: {data}")
+        
         if not data or 'subtask_descr' not in data:
             return jsonify({'error': 'Subtask description is required'}), 400
         
@@ -1092,12 +1120,45 @@ def create_subtask(task_id):
         # Create a new subtask
         subtask_id = str(uuid.uuid4())
         
+        # Handle task_due_date - use the one from request if provided, otherwise use task's due_date
+        task_due_date = None
+        if 'task_due_date' in data and data['task_due_date']:
+            try:
+                if isinstance(data['task_due_date'], str):
+                    # Handle different date formats
+                    if 'T' in data['task_due_date']:
+                        task_due_date = datetime.fromisoformat(data['task_due_date'].replace('Z', '+00:00'))
+                    else:
+                        # Assume YYYY-MM-DD format
+                        task_due_date = datetime.fromisoformat(data['task_due_date'] + 'T00:00:00')
+                else:
+                    task_due_date = data['task_due_date']
+            except Exception as e:
+                current_app.logger.error(f"Error parsing task_due_date: {data['task_due_date']}, error: {e}")
+                task_due_date = task_row.task_due_date if hasattr(task_row, 'task_due_date') and task_row.task_due_date else task_row.due_date
+        else:
+            task_due_date = task_row.task_due_date if hasattr(task_row, 'task_due_date') and task_row.task_due_date else task_row.due_date
+        
+        # Get all existing subtask orders for this task
+        existing_orders = get_subtask_orders_for_task(task_id, user_id)
+        if existing_orders:
+            subtask_order = max(existing_orders) + 1
+        else:
+            subtask_order = 0
+        
+        # Debug logging
+        print(f"Task due date: {task_due_date}")
+        print(f"Subtask order: {subtask_order}")
+        print(f"Task due date type: {type(task_due_date)}")
+        print(f"Subtask order type: {type(subtask_order)}")
+        
         new_subtask = Goal(
             user_id=user_id,
             course_id=task_row.course_id,
             goal_id=task_row.goal_id,
             goal_descr=task_row.goal_descr,
             due_date=task_row.due_date,
+            task_due_date=task_due_date,
             goal_completed=task_row.goal_completed,
             task_id=task_id,
             task_title=task_row.task_title,
@@ -1107,7 +1168,7 @@ def create_subtask(task_id):
             subtask_descr=data['subtask_descr'],
             subtask_type=data.get('subtask_type', 'other'),
             subtask_completed=data.get('subtask_completed', False),
-            subtask_order=data.get('subtask_order', None)
+            subtask_order=subtask_order
         )
         
         db.session.add(new_subtask)
@@ -1122,7 +1183,8 @@ def create_subtask(task_id):
             "subtask": {
                 "subtask_id": new_subtask.subtask_id,
                 "subtask_descr": new_subtask.subtask_descr,
-                "subtask_completed": new_subtask.subtask_completed
+                "subtask_completed": new_subtask.subtask_completed,
+                "subtask_order": new_subtask.subtask_order
             }
         }), 201
         
@@ -1476,3 +1538,12 @@ def reindex_subtasks(task_id, user_id):
     for idx, subtask in enumerate(subtasks):
         subtask.subtask_order = idx
     db.session.commit()
+
+# Helper to get all subtask orders for a task
+def get_subtask_orders_for_task(task_id, user_id):
+    """Get all subtask_order values for a given task, sorted in ascending order"""
+    from app.models.goal import Goal
+    from sqlalchemy import asc
+    subtasks = Goal.query.filter_by(task_id=task_id, user_id=user_id).order_by(asc(Goal.subtask_order)).all()
+    orders = [subtask.subtask_order for subtask in subtasks if subtask.subtask_order is not None]
+    return sorted(orders)

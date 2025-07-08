@@ -136,6 +136,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted 
             <SubtaskList 
               taskId={task.id} 
               subtasks={task.subtasks} 
+              taskDueDate={task.scheduledDate}
               onSubtaskDeleted={(subtaskId) => {
                 // Update the local task state to reflect the deleted subtask
                 const updatedTask = {
