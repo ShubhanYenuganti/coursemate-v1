@@ -11,6 +11,7 @@ from app.models.goal import Goal
 from dateutil.parser import isoparse
 from datetime import timezone
 from app.models.course import Course
+from sqlalchemy import asc
 import requests
 
 calendar_bp = Blueprint('calendar', __name__)
@@ -408,8 +409,8 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
         description = task.task_descr or ""
         
         # Add subtask information to description if available
-        # Get all subtasks for this task to include in the description
-        all_subtasks = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).all()
+        # Get all subtasks for this task to include in the description, ordered by subtask_order
+        all_subtasks = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).order_by(asc(Goal.subtask_order)).all()
         if all_subtasks and len(all_subtasks) > 1:  # Only add subtasks section if there are multiple subtasks
             if description:
                 description += "\n\nSubtasks:\n"
@@ -466,7 +467,7 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
                 ).execute()
                 
                 # Update ALL task rows with the same task_id with Google Calendar info
-                all_task_rows = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).all()
+                all_task_rows = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).order_by(asc(Goal.subtask_order)).all()
                 for task_row in all_task_rows:
                     task_row.google_event_id = updated_event["id"]
                     task_row.google_calendar_id = calendar_id
@@ -538,7 +539,7 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
         
         # Clear the stored event ID since we're creating a new one
         # Update ALL task rows with the same task_id to clear Google Calendar info
-        all_task_rows = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).all()
+        all_task_rows = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).order_by(asc(Goal.subtask_order)).all()
         for task_row in all_task_rows:
             task_row.google_event_id = None
             task_row.sync_status = None
@@ -555,7 +556,7 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
             ).execute()
             
             # Update ALL task rows with the same task_id with Google Calendar info
-            all_task_rows = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).all()
+            all_task_rows = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).order_by(asc(Goal.subtask_order)).all()
             for task_row in all_task_rows:
                 task_row.google_event_id = new_event["id"]
                 task_row.google_calendar_id = calendar_id
