@@ -196,7 +196,7 @@ export function CalendarScheduler() {
   const [isLoadingGoals, setIsLoadingGoals] = useState(false);
 
   // Add this state near the top of CalendarScheduler
-  const [newSubtasks, setNewSubtasks] = useState<{ subtask_descr: string; subtask_type: string }[]>([]);
+  const [newSubtasks, setNewSubtasks] = useState<{ subtask_descr: string; subtask_type: string; estimatedTimeMinutes: number }[]>([]);
 
   // Add these state variables near the top for form fields
   const [newTaskName, setNewTaskName] = useState('');
@@ -677,10 +677,12 @@ export function CalendarScheduler() {
         task_title: newTaskName,
         task_descr: newTaskDescription,
         task_due_date: newTaskDueDate,
-        subtasks: newSubtasks.map((sub: { subtask_descr: string; subtask_type: string }) => ({
+        subtasks: newSubtasks.map((sub: { subtask_descr: string; subtask_type: string; estimatedTimeMinutes: number }, index: number) => ({
           subtask_descr: sub.subtask_descr,
           subtask_type: sub.subtask_type,
-          subtask_completed: false
+          subtask_completed: false,
+          subtask_order: index,
+          estimatedTimeMinutes: sub.estimatedTimeMinutes
         }))
       };
       const res = await fetch(`${api}/api/goals/${selectedGoalId}/create-task`, {
@@ -1844,47 +1846,90 @@ export function CalendarScheduler() {
                     <button
                       type="button"
                       className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-2"
-                      onClick={() => setNewSubtasks([...newSubtasks, { subtask_descr: '', subtask_type: 'other' }])}
+                      onClick={() => setNewSubtasks([...newSubtasks, { subtask_descr: '', subtask_type: 'other', estimatedTimeMinutes: 15 }])}
                     >
                       <Plus className="w-4 h-4" />
                       Add Subtask
                     </button>
                   </div>
-                  {newSubtasks.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                      <p>No subtasks yet. Add your first subtask to get started.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {newSubtasks.map((subtask, idx) => (
-                        <div key={idx} className="relative flex items-start gap-2">
-                          <div className="flex-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Subtask Description
+                  
+                  <div className="space-y-3">
+                    {newSubtasks.map((subtask, index) => (
+                      <div key={index} className="bg-gray-50 rounded-lg p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Subtask {index + 1} *
                             </label>
-                            <textarea
-                              rows={2}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              placeholder={`Enter subtask description`}
+                            <input
+                              type="text"
                               value={subtask.subtask_descr}
                               onChange={e => {
                                 const updated = [...newSubtasks];
-                                updated[idx].subtask_descr = e.target.value;
+                                updated[index].subtask_descr = e.target.value;
                                 setNewSubtasks(updated);
                               }}
+                              placeholder={`Enter subtask ${index + 1} name`}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
                           </div>
-                          <button
-                            type="button"
-                            className="absolute right-0 -top-2 text-red-500 hover:text-red-700 w-8 h-8 flex items-center justify-center z-10"
-                            style={{ marginRight: '-12px' }}
-                            onClick={() => setNewSubtasks(newSubtasks.filter((_, i) => i !== idx))}
-                            title="Remove subtask"
-                          >
-                            <X className="w-6 h-6" />
-                          </button>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Type
+                            </label>
+                            <select
+                              value={subtask.subtask_type}
+                              onChange={e => {
+                                const updated = [...newSubtasks];
+                                updated[index].subtask_type = e.target.value;
+                                setNewSubtasks(updated);
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                              <option value="reading">Reading</option>
+                              <option value="flashcard">Flashcard</option>
+                              <option value="quiz">Quiz</option>
+                              <option value="practice">Practice</option>
+                              <option value="review">Review</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Time (min)
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                value={subtask.estimatedTimeMinutes || 15}
+                                onChange={e => {
+                                  const updated = [...newSubtasks];
+                                  updated[index].estimatedTimeMinutes = parseInt(e.target.value) || 0;
+                                  setNewSubtasks(updated);
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                min="5"
+                                max="120"
+                              />
+                              <button
+                                onClick={() => setNewSubtasks(newSubtasks.filter((_, i) => i !== index))}
+                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Remove subtask"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      ))}
+                      </div>
+                    ))}
+                  </div>
+
+                  {newSubtasks.length === 0 && (
+                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                      <p>No subtasks yet. Add your first subtask to get started.</p>
                     </div>
                   )}
                 </div>

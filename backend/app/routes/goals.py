@@ -1459,7 +1459,7 @@ def create_task(goal_id):
                     subtask_descr=subtask_descr,
                     subtask_type=subtask_type,
                     subtask_completed=subtask_completed,
-                    subtask_order=data.get('subtask_order', None)
+                    subtask_order=subtask.get('subtask_order', None)
                 )
                 db.session.add(new_row)
                 created_rows.append(new_row)
