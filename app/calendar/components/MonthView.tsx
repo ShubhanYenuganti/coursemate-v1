@@ -5,7 +5,21 @@ import { startOfToday } from "../utils/date.utils"
 import { groupTasksByTaskId } from "../utils/goal.progress"
 import { calculateStatus } from "../utils/goal.status"
 
-export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handleGoalClick, handleOverflowClick, getCourseColor }: any) => (
+export const MonthView = ({ 
+  currentDate, 
+  setCurrentDate, 
+  getGoalsForDate, 
+  handleGoalClick, 
+  handleOverflowClick, 
+  getCourseColor,
+  handleTaskDragStart,
+  handleTaskDragEnd,
+  handleDayDragOver,
+  handleDayDragLeave,
+  handleDayDrop,
+  isDraggingTask,
+  dragOverDate
+}: any) => (
     <>
       <div className="flex flex-col border-b border-gray-200">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -82,7 +96,20 @@ export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handle
             return (
               <div
                 key={d.toISOString()}
-                className={`bg-white p-2 min-h-[110px] overflow-visible ${!inMonth ? "bg-gray-50 text-gray-400" : ""}`}
+                className={`p-2 min-h-[110px] overflow-visible transition-all duration-200 ${
+                  dragOverDate && dragOverDate.toDateString() === d.toDateString() 
+                    ? 'bg-blue-50 border-2 border-blue-300 shadow-lg' 
+                    : !inMonth 
+                      ? "bg-gray-50 text-gray-400" 
+                      : "bg-white"
+                } ${
+                  isDraggingTask && !dragOverDate 
+                    ? 'border-2 border-dashed border-gray-300' 
+                    : ''
+                }`}
+                onDragOver={(e) => handleDayDragOver?.(e, d)}
+                onDragLeave={(e) => handleDayDragLeave?.(e)}
+                onDrop={(e) => handleDayDrop?.(e, d)}
               >
                 <div
                   className={`text-sm font-medium mb-2 ${isToday
@@ -102,9 +129,19 @@ export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handle
                     {groupedGoals.map((g: any) => (
                   <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
-                    className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
+                    className={`text-xs p-1 rounded text-white font-medium truncate cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity ${
+                      isDraggingTask ? 'opacity-30' : ''
+                    }`}
                         style={{ backgroundColor: getCourseColor(g.course_id) }}
-                    onClick={(e) => handleGoalClick(g, e)}
+                    onClick={(e) => {
+                      // Prevent click if we're dragging
+                      if (!isDraggingTask) {
+                        handleGoalClick(g, e);
+                      }
+                    }}
+                    draggable={g.goal_id !== "Google Calendar"}
+                    onDragStart={(e) => handleTaskDragStart?.(e, g)}
+                    onDragEnd={(e) => handleTaskDragEnd?.(e)}
                   >
                     {g.task_title ?? "(untitled)"}
                   </div>
@@ -116,9 +153,19 @@ export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handle
                     {groupedGoals.slice(0, 2).map((g: any) => (
                       <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
-                        className="text-xs p-1 rounded text-white font-medium truncate cursor-pointer hover:opacity-80"
+                        className={`text-xs p-1 rounded text-white font-medium truncate cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity ${
+                          isDraggingTask ? 'opacity-30' : ''
+                        }`}
                         style={{ backgroundColor: getCourseColor(g.course_id) }}
-                        onClick={(e) => handleGoalClick(g, e)}
+                        onClick={(e) => {
+                          // Prevent click if we're dragging
+                          if (!isDraggingTask) {
+                            handleGoalClick(g, e);
+                          }
+                        }}
+                        draggable={g.goal_id !== "Google Calendar"}
+                        onDragStart={(e) => handleTaskDragStart?.(e, g)}
+                        onDragEnd={(e) => handleTaskDragEnd?.(e)}
                       >
                         {g.task_title ?? "(untitled)"}
                       </div>
@@ -129,7 +176,9 @@ export const MonthView = ({ currentDate, setCurrentDate, getGoalsForDate, handle
                       title={`${groupedGoals.length - 2} more events`}
                       onClick={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
-                        handleOverflowClick(groupedGoals, { x: rect.left, y: rect.bottom }, d);
+                        // Only pass the additional events (beyond the first 2)
+                        const additionalEvents = groupedGoals.slice(2);
+                        handleOverflowClick(additionalEvents, { x: rect.left, y: rect.bottom }, d);
                       }}
                     >
                       +{groupedGoals.length - 2} more

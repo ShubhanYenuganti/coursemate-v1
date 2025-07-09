@@ -292,6 +292,12 @@ export function CalendarScheduler() {
 
   // Drag and drop handlers for task events
   const handleTaskDragStart = (e: React.DragEvent, task: Goal) => {
+    // Prevent dragging for Google Calendar events
+    if (task.goal_id === "Google Calendar") {
+      e.preventDefault();
+      return;
+    }
+    
     e.stopPropagation();
     setIsDraggingTask(true);
     setDraggedTask(task);
@@ -1594,6 +1600,13 @@ export function CalendarScheduler() {
             handleGoalClick={handleGoalClick}
             handleOverflowClick={handleOverflowClick}
             getCourseColor={getCourseColor}
+            handleTaskDragStart={handleTaskDragStart}
+            handleTaskDragEnd={handleTaskDragEnd}
+            handleDayDragOver={handleDayDragOver}
+            handleDayDragLeave={handleDayDragLeave}
+            handleDayDrop={handleDayDrop}
+            isDraggingTask={isDraggingTask}
+            dragOverDate={dragOverDate}
           />
         ) : (
           <YearView
@@ -1888,7 +1901,7 @@ export function CalendarScheduler() {
                         setOverflowEvents(null)
                       }
                     }}
-                    draggable={true}
+                    draggable={event.goal_id !== "Google Calendar"}
                     onDragStart={(e) => handleTaskDragStart(e, event)}
                     onDragEnd={(e) => handleTaskDragEnd(e)}
                   >

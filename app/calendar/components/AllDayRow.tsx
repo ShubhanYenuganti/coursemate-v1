@@ -99,7 +99,7 @@ export const AllDayRow = ({
                             handleGoalClick(g, e);
                           }
                         }}
-                        draggable={true}
+                        draggable={g.goal_id !== "Google Calendar"}
                         onDragStart={(e) => handleTaskDragStart?.(e, g)}
                         onDragEnd={(e) => handleTaskDragEnd?.(e)}
                       >
