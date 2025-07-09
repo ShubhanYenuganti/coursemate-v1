@@ -199,6 +199,11 @@ export function CalendarScheduler() {
   // Add this state near the top of CalendarScheduler
   const [newSubtasks, setNewSubtasks] = useState<{ subtask_descr: string; subtask_type: string; estimatedTimeMinutes: number }[]>([]);
 
+  // Add subtask form state
+  const [newSubtaskDescr, setNewSubtaskDescr] = useState('');
+  const [newSubtaskType, setNewSubtaskType] = useState('other');
+  const [newSubtaskTime, setNewSubtaskTime] = useState(15);
+
   // Add these state variables near the top for form fields
   const [newTaskName, setNewTaskName] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
@@ -242,6 +247,12 @@ export function CalendarScheduler() {
     isOpen: boolean;
     subtask: Goal | null;
     position: { x: number; y: number };
+  } | null>(null);
+
+  /** Add subtask modal state */
+  const [addSubtaskModal, setAddSubtaskModal] = useState<{
+    isOpen: boolean;
+    task: any;
   } | null>(null);
 
   /** Undo state for deleted tasks */
@@ -450,6 +461,91 @@ export function CalendarScheduler() {
 
   const handleSubtaskDeleteCancel = () => {
     setDeleteSubtaskModal(null);
+  }
+
+  const handleAddSubtask = () => {
+    if (subtasksModal) {
+      setAddSubtaskModal({
+        isOpen: true,
+        task: subtasksModal.task
+      });
+    }
+  }
+
+  const handleAddSubtaskCancel = () => {
+    setAddSubtaskModal(null);
+    setNewSubtaskDescr('');
+    setNewSubtaskType('other');
+    setNewSubtaskTime(15);
+  }
+
+  const handleAddSubtaskConfirm = async () => {
+    if (!addSubtaskModal?.task || !newSubtaskDescr.trim()) {
+      toast.error('Please enter a subtask description');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const payload = {
+        subtask_descr: newSubtaskDescr.trim(),
+        subtask_type: newSubtaskType,
+        task_due_date: addSubtaskModal.task.task_due_date || addSubtaskModal.task.due_date
+      };
+
+      const res = await fetch(`${api}/api/goals/tasks/${addSubtaskModal.task.task_id}/subtasks`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to create subtask: ${res.status}`);
+      }
+
+      // Refresh the goals data to show the new subtask
+      const fetchGoals = async () => {
+        try {
+          const token =
+            typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          
+          const grouped = await res.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) { 
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      await fetchGoals();
+      
+      handleAddSubtaskCancel();
+      toast.success("Subtask created successfully");
+    } catch (err) {
+      console.error("handleAddSubtaskConfirm error", err);
+      toast.error("Failed to create subtask");
+    }
   }
 
   const handleUndoDelete = async () => {
@@ -2856,6 +2952,17 @@ export function CalendarScheduler() {
                     );
                   })}
                 </div>
+
+                {/* Add Subtask Button */}
+                <div className="pt-3 border-t border-gray-200">
+                  <button
+                    onClick={handleAddSubtask}
+                    className="w-full px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Subtask
+                  </button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -2994,6 +3101,110 @@ export function CalendarScheduler() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                     Delete Subtask
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Subtask Modal */}
+      {addSubtaskModal?.isOpen && addSubtaskModal?.task && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Plus className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Add Subtask</h2>
+                </div>
+                <button
+                  onClick={handleAddSubtaskCancel}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Task Info */}
+                <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(addSubtaskModal.task.course_id) }}></div>
+                    <div className="flex-1">
+                      <h3 className="font-medium text-gray-900">{addSubtaskModal.task.task_title}</h3>
+                      <p className="text-sm text-gray-600">Adding subtask to this task</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subtask Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subtask Description *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter subtask description"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={newSubtaskDescr}
+                    onChange={e => setNewSubtaskDescr(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+
+                {/* Subtask Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Type
+                  </label>
+                  <select
+                    value={newSubtaskType}
+                    onChange={e => setNewSubtaskType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="reading">Reading</option>
+                    <option value="flashcard">Flashcard</option>
+                    <option value="quiz">Quiz</option>
+                    <option value="practice">Practice</option>
+                    <option value="review">Review</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                {/* Estimated Time */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Estimated Time (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    value={newSubtaskTime}
+                    onChange={e => setNewSubtaskTime(parseInt(e.target.value) || 15)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    min="5"
+                    max="120"
+                  />
+                </div>
+
+                {/* Footer */}
+                <div className="flex gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleAddSubtaskCancel}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddSubtaskConfirm}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Subtask
                   </button>
                 </div>
               </div>
