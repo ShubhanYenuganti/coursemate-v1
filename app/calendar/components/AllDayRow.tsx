@@ -16,7 +16,8 @@ export const AllDayRow = ({
     handleDayDragLeave,
     handleDayDrop,
     isDraggingTask,
-    dragOverDate
+    dragOverDate,
+    onDayClick
   }: {
     days: Date | Date[];
     getGoalsForDate: (d: Date) => Goal[];
@@ -30,6 +31,7 @@ export const AllDayRow = ({
     handleDayDrop?: (e: React.DragEvent, date: Date) => void;
     isDraggingTask?: boolean;
     dragOverDate?: Date | null;
+    onDayClick?: (date: Date) => void;
   }) => {
     const dayList = Array.isArray(days) ? days : [days];
   
@@ -70,7 +72,7 @@ export const AllDayRow = ({
             return (
               <div
                 key={d.toISOString()}
-                className={`flex-1 min-w-0 ${showDivider} transition-all duration-200 ${
+                className={`flex-1 min-w-0 ${showDivider} transition-all duration-200 cursor-pointer hover:bg-gray-50 ${
                   dragOverDate && dragOverDate.toDateString() === d.toDateString() 
                     ? 'bg-blue-50 border-2 border-blue-300 shadow-lg' 
                     : isDraggingTask 
@@ -80,6 +82,12 @@ export const AllDayRow = ({
                 onDragOver={(e) => handleDayDragOver?.(e, d)}
                 onDragLeave={(e) => handleDayDragLeave?.(e)}
                 onDrop={(e) => handleDayDrop?.(e, d)}
+                onClick={(e) => {
+                  // Only trigger if clicking on the day column itself, not on events
+                  if (e.target === e.currentTarget || (e.target as Element).closest('.empty-slot')) {
+                    onDayClick?.(d);
+                  }
+                }}
               >
                 {/* Fixed-width all-day container with 4 slots */}
                 <div className="min-h-[32px] p-1">
@@ -132,7 +140,7 @@ export const AllDayRow = ({
                     
                     {/* Empty slots to fill the grid */}
                     {Array.from({ length: Math.max(0, 4 - Math.min(groupedGoals.length, 2) - (groupedGoals.length > 2 ? 1 : 0)) }, (_, index) => (
-                      <div key={`empty-${index}`} className="h-6 col-span-2"></div>
+                      <div key={`empty-${index}`} className="h-6 col-span-2 empty-slot"></div>
                     ))}
                   </div>
                 </div>

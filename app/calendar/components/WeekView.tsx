@@ -23,7 +23,8 @@ export const WeekView = ({
   handleDayDragLeave,
   handleDayDrop,
   isDraggingTask,
-  dragOverDate
+  dragOverDate,
+  onDayClick
 }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
@@ -92,6 +93,7 @@ export const WeekView = ({
       handleDayDrop={handleDayDrop}
       isDraggingTask={isDraggingTask}
       dragOverDate={dragOverDate}
+      onDayClick={onDayClick}
     />
 
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>

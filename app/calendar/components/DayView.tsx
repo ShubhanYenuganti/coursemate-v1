@@ -24,7 +24,8 @@ export const DayView = ({
   handleDayDragLeave,
   handleDayDrop,
   isDraggingTask,
-  dragOverDate
+  dragOverDate,
+  onDayClick
 }: any) => (
     <div className="flex flex-col h-full">
       <div className="border-b border-gray-200 p-4 flex items-center justify-between">
@@ -70,6 +71,7 @@ export const DayView = ({
         handleDayDrop={handleDayDrop}
         isDraggingTask={isDraggingTask}
         dragOverDate={dragOverDate}
+        onDayClick={onDayClick}
       />
   
       <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>

@@ -376,6 +376,12 @@ export function CalendarScheduler() {
     setOverflowEvents({ events, position, day })
   }
 
+  const handleDayClick = (date: Date) => {
+    // Open Add Task modal with the selected date pre-filled
+    setNewTaskDueDate(date.toISOString().split('T')[0]);
+    setShowAddTask(true);
+  }
+
   const toggleCourseVisibility = (courseId: string) => {
     setCourseVisibility(prev => ({
       ...prev,
@@ -1571,6 +1577,7 @@ export function CalendarScheduler() {
             handleDayDrop={handleDayDrop}
             isDraggingTask={isDraggingTask}
             dragOverDate={dragOverDate}
+            onDayClick={handleDayClick}
           />
         ) : currentView === "week" ? (
           <WeekView
@@ -1591,6 +1598,7 @@ export function CalendarScheduler() {
             handleDayDrop={handleDayDrop}
             isDraggingTask={isDraggingTask}
             dragOverDate={dragOverDate}
+            onDayClick={handleDayClick}
           />
         ) : currentView === "month" ? (
           <MonthView
@@ -1607,6 +1615,7 @@ export function CalendarScheduler() {
             handleDayDrop={handleDayDrop}
             isDraggingTask={isDraggingTask}
             dragOverDate={dragOverDate}
+            onDayClick={handleDayClick}
           />
         ) : (
           <YearView

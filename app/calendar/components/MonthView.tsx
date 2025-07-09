@@ -18,7 +18,8 @@ export const MonthView = ({
   handleDayDragLeave,
   handleDayDrop,
   isDraggingTask,
-  dragOverDate
+  dragOverDate,
+  onDayClick
 }: any) => (
     <>
       <div className="flex flex-col border-b border-gray-200">
@@ -96,7 +97,7 @@ export const MonthView = ({
             return (
               <div
                 key={d.toISOString()}
-                className={`p-2 min-h-[110px] overflow-visible transition-all duration-200 ${
+                className={`p-2 min-h-[110px] overflow-visible transition-all duration-200 cursor-pointer hover:bg-gray-50 ${
                   dragOverDate && dragOverDate.toDateString() === d.toDateString() 
                     ? 'bg-blue-50 border-2 border-blue-300 shadow-lg' 
                     : !inMonth 
@@ -110,6 +111,12 @@ export const MonthView = ({
                 onDragOver={(e) => handleDayDragOver?.(e, d)}
                 onDragLeave={(e) => handleDayDragLeave?.(e)}
                 onDrop={(e) => handleDayDrop?.(e, d)}
+                onClick={(e) => {
+                  // Only trigger if clicking on the day cell itself, not on events
+                  if (e.target === e.currentTarget || (e.target as Element).closest('.day-cell-content')) {
+                    onDayClick?.(d);
+                  }
+                }}
               >
                 <div
                   className={`text-sm font-medium mb-2 ${isToday
@@ -122,7 +129,7 @@ export const MonthView = ({
   
                 {groupedGoals.length === 0 ? (
                   // Empty state
-                  <div></div>
+                  <div className="day-cell-content h-full"></div>
                 ) : groupedGoals.length <= 2 ? (
                   // 1-2 events - stacked with padding
                   <div className="space-y-1">
