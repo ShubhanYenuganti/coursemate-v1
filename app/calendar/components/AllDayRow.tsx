@@ -17,7 +17,9 @@ export const AllDayRow = ({
     handleDayDrop,
     isDraggingTask,
     dragOverDate,
-    onDayClick
+    onDayClick,
+    onTaskHover,
+    onTaskMouseLeave
   }: {
     days: Date | Date[];
     getGoalsForDate: (d: Date) => Goal[];
@@ -32,6 +34,8 @@ export const AllDayRow = ({
     isDraggingTask?: boolean;
     dragOverDate?: Date | null;
     onDayClick?: (date: Date) => void;
+    onTaskHover?: (task: Goal, e: React.MouseEvent) => void;
+    onTaskMouseLeave?: () => void;
   }) => {
     const dayList = Array.isArray(days) ? days : [days];
   
@@ -101,12 +105,15 @@ export const AllDayRow = ({
                         }`}
                         style={{ backgroundColor: getCourseColor(g.course_id) }}
                         title={g.goal_descr ?? g.task_title ?? ""}
+                        tabIndex={0}
                         onClick={(e) => {
                           // Prevent click if we're dragging
                           if (!isDraggingTask) {
                             handleGoalClick(g, e);
                           }
                         }}
+                        onMouseEnter={(e) => onTaskHover?.(g, e)}
+                        onMouseLeave={() => onTaskMouseLeave?.()}
                         draggable={g.goal_id !== "Google Calendar"}
                         onDragStart={(e) => handleTaskDragStart?.(e, g)}
                         onDragEnd={(e) => handleTaskDragEnd?.(e)}

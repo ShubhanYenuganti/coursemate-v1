@@ -24,7 +24,9 @@ export const WeekView = ({
   handleDayDrop,
   isDraggingTask,
   dragOverDate,
-  onDayClick
+  onDayClick,
+  onTaskHover,
+  onTaskMouseLeave
 }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
@@ -94,6 +96,8 @@ export const WeekView = ({
       isDraggingTask={isDraggingTask}
       dragOverDate={dragOverDate}
       onDayClick={onDayClick}
+      onTaskHover={onTaskHover}
+      onTaskMouseLeave={onTaskMouseLeave}
     />
 
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
@@ -144,7 +148,10 @@ export const WeekView = ({
                         zIndex: pos.zIndex,
                         minHeight: '16px', // Ensure minimum height for visibility
                       }}
+                      tabIndex={0}
                       onClick={(e) => handleGoalClick(pos.goal, e)}
+                      onMouseEnter={(e) => onTaskHover?.(pos.goal, e)}
+                      onMouseLeave={() => onTaskMouseLeave?.()}
                     >
                       {pos.showTitle && (
                         <div className="font-semibold leading-tight truncate">

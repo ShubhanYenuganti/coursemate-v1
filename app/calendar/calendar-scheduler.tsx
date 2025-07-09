@@ -230,6 +230,17 @@ export function CalendarScheduler() {
     position: { x: number; y: number };
   } | null>(null);
 
+  /** Delete confirmation modal state */
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    task: Goal | null;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  /** Undo state for deleted tasks */
+  const [deletedTask, setDeletedTask] = useState<Goal | null>(null);
+  const [showUndoToast, setShowUndoToast] = useState(false);
+
   /** Subtasks modal drag state */
   const [isSubtasksModalDragging, setIsSubtasksModalDragging] = useState(false);
   const [subtasksModalDragOffset, setSubtasksModalDragOffset] = useState({ x: 0, y: 0 });
@@ -382,11 +393,249 @@ export function CalendarScheduler() {
     setShowAddTask(true);
   }
 
+  const [hoveredTask, setHoveredTask] = useState<Goal | null>(null);
+
+  const handleTaskHover = (task: Goal, event: React.MouseEvent) => {
+    // Only allow hover for non-Google Calendar events
+    if (task.goal_id !== "Google Calendar") {
+      setHoveredTask(task);
+    }
+  }
+
+  const handleTaskMouseLeave = () => {
+    // Clear hovered task when mouse leaves
+    setHoveredTask(null);
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (deleteModal?.task) {
+      // Close the modal immediately
+      setDeleteModal(null);
+      // Also close the overflow events modal if it's open
+      if (overflowEvents) {
+        setOverflowEvents(null);
+      }
+      // Then handle the deletion
+      await handleTaskDelete(deleteModal.task);
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteModal(null);
+    // Also close the overflow events modal if it's open
+    if (overflowEvents) {
+      setOverflowEvents(null);
+    }
+  }
+
+  const handleUndoDelete = async () => {
+    if (!deletedTask) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+      // Recreate the task using the create-task endpoint
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const payload = {
+        task_title: deletedTask.task_title,
+        task_descr: deletedTask.task_descr || '',
+        task_due_date: deletedTask.task_due_date || deletedTask.due_date,
+        subtasks: deletedTask.subtasks?.map((subtask: any, index: number) => ({
+          subtask_descr: subtask.subtask_descr,
+          subtask_type: subtask.subtask_type || 'other',
+          subtask_completed: subtask.subtask_completed || false,
+          subtask_order: index,
+          estimatedTimeMinutes: subtask.estimatedTimeMinutes
+        })) || [{
+          subtask_descr: 'Default Subtask',
+          subtask_type: 'other',
+          subtask_completed: false,
+          subtask_order: 0
+        }]
+      };
+
+      const res = await fetch(`${api}/api/goals/${deletedTask.goal_id}/create-task`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to restore task: ${res.status}`);
+      }
+
+      // Refresh the goals data to show the restored task
+      const fetchGoals = async () => {
+        try {
+          const token =
+            typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          
+          const grouped = await res.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) { 
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      await fetchGoals();
+      
+      setShowUndoToast(false);
+      setDeletedTask(null);
+      toast.success("Task restored successfully");
+    } catch (err) {
+      console.error("handleUndoDelete error", err);
+      toast.error("Failed to restore task");
+    }
+  }
+
+  // Global keyboard event listener for delete confirmation
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      if ((event.key === 'Delete' || event.key === 'Backspace') && hoveredTask && hoveredTask.goal_id !== "Google Calendar") {
+        event.preventDefault();
+        // Position modal in center of screen since we don't have mouse position from keyboard event
+        setDeleteModal({
+          isOpen: true,
+          task: hoveredTask,
+          position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+        });
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [hoveredTask]);
+
   const toggleCourseVisibility = (courseId: string) => {
     setCourseVisibility(prev => ({
       ...prev,
       [courseId]: !prev[courseId]
     }));
+  }
+
+  const handleTaskDelete = async (task: Goal) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+      // Store the deleted task for undo functionality
+      setDeletedTask(task);
+      setShowUndoToast(true);
+
+      // Store original state for potential rollback
+      const originalSelectedGoal = selectedGoal;
+      const originalGoalsByDate = goalsByDate;
+      const originalSortedGoalsByDate = sortedGoalsByDate;
+
+      // Greedy optimistic update - immediately remove the task from UI
+      setSelectedGoal((prev) => {
+        if (!prev || prev.task_id !== task.task_id) return prev;
+        return null; // Close the task modal
+      });
+
+      // Remove all instances of this task from all date groups
+      setGoalsByDate((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(dateKey => {
+          updated[dateKey] = updated[dateKey].filter(goal => goal.task_id !== task.task_id);
+        });
+        return updated;
+      });
+
+      setSortedGoalsByDate((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(dateKey => {
+          updated[dateKey] = updated[dateKey].filter(goal => goal.task_id !== task.task_id);
+        });
+        return updated;
+      });
+
+      // Call the delete_task route
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const res = await fetch(`${api}/api/goals/${task.goal_id}/tasks/${task.task_id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+      });
+
+      if (!res.ok) {
+        // If API call fails, revert the optimistic updates
+        console.error("Task deletion failed, reverting changes");
+        setSelectedGoal(originalSelectedGoal);
+        setGoalsByDate(originalGoalsByDate);
+        setSortedGoalsByDate(originalSortedGoalsByDate);
+        setDeletedTask(null);
+        setShowUndoToast(false);
+        throw new Error(`Failed to delete task: ${res.status}`);
+      }
+
+      // If successful, refresh the data to ensure consistency with server
+      const fetchGoals = async () => {
+        try {
+          const token =
+            typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          
+          const grouped = await res.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) { 
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      // Refresh the goals data to ensure consistency
+      await fetchGoals();
+      
+      // Auto-hide undo toast after 5 seconds
+      setTimeout(() => {
+        setShowUndoToast(false);
+        setDeletedTask(null);
+      }, 5000);
+      
+      toast.success("Task deleted successfully");
+    } catch (err) {
+      console.error("handleTaskDelete error", err);
+      toast.error("Failed to delete task");
+    }
   }
 
   const handleTaskDueDateChange = async (task: Goal, newDueDate: string) => {
@@ -1578,6 +1827,8 @@ export function CalendarScheduler() {
             isDraggingTask={isDraggingTask}
             dragOverDate={dragOverDate}
             onDayClick={handleDayClick}
+            onTaskHover={handleTaskHover}
+            onTaskMouseLeave={handleTaskMouseLeave}
           />
         ) : currentView === "week" ? (
           <WeekView
@@ -1599,6 +1850,8 @@ export function CalendarScheduler() {
             isDraggingTask={isDraggingTask}
             dragOverDate={dragOverDate}
             onDayClick={handleDayClick}
+            onTaskHover={handleTaskHover}
+            onTaskMouseLeave={handleTaskMouseLeave}
           />
         ) : currentView === "month" ? (
           <MonthView
@@ -1616,6 +1869,8 @@ export function CalendarScheduler() {
             isDraggingTask={isDraggingTask}
             dragOverDate={dragOverDate}
             onDayClick={handleDayClick}
+            onTaskHover={handleTaskHover}
+            onTaskMouseLeave={handleTaskMouseLeave}
           />
         ) : (
           <YearView
@@ -1903,6 +2158,7 @@ export function CalendarScheduler() {
                     className={`flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-grab active:cursor-grabbing transition-colors ${
                       isDraggingTask ? 'opacity-50' : ''
                     }`}
+                    tabIndex={0}
                     onClick={(e) => {
                       // Prevent click if we're dragging
                       if (!isDraggingTask) {
@@ -1910,6 +2166,8 @@ export function CalendarScheduler() {
                         setOverflowEvents(null)
                       }
                     }}
+                    onMouseEnter={(e) => handleTaskHover(event, e)}
+                    onMouseLeave={handleTaskMouseLeave}
                     draggable={event.goal_id !== "Google Calendar"}
                     onDragStart={(e) => handleTaskDragStart(e, event)}
                     onDragEnd={(e) => handleTaskDragEnd(e)}
@@ -2371,6 +2629,105 @@ export function CalendarScheduler() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal?.isOpen && deleteModal?.task && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                    <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Delete Task</h2>
+                </div>
+                <button
+                  onClick={handleDeleteCancel}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="text-center">
+                  <p className="text-gray-700 text-lg mb-4">
+                    Are you sure you want to delete this task?
+                  </p>
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(deleteModal.task.course_id) }}></div>
+                      <div className="flex-1 text-left">
+                        <h3 className="font-semibold text-gray-900">{deleteModal.task.task_title || '(untitled)'}</h3>
+                        {deleteModal.task.task_descr && (
+                          <p className="text-sm text-gray-600 mt-1">{deleteModal.task.task_descr}</p>
+                        )}
+                        {deleteModal.task.task_due_date && (
+                          <p className="text-sm text-gray-500 mt-1">
+                            Due: {new Date(deleteModal.task.task_due_date).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleDeleteCancel}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteConfirm}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete Task
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Toast */}
+      {showUndoToast && deletedTask && (
+        <div className="fixed bottom-6 left-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[10000] max-w-sm">
+          <div className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">
+                  Task deleted
+                </p>
+                <p className="text-xs text-gray-600 truncate">
+                  {deletedTask.task_title || '(untitled)'}
+                </p>
+              </div>
+              <button
+                onClick={handleUndoDelete}
+                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+              >
+                Undo
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

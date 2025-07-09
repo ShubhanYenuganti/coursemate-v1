@@ -25,7 +25,9 @@ export const DayView = ({
   handleDayDrop,
   isDraggingTask,
   dragOverDate,
-  onDayClick
+  onDayClick,
+  onTaskHover,
+  onTaskMouseLeave
 }: any) => (
     <div className="flex flex-col h-full">
       <div className="border-b border-gray-200 p-4 flex items-center justify-between">
@@ -72,6 +74,8 @@ export const DayView = ({
         isDraggingTask={isDraggingTask}
         dragOverDate={dragOverDate}
         onDayClick={onDayClick}
+        onTaskHover={onTaskHover}
+        onTaskMouseLeave={onTaskMouseLeave}
       />
   
       <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
@@ -124,7 +128,10 @@ export const DayView = ({
                         zIndex: pos.zIndex,
                         minHeight: '20px', // Ensure minimum height for visibility
                       }}
+                      tabIndex={0}
                       onClick={(e) => handleGoalClick(pos.goal, e)}
+                      onMouseEnter={(e) => onTaskHover?.(pos.goal, e)}
+                      onMouseLeave={() => onTaskMouseLeave?.()}
                     >
                       {pos.showTitle && (
                         <div className="font-semibold leading-tight truncate">

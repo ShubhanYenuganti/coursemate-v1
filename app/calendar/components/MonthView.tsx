@@ -19,7 +19,9 @@ export const MonthView = ({
   handleDayDrop,
   isDraggingTask,
   dragOverDate,
-  onDayClick
+  onDayClick,
+  onTaskHover,
+  onTaskMouseLeave
 }: any) => (
     <>
       <div className="flex flex-col border-b border-gray-200">
@@ -140,13 +142,16 @@ export const MonthView = ({
                       isDraggingTask ? 'opacity-30' : ''
                     }`}
                         style={{ backgroundColor: getCourseColor(g.course_id) }}
+                        tabIndex={0}
                     onClick={(e) => {
                       // Prevent click if we're dragging
                       if (!isDraggingTask) {
                         handleGoalClick(g, e);
                       }
                     }}
-                    draggable={g.goal_id !== "Google Calendar"}
+                                                onMouseEnter={(e) => onTaskHover?.(g, e)}
+                        onMouseLeave={() => onTaskMouseLeave?.()}
+                        draggable={g.goal_id !== "Google Calendar"}
                     onDragStart={(e) => handleTaskDragStart?.(e, g)}
                     onDragEnd={(e) => handleTaskDragEnd?.(e)}
                   >
@@ -164,12 +169,15 @@ export const MonthView = ({
                           isDraggingTask ? 'opacity-30' : ''
                         }`}
                         style={{ backgroundColor: getCourseColor(g.course_id) }}
+                        tabIndex={0}
                         onClick={(e) => {
                           // Prevent click if we're dragging
                           if (!isDraggingTask) {
                             handleGoalClick(g, e);
                           }
                         }}
+                        onMouseEnter={(e) => onTaskHover?.(g, e)}
+                        onMouseLeave={() => onTaskMouseLeave?.()}
                         draggable={g.goal_id !== "Google Calendar"}
                         onDragStart={(e) => handleTaskDragStart?.(e, g)}
                         onDragEnd={(e) => handleTaskDragEnd?.(e)}
