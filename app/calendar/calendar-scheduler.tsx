@@ -1435,7 +1435,7 @@ export function CalendarScheduler() {
                             </div>
                             
                             {/* View Subtasks Button */}
-                            {group.totalSubtasks && group.totalSubtasks > 1 && (
+                            {group.totalSubtasks && group.totalSubtasks >= 1 && (
                               <div className="mt-2">
                                 <button
                                   onClick={(e) => {
