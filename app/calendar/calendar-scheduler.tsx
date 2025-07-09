@@ -237,9 +237,20 @@ export function CalendarScheduler() {
     position: { x: number; y: number };
   } | null>(null);
 
+  /** Subtask delete confirmation modal state */
+  const [deleteSubtaskModal, setDeleteSubtaskModal] = useState<{
+    isOpen: boolean;
+    subtask: Goal | null;
+    position: { x: number; y: number };
+  } | null>(null);
+
   /** Undo state for deleted tasks */
   const [deletedTask, setDeletedTask] = useState<Goal | null>(null);
   const [showUndoToast, setShowUndoToast] = useState(false);
+
+  /** Undo state for deleted subtasks */
+  const [deletedSubtask, setDeletedSubtask] = useState<Goal | null>(null);
+  const [showUndoSubtaskToast, setShowUndoSubtaskToast] = useState(false);
 
   /** Subtasks modal drag state */
   const [isSubtasksModalDragging, setIsSubtasksModalDragging] = useState(false);
@@ -428,6 +439,19 @@ export function CalendarScheduler() {
     }
   }
 
+  const handleSubtaskDeleteConfirm = async () => {
+    if (deleteSubtaskModal?.subtask) {
+      // Close the modal immediately
+      setDeleteSubtaskModal(null);
+      // Then handle the deletion
+      await handleSubtaskDelete(deleteSubtaskModal.subtask);
+    }
+  }
+
+  const handleSubtaskDeleteCancel = () => {
+    setDeleteSubtaskModal(null);
+  }
+
   const handleUndoDelete = async () => {
     if (!deletedTask) return;
 
@@ -505,6 +529,194 @@ export function CalendarScheduler() {
     } catch (err) {
       console.error("handleUndoDelete error", err);
       toast.error("Failed to restore task");
+    }
+  }
+
+  const handleSubtaskDelete = async (subtask: Goal) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+      // Store the deleted subtask for undo functionality
+      setDeletedSubtask(subtask);
+      setShowUndoSubtaskToast(true);
+
+      // Store original state for potential rollback
+      const originalSubtasksModal = subtasksModal;
+      const originalGoalsByDate = goalsByDate;
+      const originalSortedGoalsByDate = sortedGoalsByDate;
+
+      // Greedy optimistic update - immediately remove the subtask from UI
+      setSubtasksModal((prev) => {
+        if (!prev) return prev;
+
+        const updatedSubtasks = prev.task.subtasks?.filter((s: any) => s.subtask_id !== subtask.subtask_id) || [];
+        const completedSubtasks = updatedSubtasks.filter((s: any) => s.subtask_completed).length;
+        const totalSubtasks = updatedSubtasks.length;
+        const newProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+
+        return {
+          ...prev,
+          task: {
+            ...prev.task,
+            subtasks: updatedSubtasks,
+            completedSubtasks,
+            totalSubtasks,
+            progress: newProgress,
+            task_completed: totalSubtasks > 0 && completedSubtasks === totalSubtasks
+          }
+        };
+      });
+
+      // Also optimistically update the main goals data
+      setGoalsByDate((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(dateKey => {
+          updated[dateKey] = updated[dateKey].filter(goal => goal.subtask_id !== subtask.subtask_id);
+        });
+        return updated;
+      });
+
+      setSortedGoalsByDate((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(dateKey => {
+          updated[dateKey] = updated[dateKey].filter(goal => goal.subtask_id !== subtask.subtask_id);
+        });
+        return updated;
+      });
+
+      // Call the delete_subtask route
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const res = await fetch(`${api}/api/goals/tasks/subtasks/${subtask.subtask_id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+      });
+
+      if (!res.ok) {
+        // If API call fails, revert the optimistic updates
+        console.error("Subtask deletion failed, reverting changes");
+        setSubtasksModal(originalSubtasksModal);
+        setGoalsByDate(originalGoalsByDate);
+        setSortedGoalsByDate(originalSortedGoalsByDate);
+        setDeletedSubtask(null);
+        setShowUndoSubtaskToast(false);
+        throw new Error(`Failed to delete subtask: ${res.status}`);
+      }
+
+      // If successful, refresh the data to ensure consistency with server
+      const fetchGoals = async () => {
+        try {
+          const token =
+            typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          
+          const grouped = await res.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) { 
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      // Refresh the goals data to ensure consistency
+      await fetchGoals();
+      
+      // Auto-hide undo toast after 5 seconds
+      setTimeout(() => {
+        setShowUndoSubtaskToast(false);
+        setDeletedSubtask(null);
+      }, 5000);
+      
+      toast.success("Subtask deleted successfully");
+    } catch (err) {
+      console.error("handleSubtaskDelete error", err);
+      toast.error("Failed to delete subtask");
+    }
+  }
+
+  const handleUndoSubtaskDelete = async () => {
+    if (!deletedSubtask) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+      // Recreate the subtask using the create_subtask endpoint
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const payload = {
+        subtask_descr: deletedSubtask.subtask_descr,
+        subtask_type: deletedSubtask.subtask_type || 'other',
+        subtask_completed: deletedSubtask.subtask_completed || false,
+        task_due_date: deletedSubtask.task_due_date || deletedSubtask.due_date
+      };
+
+      const res = await fetch(`${api}/api/goals/tasks/${deletedSubtask.task_id}/subtasks`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to restore subtask: ${res.status}`);
+      }
+
+      // Refresh the goals data to show the restored subtask
+      const fetchGoals = async () => {
+        try {
+          const token =
+            typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          
+          const grouped = await res.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) { 
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      await fetchGoals();
+      
+      setShowUndoSubtaskToast(false);
+      setDeletedSubtask(null);
+      toast.success("Subtask restored successfully");
+    } catch (err) {
+      console.error("handleUndoSubtaskDelete error", err);
+      toast.error("Failed to restore subtask");
     }
   }
 
@@ -2603,11 +2815,13 @@ export function CalendarScheduler() {
                     return (
                       <div
                         key={currentSubtask.subtask_id || index}
-                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                        onClick={() => handleSubtaskToggle(currentSubtask)}
+                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                       >
-                        <div className={`w-3 h-3 rounded-full flex-shrink-0 ${currentSubtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'}`} />
-                        <div className="flex-1 min-w-0">
+                        <div 
+                          className={`w-3 h-3 rounded-full flex-shrink-0 cursor-pointer ${currentSubtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'}`}
+                          onClick={() => handleSubtaskToggle(currentSubtask)}
+                        />
+                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleSubtaskToggle(currentSubtask)}>
                           <div className={`text-sm font-medium ${currentSubtask.subtask_completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
                             {currentSubtask.subtask_descr || `Subtask ${index + 1}`}
                           </div>
@@ -2622,6 +2836,22 @@ export function CalendarScheduler() {
                             </div>
                           )}
                         </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteSubtaskModal({
+                              isOpen: true,
+                              subtask: currentSubtask,
+                              position: { x: e.clientX, y: e.clientY }
+                            });
+                          }}
+                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                          title="Delete subtask"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </div>
                     );
                   })}
@@ -2702,6 +2932,76 @@ export function CalendarScheduler() {
         </div>
       )}
 
+      {/* Subtask Delete Confirmation Modal */}
+      {deleteSubtaskModal?.isOpen && deleteSubtaskModal?.subtask && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                    <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Delete Subtask</h2>
+                </div>
+                <button
+                  onClick={handleSubtaskDeleteCancel}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="text-center">
+                  <p className="text-gray-700 text-lg mb-4">
+                    Are you sure you want to delete this subtask?
+                  </p>
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(deleteSubtaskModal.subtask.course_id) }}></div>
+                      <div className="flex-1 text-left">
+                        <h3 className="font-semibold text-gray-900">{deleteSubtaskModal.subtask.subtask_descr || '(untitled)'}</h3>
+                        {deleteSubtaskModal.subtask.task_title && (
+                          <p className="text-sm text-gray-600 mt-1">Task: {deleteSubtaskModal.subtask.task_title}</p>
+                        )}
+                        {deleteSubtaskModal.subtask.subtask_type && deleteSubtaskModal.subtask.subtask_type !== 'other' && (
+                          <p className="text-sm text-gray-500 mt-1">
+                            Type: {deleteSubtaskModal.subtask.subtask_type}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleSubtaskDeleteCancel}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSubtaskDeleteConfirm}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete Subtask
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Undo Toast */}
       {showUndoToast && deletedTask && (
         <div className="fixed bottom-6 left-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[10000] max-w-sm">
@@ -2722,6 +3022,35 @@ export function CalendarScheduler() {
               </div>
               <button
                 onClick={handleUndoDelete}
+                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+              >
+                Undo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Subtask Toast */}
+      {showUndoSubtaskToast && deletedSubtask && (
+        <div className="fixed bottom-6 left-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[10000] max-w-sm">
+          <div className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">
+                  Subtask deleted
+                </p>
+                <p className="text-xs text-gray-600 truncate">
+                  {deletedSubtask.subtask_descr || '(untitled)'}
+                </p>
+              </div>
+              <button
+                onClick={handleUndoSubtaskDelete}
                 className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
               >
                 Undo
