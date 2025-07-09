@@ -1344,6 +1344,12 @@ def update_task(task_id):
         
         if 'task_due_date' in data:
             task.task_due_date = data['task_due_date']
+            
+            # update due date for all subtasks
+            subtasks: list[Goal] = Goal.query.filter_by(task_id=task.task_id, user_id=user_id).all()
+            for subtask in subtasks:
+                subtask.task_due_date = data['task_due_date']
+                subtask.updated_at = now
         
         if 'task_completed' in data:
             task.task_completed = data['task_completed']

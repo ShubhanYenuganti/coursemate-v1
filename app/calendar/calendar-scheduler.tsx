@@ -13,6 +13,7 @@ import {
   Save,
   ExternalLink,
   RotateCcw,
+  Move,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -233,6 +234,11 @@ export function CalendarScheduler() {
   const [isSubtasksModalDragging, setIsSubtasksModalDragging] = useState(false);
   const [subtasksModalDragOffset, setSubtasksModalDragOffset] = useState({ x: 0, y: 0 });
 
+  /** Drag and drop state for task events */
+  const [isDraggingTask, setIsDraggingTask] = useState(false);
+  const [draggedTask, setDraggedTask] = useState<Goal | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
+
   /** Helpers */
   const weekDates = getWeekDates(currentDate) // Sunday‑based week
 
@@ -284,6 +290,71 @@ export function CalendarScheduler() {
     setIsSubtasksModalDragging(false);
   };
 
+  // Drag and drop handlers for task events
+  const handleTaskDragStart = (e: React.DragEvent, task: Goal) => {
+    e.stopPropagation();
+    setIsDraggingTask(true);
+    setDraggedTask(task);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify(task));
+  };
+
+  const handleTaskDragEnd = (e: React.DragEvent) => {
+    e.stopPropagation();
+    setIsDraggingTask(false);
+    setDraggedTask(null);
+    setDragOverDate(null);
+  };
+
+  const handleDayDragOver = (e: React.DragEvent, date: Date) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverDate(date);
+  };
+
+  const handleDayDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverDate(null);
+  };
+
+  const handleDayDrop = async (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedTask) return;
+
+    // Convert the target date to ISO string format
+    const newDueDate = targetDate.toISOString().split('T')[0];
+    
+    // Only update if the date actually changed
+    const currentDueDate = draggedTask.task_due_date || draggedTask.due_date;
+    if (currentDueDate) {
+      const currentDateStr = currentDueDate.split('T')[0];
+      if (currentDateStr === newDueDate) {
+        setDragOverDate(null);
+        return; // No change needed
+      }
+    }
+
+    try {
+      // Call the handleTaskDueDateChange function
+      await handleTaskDueDateChange(draggedTask, newDueDate);
+      toast.success(`Task moved to ${targetDate.toLocaleDateString()}`);
+      
+      // Close the overflow modal if it's open
+      if (overflowEvents) {
+        setOverflowEvents(null);
+      }
+    } catch (error) {
+      console.error('Failed to move task:', error);
+      toast.error('Failed to move task');
+    } finally {
+      setDragOverDate(null);
+    }
+  };
+
   const handleGoalClick = (event: Goal | any, clickEvent?: React.MouseEvent) => {
     if (clickEvent) {
       setGoalDisplayPosition({ x: clickEvent.clientX, y: clickEvent.clientY })
@@ -304,6 +375,105 @@ export function CalendarScheduler() {
       ...prev,
       [courseId]: !prev[courseId]
     }));
+  }
+
+  const handleTaskDueDateChange = async (task: Goal, newDueDate: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.")
+
+      // Store original state for potential rollback
+      const originalSelectedGoal = selectedGoal;
+      const originalGoalsByDate = goalsByDate;
+      const originalSortedGoalsByDate = sortedGoalsByDate;
+
+      // Greedy optimistic update - immediately update the UI for all instances of this task
+      setSelectedGoal((prev) => {
+        if (!prev || prev.task_id !== task.task_id) return prev;
+        return {
+          ...prev,
+          task_due_date: newDueDate
+        };
+      });
+
+      // Update all instances of this task across all date groups
+      setGoalsByDate((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(dateKey => {
+          updated[dateKey] = updated[dateKey].map(goal => 
+            goal.task_id === task.task_id ? { ...goal, task_due_date: newDueDate } : goal
+          );
+        });
+        return updated;
+      });
+
+      setSortedGoalsByDate((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(dateKey => {
+          updated[dateKey] = updated[dateKey].map(goal => 
+            goal.task_id === task.task_id ? { ...goal, task_due_date: newDueDate } : goal
+          );
+        });
+        return updated;
+      });
+
+      // Call the update_task route with the new due date
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const res = await fetch(`${api}/api/goals/tasks/${task.task_id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ 
+          task_due_date: newDueDate 
+        }),
+      });
+
+      if (!res.ok) {
+        // If API call fails, revert the optimistic updates
+        console.error("Task due date change failed, reverting changes");
+        setSelectedGoal(originalSelectedGoal);
+        setGoalsByDate(originalGoalsByDate);
+        setSortedGoalsByDate(originalSortedGoalsByDate);
+        throw new Error(`Failed to update task due date: ${res.status}`);
+      }
+
+      // If successful, refresh the data to ensure consistency with server
+      const fetchGoals = async () => {
+        try {
+          const token =
+            typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          
+          const grouped = await res.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) { 
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      // Refresh the goals data to ensure consistency
+      await fetchGoals();
+    } catch (err) {
+      console.error("handleTaskDueDateChange error", err);
+      toast.error("Failed to update task due date");
+    }
   }
 
   const handleSubtaskToggle = async (sub: Goal) => {
@@ -1388,6 +1558,13 @@ export function CalendarScheduler() {
             formatHourLabel={formatHourLabel}
             handleOverflowClick={handleOverflowClick}
             getCourseColor={getCourseColor}
+            handleTaskDragStart={handleTaskDragStart}
+            handleTaskDragEnd={handleTaskDragEnd}
+            handleDayDragOver={handleDayDragOver}
+            handleDayDragLeave={handleDayDragLeave}
+            handleDayDrop={handleDayDrop}
+            isDraggingTask={isDraggingTask}
+            dragOverDate={dragOverDate}
           />
         ) : currentView === "week" ? (
           <WeekView
@@ -1401,6 +1578,13 @@ export function CalendarScheduler() {
             formatHourLabel={formatHourLabel}
             handleOverflowClick={handleOverflowClick}
             getCourseColor={getCourseColor}
+            handleTaskDragStart={handleTaskDragStart}
+            handleTaskDragEnd={handleTaskDragEnd}
+            handleDayDragOver={handleDayDragOver}
+            handleDayDragLeave={handleDayDragLeave}
+            handleDayDrop={handleDayDrop}
+            isDraggingTask={isDraggingTask}
+            dragOverDate={dragOverDate}
           />
         ) : currentView === "month" ? (
           <MonthView
@@ -1694,11 +1878,19 @@ export function CalendarScheduler() {
                 {overflowEvents.events.map((event, index) => (
                   <div
                     key={`${event.goal_id}-${event.task_id}-${event.subtask_id}-${index}`}
-                    className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer transition-colors"
+                    className={`flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-grab active:cursor-grabbing transition-colors ${
+                      isDraggingTask ? 'opacity-50' : ''
+                    }`}
                     onClick={(e) => {
-                      handleGoalClick(event, e)
-                      setOverflowEvents(null)
+                      // Prevent click if we're dragging
+                      if (!isDraggingTask) {
+                        handleGoalClick(event, e)
+                        setOverflowEvents(null)
+                      }
                     }}
+                    draggable={true}
+                    onDragStart={(e) => handleTaskDragStart(e, event)}
+                    onDragEnd={(e) => handleTaskDragEnd(e)}
                   >
                     <div
                       className="w-3 h-3 rounded-full flex-shrink-0"
@@ -1714,6 +1906,7 @@ export function CalendarScheduler() {
                         </div>
                       )}
                     </div>
+                    <Move className="w-4 h-4 text-gray-400 opacity-50 hover:opacity-100 transition-opacity" />
                   </div>
                 ))}
               </div>

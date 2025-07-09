@@ -8,7 +8,24 @@ import { calculateStatus } from "../utils/goal.status"
 import { startOfToday } from "../utils/date.utils"
 
 // Extracted view components to reduce cognitive complexity
-export const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel, handleOverflowClick, getCourseColor }: any) => (
+export const DayView = ({ 
+  currentDate, 
+  setCurrentDate, 
+  hours, 
+  getGoalsForDate, 
+  handleGoalClick, 
+  setTimelineRef, 
+  formatHourLabel, 
+  handleOverflowClick, 
+  getCourseColor,
+  handleTaskDragStart,
+  handleTaskDragEnd,
+  handleDayDragOver,
+  handleDayDragLeave,
+  handleDayDrop,
+  isDraggingTask,
+  dragOverDate
+}: any) => (
     <div className="flex flex-col h-full">
       <div className="border-b border-gray-200 p-4 flex items-center justify-between">
         <h2 className="text-2xl font-semibold">
@@ -46,6 +63,13 @@ export const DayView = ({ currentDate, setCurrentDate, hours, getGoalsForDate, h
         handleGoalClick={handleGoalClick}
         onOverflowClick={handleOverflowClick}
         getCourseColor={getCourseColor}
+        handleTaskDragStart={handleTaskDragStart}
+        handleTaskDragEnd={handleTaskDragEnd}
+        handleDayDragOver={handleDayDragOver}
+        handleDayDragLeave={handleDayDragLeave}
+        handleDayDrop={handleDayDrop}
+        isDraggingTask={isDraggingTask}
+        dragOverDate={dragOverDate}
       />
   
       <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>

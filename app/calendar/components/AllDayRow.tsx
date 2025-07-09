@@ -1,5 +1,6 @@
 import { groupTasksByTaskId, isAllDay } from "../utils/goal.progress";
 import { calculateStatus } from "../utils/goal.status";
+import { Move } from "lucide-react";
 
 import { Goal } from "../utils/goal.types";
 
@@ -8,13 +9,27 @@ export const AllDayRow = ({
     getGoalsForDate,
     handleGoalClick,
     onOverflowClick,
-    getCourseColor
+    getCourseColor,
+    handleTaskDragStart,
+    handleTaskDragEnd,
+    handleDayDragOver,
+    handleDayDragLeave,
+    handleDayDrop,
+    isDraggingTask,
+    dragOverDate
   }: {
     days: Date | Date[];
     getGoalsForDate: (d: Date) => Goal[];
     handleGoalClick: (g: Goal, e?: React.MouseEvent) => void;
     onOverflowClick: (events: Goal[], position: { x: number; y: number }, day: Date) => void;
     getCourseColor: (courseId: string) => string;
+    handleTaskDragStart?: (e: React.DragEvent, task: Goal) => void;
+    handleTaskDragEnd?: (e: React.DragEvent) => void;
+    handleDayDragOver?: (e: React.DragEvent, date: Date) => void;
+    handleDayDragLeave?: (e: React.DragEvent) => void;
+    handleDayDrop?: (e: React.DragEvent, date: Date) => void;
+    isDraggingTask?: boolean;
+    dragOverDate?: Date | null;
   }) => {
     const dayList = Array.isArray(days) ? days : [days];
   
@@ -55,7 +70,16 @@ export const AllDayRow = ({
             return (
               <div
                 key={d.toISOString()}
-                className={`flex-1 min-w-0 ${showDivider}`}
+                className={`flex-1 min-w-0 ${showDivider} transition-all duration-200 ${
+                  dragOverDate && dragOverDate.toDateString() === d.toDateString() 
+                    ? 'bg-blue-50 border-2 border-blue-300 shadow-lg' 
+                    : isDraggingTask 
+                      ? 'border-2 border-dashed border-gray-300' 
+                      : ''
+                }`}
+                onDragOver={(e) => handleDayDragOver?.(e, d)}
+                onDragLeave={(e) => handleDayDragLeave?.(e)}
+                onDrop={(e) => handleDayDrop?.(e, d)}
               >
                 {/* Fixed-width all-day container with 4 slots */}
                 <div className="min-h-[32px] p-1">
@@ -64,16 +88,29 @@ export const AllDayRow = ({
                     {groupedGoals.slice(0, 2).map((g, index) => (
                       <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
-                        className="h-6 px-2 rounded text-xs font-medium text-white cursor-pointer truncate hover:opacity-90 transition-opacity flex items-center col-span-2"
+                        className={`h-6 px-2 rounded text-xs font-medium text-white cursor-grab active:cursor-grabbing truncate hover:opacity-90 transition-opacity flex items-center col-span-2 ${
+                          isDraggingTask ? 'opacity-50' : ''
+                        }`}
                         style={{ backgroundColor: getCourseColor(g.course_id) }}
                         title={g.goal_descr ?? g.task_title ?? ""}
-                        onClick={(e) => handleGoalClick(g, e)}
+                        onClick={(e) => {
+                          // Prevent click if we're dragging
+                          if (!isDraggingTask) {
+                            handleGoalClick(g, e);
+                          }
+                        }}
+                        draggable={true}
+                        onDragStart={(e) => handleTaskDragStart?.(e, g)}
+                        onDragEnd={(e) => handleTaskDragEnd?.(e)}
                       >
-                        {g.task_title ?? "(untitled)"}
-                        {/* Show progress indicator for grouped tasks */}
-                        {g.totalSubtasks && g.totalSubtasks > 1 && (
-                          <span className="ml-1 opacity-75">({g.completedSubtasks}/{g.totalSubtasks})</span>
-                        )}
+                        <span className="flex-1 truncate">
+                          {g.task_title ?? "(untitled)"}
+                          {/* Show progress indicator for grouped tasks */}
+                          {g.totalSubtasks && g.totalSubtasks > 1 && (
+                            <span className="ml-1 opacity-75">({g.completedSubtasks}/{g.totalSubtasks})</span>
+                          )}
+                        </span>
+                        <Move className="w-3 h-3 opacity-50 hover:opacity-100 transition-opacity flex-shrink-0" />
                       </div>
                     ))}
                     

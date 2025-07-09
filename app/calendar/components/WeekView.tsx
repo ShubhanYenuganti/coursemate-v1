@@ -7,7 +7,24 @@ import { groupTasksByTaskId } from "../utils/goal.progress"
 import { calculateStatus } from "../utils/goal.status"
 import { startOfToday } from "../utils/date.utils"
 
-export const WeekView = ({ setCurrentDate, weekDates, hours, getGoalsForDate, handleGoalClick, setTimelineRef, formatHourLabel, handleOverflowClick, getCourseColor }: any) => (
+export const WeekView = ({ 
+  setCurrentDate, 
+  weekDates, 
+  hours, 
+  getGoalsForDate, 
+  handleGoalClick, 
+  setTimelineRef, 
+  formatHourLabel, 
+  handleOverflowClick, 
+  getCourseColor,
+  handleTaskDragStart,
+  handleTaskDragEnd,
+  handleDayDragOver,
+  handleDayDragLeave,
+  handleDayDrop,
+  isDraggingTask,
+  dragOverDate
+}: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -68,6 +85,13 @@ export const WeekView = ({ setCurrentDate, weekDates, hours, getGoalsForDate, ha
       handleGoalClick={handleGoalClick}
       onOverflowClick={handleOverflowClick}
       getCourseColor={getCourseColor}
+      handleTaskDragStart={handleTaskDragStart}
+      handleTaskDragEnd={handleTaskDragEnd}
+      handleDayDragOver={handleDayDragOver}
+      handleDayDragLeave={handleDayDragLeave}
+      handleDayDrop={handleDayDrop}
+      isDraggingTask={isDraggingTask}
+      dragOverDate={dragOverDate}
     />
 
     <div className="flex-1 overflow-y-auto" ref={setTimelineRef}>
