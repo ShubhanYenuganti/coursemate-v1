@@ -930,172 +930,172 @@ const GoalDetailPage = () => {
               .slice() // create a shallow copy to avoid mutating state
               .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
               .map(task => (
-                <div key={task.id} className="bg-white rounded-lg border border-gray-200 shadow-sm">
-                  {/* Task Header */}
-                  <div className="p-4 cursor-pointer" onClick={() => toggleTaskExpansion(task.id)}>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          {task.completed ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleTaskCompletion(task);
-                              }}
-                              className="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors bg-green-500 border-green-500 hover:bg-green-600"
-                              title="Mark as incomplete"
-                            >
-                              <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          ) : (
-                            // Only show checkbox if all subtasks are completed
-                            task.totalSubtasks > 0 && task.completedSubtasks === task.totalSubtasks && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleTaskCompletion(task);
-                              }}
-                              className="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors bg-white border-gray-300 hover:border-green-400"
-                              title="Mark as complete"
-                            />
-                            )
-                          )}
-                          <h4 className={`font-medium ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{task.name}</h4>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            <span>{formatDate(task.scheduledDate)}</span>
-                          </div>
-                          <div>
-                            <span>{task.completedSubtasks}/{task.totalSubtasks} subtasks</span>
-                          </div>
-                        </div>
-                      </div>
+              <div key={task.id} className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                {/* Task Header */}
+                <div className="p-4 cursor-pointer" onClick={() => toggleTaskExpansion(task.id)}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTaskDeleted(task.id);
-                          }}
-                          className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingTask(task);
-                          }}
-                          className="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
+                        {task.completed ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleTaskCompletion(task);
+                            }}
+                            className="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors bg-green-500 border-green-500 hover:bg-green-600"
+                            title="Mark as incomplete"
+                          >
+                            <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        ) : (
+                          // Only show checkbox if all subtasks are completed
+                          task.totalSubtasks > 0 && task.completedSubtasks === task.totalSubtasks && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleTaskCompletion(task);
+                            }}
+                            className="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors bg-white border-gray-300 hover:border-green-400"
+                            title="Mark as complete"
+                          />
+                          )
+                        )}
+                        <h4 className={`font-medium ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{task.name}</h4>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4" />
+                          <span>{formatDate(task.scheduledDate)}</span>
+                        </div>
+                        <div>
+                          <span>{task.completedSubtasks}/{task.totalSubtasks} subtasks</span>
+                        </div>
                       </div>
                     </div>
-                    
-                    {/* Progress Bar */}
-                    <div className="mt-2">
-                      <div className="w-full bg-gray-200 rounded-full h-1.5">
-                        <div
-                          className={`h-1.5 rounded-full transition-all duration-300 ${getProgressColor(task.progress)}`}
-                          style={{ width: `${task.progress}%` }}
-                        />
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTaskDeleted(task.id);
+                        }}
+                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTask(task);
+                        }}
+                        className="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                   
-                  {/* Expanded Subtasks */}
-                  {expandedTaskId === task.id && (
-                    <div className="border-t border-gray-200 p-4">
-                      <SubtaskList 
-                        taskId={task.id} 
-                        subtasks={task.subtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0))}
-                        taskDueDate={task.scheduledDate}
-                        onSubtaskDeleted={(subtaskId) => {
-                          // Update the local task state to reflect the deleted subtask
-                          const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
-                          // Keep the order after deletion
-                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
-                          const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
-                          const totalSubtasksCount = updatedSubtasks.length;
-                          
-                          const updatedTask = {
-                            ...task,
-                            subtasks: sortedSubtasks,
-                            totalSubtasks: totalSubtasksCount,
-                            completedSubtasks: completedSubtasksCount,
-                            // Automatically complete task if all subtasks are done
-                            completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
-                          };
-                          
-                          // Recalculate progress
-                          updatedTask.progress = updatedTask.totalSubtasks > 0
-                            ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
-                            : 0;
-                          
-                          // Update tasks list
-                          handleTaskUpdated(updatedTask);
-                        }}
-                        onSubtaskAdded={(newSubtask) => {
-                          // Update the local task state to reflect the added subtask
-                          const updatedSubtasks = [...task.subtasks, newSubtask];
-                          // Keep the order after addition
-                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
-                          const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
-                          const totalSubtasksCount = updatedSubtasks.length;
-                          
-                          const updatedTask = {
-                            ...task,
-                            subtasks: sortedSubtasks,
-                            totalSubtasks: totalSubtasksCount,
-                            completedSubtasks: completedSubtasksCount,
-                            // Automatically complete task if all subtasks are done
-                            completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
-                          };
-                          
-                          // Recalculate progress
-                          updatedTask.progress = updatedTask.totalSubtasks > 0
-                            ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
-                            : 0;
-                          
-                          // Update tasks list
-                          handleTaskUpdated(updatedTask);
-                        }}
-                        onSubtaskToggled={(subtaskId, completed) => {
-                          // Update the local task state to reflect the subtask completion change
-                          const updatedSubtasks = task.subtasks.map(subtask => 
-                            subtask.id === subtaskId ? { ...subtask, completed } : subtask
-                          );
-                          // Keep the order after toggle
-                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
-                          
-                          const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
-                          const totalSubtasksCount = updatedSubtasks.length;
-                          
-                          const updatedTask = {
-                            ...task,
-                            subtasks: sortedSubtasks,
-                            completedSubtasks: completedSubtasksCount,
-                            // Automatically complete task if all subtasks are done
-                            completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
-                          };
-                          
-                          // Recalculate progress
-                          updatedTask.progress = updatedTask.totalSubtasks > 0
-                            ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
-                            : 0;
-                          
-                          // Update tasks list
-                          handleTaskUpdated(updatedTask);
-                        }}
+                  {/* Progress Bar */}
+                  <div className="mt-2">
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full transition-all duration-300 ${getProgressColor(task.progress)}`}
+                        style={{ width: `${task.progress}%` }}
                       />
                     </div>
-                  )}
+                  </div>
                 </div>
-              ))}
+                
+                {/* Expanded Subtasks */}
+                {expandedTaskId === task.id && (
+                  <div className="border-t border-gray-200 p-4">
+                    <SubtaskList 
+                      taskId={task.id} 
+                        subtasks={task.subtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0))}
+                        taskDueDate={task.scheduledDate}
+                      onSubtaskDeleted={(subtaskId) => {
+                        // Update the local task state to reflect the deleted subtask
+                        const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
+                          // Keep the order after deletion
+                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
+                        const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+                        const totalSubtasksCount = updatedSubtasks.length;
+                        
+                        const updatedTask = {
+                          ...task,
+                            subtasks: sortedSubtasks,
+                          totalSubtasks: totalSubtasksCount,
+                          completedSubtasks: completedSubtasksCount,
+                          // Automatically complete task if all subtasks are done
+                          completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
+                        };
+                        
+                        // Recalculate progress
+                        updatedTask.progress = updatedTask.totalSubtasks > 0
+                          ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
+                          : 0;
+                        
+                        // Update tasks list
+                        handleTaskUpdated(updatedTask);
+                      }}
+                      onSubtaskAdded={(newSubtask) => {
+                        // Update the local task state to reflect the added subtask
+                        const updatedSubtasks = [...task.subtasks, newSubtask];
+                          // Keep the order after addition
+                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
+                        const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+                        const totalSubtasksCount = updatedSubtasks.length;
+                        
+                        const updatedTask = {
+                          ...task,
+                            subtasks: sortedSubtasks,
+                          totalSubtasks: totalSubtasksCount,
+                          completedSubtasks: completedSubtasksCount,
+                          // Automatically complete task if all subtasks are done
+                          completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
+                        };
+                        
+                        // Recalculate progress
+                        updatedTask.progress = updatedTask.totalSubtasks > 0
+                          ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
+                          : 0;
+                        
+                        // Update tasks list
+                        handleTaskUpdated(updatedTask);
+                      }}
+                      onSubtaskToggled={(subtaskId, completed) => {
+                        // Update the local task state to reflect the subtask completion change
+                        const updatedSubtasks = task.subtasks.map(subtask => 
+                          subtask.id === subtaskId ? { ...subtask, completed } : subtask
+                        );
+                          // Keep the order after toggle
+                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
+                        
+                        const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+                        const totalSubtasksCount = updatedSubtasks.length;
+                        
+                        const updatedTask = {
+                          ...task,
+                            subtasks: sortedSubtasks,
+                          completedSubtasks: completedSubtasksCount,
+                          // Automatically complete task if all subtasks are done
+                          completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
+                        };
+                        
+                        // Recalculate progress
+                        updatedTask.progress = updatedTask.totalSubtasks > 0
+                          ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
+                          : 0;
+                        
+                        // Update tasks list
+                        handleTaskUpdated(updatedTask);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

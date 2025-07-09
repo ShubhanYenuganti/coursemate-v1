@@ -321,13 +321,13 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Subtask Name *
                       </label>
-                      <input
-                        type="text"
-                        value={editedSubtaskName}
-                        onChange={(e) => setEditedSubtaskName(e.target.value)}
+                  <input
+                    type="text"
+                    value={editedSubtaskName}
+                    onChange={(e) => setEditedSubtaskName(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        autoFocus
-                      />
+                    autoFocus
+                  />
                     </div>
                     
                     <div>
@@ -429,14 +429,14 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Subtask Name *
               </label>
-              <input
-                type="text"
-                value={newSubtaskName}
-                onChange={(e) => setNewSubtaskName(e.target.value)}
+          <input
+            type="text"
+            value={newSubtaskName}
+            onChange={(e) => setNewSubtaskName(e.target.value)}
                 placeholder="Enter subtask name"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                autoFocus
-              />
+            autoFocus
+          />
             </div>
             
             <div>

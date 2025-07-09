@@ -219,6 +219,20 @@ export function CalendarScheduler() {
     completed: false,
   })
 
+  /** Expanded subtasks in sidebar */
+  const [expandedSidebarSubtasks, setExpandedSidebarSubtasks] = useState<Record<string, boolean>>({});
+
+  /** Subtasks modal state */
+  const [subtasksModal, setSubtasksModal] = useState<{
+    isOpen: boolean;
+    task: any;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  /** Subtasks modal drag state */
+  const [isSubtasksModalDragging, setIsSubtasksModalDragging] = useState(false);
+  const [subtasksModalDragOffset, setSubtasksModalDragOffset] = useState({ x: 0, y: 0 });
+
   /** Helpers */
   const weekDates = getWeekDates(currentDate) // Sunday‑based week
 
@@ -227,6 +241,48 @@ export function CalendarScheduler() {
 
   const toggleSectionExpansion = (section: string) =>
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }))
+
+  const toggleSidebarSubtaskExpansion = (taskId: string) =>
+    setExpandedSidebarSubtasks((prev) => ({ ...prev, [taskId]: !prev[taskId] }))
+
+  const openSubtasksModal = (task: any, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setSubtasksModal({
+      isOpen: true,
+      task,
+      position: { x: event.clientX - 350, y: event.clientY - 100 } // Further to the left
+    });
+  };
+
+  const closeSubtasksModal = () => {
+    setSubtasksModal(null);
+  };
+
+  const handleSubtasksModalMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsSubtasksModalDragging(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setSubtasksModalDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+  };
+
+  const handleSubtasksModalMouseMove = (e: MouseEvent) => {
+    if (!isSubtasksModalDragging || !subtasksModal) return;
+
+    const newX = e.clientX - subtasksModalDragOffset.x;
+    const newY = e.clientY - subtasksModalDragOffset.y;
+
+    setSubtasksModal(prev => prev ? {
+      ...prev,
+      position: { x: newX, y: newY }
+    } : null);
+  };
+
+  const handleSubtasksModalMouseUp = () => {
+    setIsSubtasksModalDragging(false);
+  };
 
   const handleGoalClick = (event: Goal | any, clickEvent?: React.MouseEvent) => {
     if (clickEvent) {
@@ -265,12 +321,12 @@ export function CalendarScheduler() {
         if (!prev) return null;
 
         // Update the specific subtask in the selected goal
-        const updatedSubtasks = prev.subtasks?.map(subtask =>
+        const updatedSubtasks = prev.subtasks?.map((subtask: any) =>
           subtask.subtask_id === sub.subtask_id ? { ...subtask, subtask_completed: !subtask.subtask_completed } : subtask
         ) || [];
 
         // Recalculate progress
-        const completedSubtasks = updatedSubtasks.filter(s => s.subtask_completed).length;
+        const completedSubtasks = updatedSubtasks.filter((s: any) => s.subtask_completed).length;
         const totalSubtasks = updatedSubtasks.length;
         const newProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
 
@@ -284,6 +340,33 @@ export function CalendarScheduler() {
           totalSubtasks,
           progress: newProgress,
           task_completed: taskCompleted // Update task completion status
+        };
+      });
+
+      // Also update the subtasks modal if it's open
+      setSubtasksModal((prev) => {
+        if (!prev) return prev;
+
+        // Update the specific subtask in the modal
+        const updatedSubtasks = prev.task.subtasks?.map((subtask: any) =>
+          subtask.subtask_id === sub.subtask_id ? { ...subtask, subtask_completed: !subtask.subtask_completed } : subtask
+        ) || [];
+
+        // Recalculate progress for the modal
+        const completedSubtasks = updatedSubtasks.filter((s: any) => s.subtask_completed).length;
+        const totalSubtasks = updatedSubtasks.length;
+        const newProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+
+        return {
+          ...prev,
+          task: {
+            ...prev.task,
+            subtasks: updatedSubtasks,
+            completedSubtasks,
+            totalSubtasks,
+            progress: newProgress,
+            task_completed: totalSubtasks > 0 && completedSubtasks === totalSubtasks
+          }
         };
       });
 
@@ -413,6 +496,7 @@ export function CalendarScheduler() {
           });
           setCourses(courses);
           updateCourseTitles(courseIds, token, courses).then(setCourses);
+          console.log('Courses set with colors:', courses);
 
           // Initialize all courses as visible by default
           const initialVisibility: Record<string, boolean> = {};
@@ -427,7 +511,6 @@ export function CalendarScheduler() {
 
       // Refresh the goals data
       fetchGoals();
-
     } catch (err) {
       console.error("handleSubtaskToggle error", err);
     }
@@ -864,7 +947,7 @@ export function CalendarScheduler() {
     fetchGoals();
   }, []);
 
-  // Handle clicking outside to close floating goal display
+  // Handle clicking outside to close floating goal display and subtasks modal
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (selectedGoal && goalDisplayPosition) {
@@ -882,13 +965,20 @@ export function CalendarScheduler() {
           setOverflowEvents(null);
         }
       }
+
+      if (subtasksModal) {
+        const target = event.target as Element;
+        if (!target.closest('.subtasks-modal')) {
+          closeSubtasksModal();
+        }
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [selectedGoal, goalDisplayPosition, overflowEvents]);
+  }, [selectedGoal, goalDisplayPosition, overflowEvents, subtasksModal]);
 
   // Handle mouse events for dragging
   useEffect(() => {
@@ -902,6 +992,19 @@ export function CalendarScheduler() {
       };
     }
   }, [isDragging, dragOffset, selectedGoal, goalDisplayPosition, overflowEvents]);
+
+  // Handle mouse events for subtasks modal dragging
+  useEffect(() => {
+    if (isSubtasksModalDragging) {
+      document.addEventListener('mousemove', handleSubtasksModalMouseMove);
+      document.addEventListener('mouseup', handleSubtasksModalMouseUp);
+
+      return () => {
+        document.removeEventListener('mousemove', handleSubtasksModalMouseMove);
+        document.removeEventListener('mouseup', handleSubtasksModalMouseUp);
+      };
+    }
+  }, [isSubtasksModalDragging, subtasksModalDragOffset, subtasksModal]);
 
   // Handle window resize to reposition modals
   useEffect(() => {
@@ -1108,80 +1211,116 @@ export function CalendarScheduler() {
                   </div>
 
                   <div className="space-y-2 ml-2">
-                    {Object.values(groupedTasks).map((group, index) => (
-                      <div
-                        key={index}
-                        className={`flex items-start gap-3 p-3 rounded-lg hover:bg-[#f0f0f0] ${isCompletedSection ? 'bg-[#f8f9fa] opacity-75' : 'bg-[#f8f9fa]'
-                          }`}
-                      >
+                    {Object.values(groupedTasks).map((group, index) => {
+                      const taskId = `${group.subtasks[0].task_id}-${date}`;
+                      const isSubtaskExpanded = expandedSidebarSubtasks[taskId];
+                      
+                      return (
                         <div
-                          className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
-                          style={{ backgroundColor: getCourseColor(group.courseId) }}
-                        />
-                        <div
-                          className="flex-1 min-w-0 cursor-pointer"
-                          onClick={(e) => {
-                            const representativeGoal = {
-                              ...group.subtasks[0],
-                              task_title: group.taskTitle,
-                              task_descr: group.taskDescr,
-                              start_time: group.startTime,
-                              end_time: group.endTime,
-                              course_id: group.courseId,
-                              google_calendar_color: group.googleCalendarColor,
-                              progress: group.progress,
-                              totalSubtasks: group.totalSubtasks,
-                              completedSubtasks: group.completedSubtasks,
-                              subtasks: group.subtasks,
-                              status: calculateStatus(group.subtasks[0])
-                            };
-                            handleGoalClick(representativeGoal, e);
-                          }}
-                        >
-                          <div className={`text-sm font-medium truncate ${isCompletedSection ? 'text-[#71717a] line-through' : 'text-[#18181b]'
-                            }`}>
-                            {group.taskTitle || "(untitled)"}
-                          </div>
-                          {group.taskDescr && (
-                            <div className={`text-xs truncate mt-1 ${isCompletedSection ? 'text-[#a1a1aa] line-through' : 'text-[#71717a]'
-                              }`}>
-                              {group.taskDescr}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const representativeGoal = {
-                              ...group.subtasks[0],
-                              task_title: group.taskTitle,
-                              task_descr: group.taskDescr,
-                              start_time: group.startTime,
-                              end_time: group.endTime,
-                              course_id: group.courseId,
-                              google_calendar_color: group.googleCalendarColor,
-                              progress: group.progress,
-                              totalSubtasks: group.totalSubtasks,
-                              completedSubtasks: group.completedSubtasks,
-                              subtasks: group.subtasks,
-                              status: calculateStatus(group.subtasks[0])
-                            };
-                            handleTaskToggle(representativeGoal);
-                          }}
-                          className={`w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors ${group.subtasks[0].task_completed
-                              ? 'bg-green-500 border-green-500'
-                              : 'bg-white border-gray-300 hover:border-green-400'
+                          key={index}
+                          className={`flex items-start gap-3 p-3 rounded-lg hover:bg-[#f0f0f0] ${isCompletedSection ? 'bg-[#f8f9fa] opacity-75' : 'bg-[#f8f9fa]'
                             }`}
-                          title={group.subtasks[0].task_completed ? "Mark as incomplete" : "Mark as complete"}
                         >
-                          {group.subtasks[0].task_completed && (
-                            <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                    ))}
+                          <div
+                            className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
+                            style={{ backgroundColor: getCourseColor(group.courseId) }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div
+                              className="cursor-pointer"
+                              onClick={(e) => {
+                                const representativeGoal = {
+                                  ...group.subtasks[0],
+                                  task_title: group.taskTitle,
+                                  task_descr: group.taskDescr,
+                                  start_time: group.startTime,
+                                  end_time: group.endTime,
+                                  course_id: group.courseId,
+                                  google_calendar_color: group.googleCalendarColor,
+                                  progress: group.progress,
+                                  totalSubtasks: group.totalSubtasks,
+                                  completedSubtasks: group.completedSubtasks,
+                                  subtasks: group.subtasks,
+                                  status: calculateStatus(group.subtasks[0])
+                                };
+                                handleGoalClick(representativeGoal, e);
+                              }}
+                            >
+                              <div className={`text-sm font-medium truncate ${isCompletedSection ? 'text-[#71717a] line-through' : 'text-[#18181b]'
+                                }`}>
+                                {group.taskTitle || "(untitled)"}
+                              </div>
+                              {group.taskDescr && (
+                                <div className={`text-xs truncate mt-1 ${isCompletedSection ? 'text-[#a1a1aa] line-through' : 'text-[#71717a]'
+                                  }`}>
+                                  {group.taskDescr}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* View Subtasks Button */}
+                            {group.totalSubtasks && group.totalSubtasks > 1 && (
+                              <div className="mt-2">
+                                <button
+                                  onClick={(e) => {
+                                    const representativeGoal = {
+                                      ...group.subtasks[0],
+                                      task_title: group.taskTitle,
+                                      task_descr: group.taskDescr,
+                                      start_time: group.startTime,
+                                      end_time: group.endTime,
+                                      course_id: group.courseId,
+                                      google_calendar_color: group.googleCalendarColor,
+                                      progress: group.progress,
+                                      totalSubtasks: group.totalSubtasks,
+                                      completedSubtasks: group.completedSubtasks,
+                                      subtasks: group.subtasks,
+                                      status: calculateStatus(group.subtasks[0])
+                                    };
+                                    openSubtasksModal(representativeGoal, e);
+                                  }}
+                                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors hover:underline"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  View Subtasks ({group.completedSubtasks}/{group.totalSubtasks})
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const representativeGoal = {
+                                ...group.subtasks[0],
+                                task_title: group.taskTitle,
+                                task_descr: group.taskDescr,
+                                start_time: group.startTime,
+                                end_time: group.endTime,
+                                course_id: group.courseId,
+                                google_calendar_color: group.googleCalendarColor,
+                                progress: group.progress,
+                                totalSubtasks: group.totalSubtasks,
+                                completedSubtasks: group.completedSubtasks,
+                                subtasks: group.subtasks,
+                                status: calculateStatus(group.subtasks[0])
+                              };
+                              handleTaskToggle(representativeGoal);
+                            }}
+                            className={`w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors ${group.subtasks[0].task_completed
+                                ? 'bg-green-500 border-green-500'
+                                : 'bg-white border-gray-300 hover:border-green-400'
+                              }`}
+                            title={group.subtasks[0].task_completed ? "Mark as incomplete" : "Mark as complete"}
+                          >
+                            {group.subtasks[0].task_completed && (
+                              <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -1373,10 +1512,12 @@ export function CalendarScheduler() {
         <div
           className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg floating-goal-display"
           style={{
-            left: Math.max(10, goalDisplayPosition.x - 320),
-            top: Math.max(10, goalDisplayPosition.y - 200),
-            maxWidth: Math.min(320, window.innerWidth - 20),
-            maxHeight: Math.min(400, window.innerHeight - 20),
+            left: Math.max(10, goalDisplayPosition.x - 200),
+            top: Math.max(10, goalDisplayPosition.y - 100),
+            width: '400px',
+            maxHeight: '500px',
+            minWidth: '320px',
+            minHeight: '200px',
           }}
         >
           <Card className="border-0 shadow-none h-full">
@@ -1472,43 +1613,11 @@ export function CalendarScheduler() {
                       <li><strong>Status:</strong> <span className={`font-medium ${getStatusColor(calculateStatus(selectedGoal))}`}>{calculateStatus(selectedGoal)}</span></li>
                       <li><strong>Assigned:</strong> {formatDate(selectedGoal.updated_at || '')}</li>
                       <li><strong>Due:</strong> {formatDate(selectedGoal.task_due_date || selectedGoal.due_date || '')}</li>
-                      {/* Progress Bar and Subtasks Dropdown */}
-                      {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks >= 1 && (
-                        <li><strong>Progress:</strong> {selectedGoal.completedSubtasks}/{selectedGoal.totalSubtasks} subtasks ({selectedGoal.progress || 0}%)</li>
-                      )}
-                    </ul>
+                                          {/* Progress Bar */}
                     {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks >= 1 && (
-                      <div className="mt-2">
-                        <button
-                          onClick={() => setExpandedTaskId(expandedTaskId === selectedGoal.task_id ? null : selectedGoal.task_id)}
-                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
-                        >
-                          {expandedTaskId === selectedGoal.task_id ? (
-                            <ChevronDown className="w-4 h-4" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4" />
-                          )}
-                          View Subtasks ({selectedGoal.totalSubtasks})
-                        </button>
-                        {expandedTaskId === selectedGoal.task_id && (
-                          <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                            {selectedGoal.subtasks?.map((subtask, index) => (
-                              <div
-                                key={subtask.subtask_id || index}
-                                className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs cursor-pointer hover:bg-gray-100 transition-colors"
-                                onClick={() => handleSubtaskToggle(subtask)}
-                              >
-                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${subtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'}`} />
-                                <span className={`flex-1 ${subtask.subtask_completed ? 'line-through text-gray-500' : 'text-gray-700'}`}>{subtask.subtask_descr || `Subtask ${index + 1}`}</span>
-                                {subtask.subtask_type && subtask.subtask_type !== 'other' && (
-                                  <span className="text-xs px-1 py-0.5 bg-gray-200 rounded text-gray-600">{subtask.subtask_type}</span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <li><strong>Progress:</strong> {selectedGoal.completedSubtasks}/{selectedGoal.totalSubtasks} subtasks ({selectedGoal.progress || 0}%)</li>
                     )}
+                  </ul>
                   </div>
                 )}
               </div>
@@ -1568,7 +1677,7 @@ export function CalendarScheduler() {
                 <div className="flex items-center gap-2">
                   <GripVertical className="w-4 h-4 text-gray-400" />
                   <CardTitle className="text-lg truncate">
-                    All Events - {overflowEvents.day.toLocaleDateString()}
+                    Additional Tasks
                   </CardTitle>
                 </div>
                 <button
@@ -1953,6 +2062,100 @@ export function CalendarScheduler() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Subtasks Modal */}
+      {subtasksModal && (
+        <div
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg subtasks-modal"
+          style={{
+            left: Math.max(10, subtasksModal.position.x),
+            top: Math.max(10, subtasksModal.position.y),
+            width: '400px',
+            maxHeight: '500px',
+            minWidth: '320px',
+            minHeight: '200px',
+          }}
+        >
+          <Card className="border-0 shadow-none h-full">
+            <CardHeader className="pb-3">
+                              <div
+                  className="flex items-center justify-between"
+                  onMouseDown={(e) => handleSubtasksModalMouseDown(e)}
+                  style={{ cursor: isSubtasksModalDragging ? 'grabbing' : 'grab' }}
+                >
+                <div className="flex items-center gap-2">
+                  <GripVertical className="w-4 h-4 text-gray-400" />
+                  <CardTitle className="text-lg truncate">
+                    Subtasks
+                  </CardTitle>
+                </div>
+                <button
+                  onClick={closeSubtasksModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 hover:bg-gray-100 rounded"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="overflow-y-auto" style={{ maxHeight: '400px' }}>
+              <div className="space-y-3">
+                {/* Task Info */}
+                <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
+                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(subtasksModal.task.course_id) }}></div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 truncate">{subtasksModal.task.task_title}</h3>
+                    {subtasksModal.task.task_descr && (
+                      <p className="text-sm text-gray-600 mt-1">{subtasksModal.task.task_descr}</p>
+                    )}
+                    <div className="text-xs text-gray-500 mt-1">
+                      Progress: {subtasksModal.task.completedSubtasks}/{subtasksModal.task.totalSubtasks} subtasks
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subtasks List */}
+                <div className="space-y-2">
+                  {subtasksModal.task.subtasks?.map((subtask: any, index: number) => {
+                    // Find the updated subtask from the current goals data
+                    const updatedSubtask = Object.values(goalsByDate)
+                      .flat()
+                      .find(goal => goal.subtask_id === subtask.subtask_id);
+                    
+                    // Use updated data if available, otherwise fall back to original
+                    const currentSubtask = updatedSubtask || subtask;
+                    
+                    return (
+                      <div
+                        key={currentSubtask.subtask_id || index}
+                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                        onClick={() => handleSubtaskToggle(currentSubtask)}
+                      >
+                        <div className={`w-3 h-3 rounded-full flex-shrink-0 ${currentSubtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-sm font-medium ${currentSubtask.subtask_completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                            {currentSubtask.subtask_descr || `Subtask ${index + 1}`}
+                          </div>
+                          {currentSubtask.subtask_type && currentSubtask.subtask_type !== 'other' && (
+                            <span className="text-xs px-2 py-1 bg-gray-200 rounded text-gray-600 mt-1 inline-block">
+                              {currentSubtask.subtask_type}
+                            </span>
+                          )}
+                          {currentSubtask.estimatedTimeMinutes && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Estimated: {currentSubtask.estimatedTimeMinutes} minutes
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
