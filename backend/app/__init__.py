@@ -75,6 +75,7 @@ def create_app(config_class=Config):
     from .routes.goals import goals_bp
     from .routes.friends import friends_bp
     from .routes.calendar import calendar_bp, register_calendar_oauth
+    from .routes.embeddings import embeddings_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
@@ -88,6 +89,7 @@ def create_app(config_class=Config):
     app.register_blueprint(messages_bp)
     app.register_blueprint(goals_bp)
     app.register_blueprint(friends_bp)
+    app.register_blueprint(embeddings_bp, url_prefix='/api/embeddings')
 
     # Ensure SocketIO handlers from blueprints are recognized
     # (This is implicitly handled by importing the blueprints before socketio runs,
@@ -100,6 +102,8 @@ def create_app(config_class=Config):
     # Global error handler to return JSON errors with CORS headers
     @app.errorhandler(Exception)
     def handle_exception(e):
+        import traceback
+        print(traceback.format_exc())
         from flask import jsonify
         response = jsonify(message=str(e))
         response.status_code = 500
