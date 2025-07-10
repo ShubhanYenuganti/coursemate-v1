@@ -592,6 +592,19 @@ export function CalendarScheduler() {
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
           
           const grouped = await res.json() as Record<string, Goal[]>;
+          console.log("Fetched goals from backend:", grouped);
+          Object.values(grouped).flat().forEach(goal => {
+            console.log("Goal:", {
+              task_id: goal.task_id,
+              subtask_id: goal.subtask_id,
+              task_due_date: goal.task_due_date,
+              due_date: goal.due_date,
+              start_time: goal.start_time,
+              end_time: goal.end_time,
+              task_title: goal.task_title,
+              subtask_descr: goal.subtask_descr,
+            });
+          });
           // Filter out placeholder tasks from each date group
           const filteredGrouped: Record<string, Goal[]> = {};
           Object.keys(grouped).forEach(key => {
@@ -890,12 +903,21 @@ export function CalendarScheduler() {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       if ((event.key === 'Delete' || event.key === 'Backspace') && hoveredTask && hoveredTask.goal_id !== "Google Calendar") {
         event.preventDefault();
-        // Position modal in center of screen since we don't have mouse position from keyboard event
-        setDeleteModal({
-          isOpen: true,
-          task: hoveredTask,
-          position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-        });
+        // For subtask events, use subtask deletion modal instead of task deletion
+        if (hoveredTask.subtask_id && hoveredTask.subtask_id !== 'placeholder') {
+          setDeleteSubtaskModal({
+            isOpen: true,
+            subtask: hoveredTask,
+            position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+          });
+        } else {
+          // For task events (without subtask_id), use task deletion modal
+          setDeleteModal({
+            isOpen: true,
+            task: hoveredTask,
+            position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+          });
+        }
       }
     };
 
@@ -1961,6 +1983,64 @@ export function CalendarScheduler() {
     });
   };
 
+  // Helper function to group tasks by task_due_date for sidebar
+  const groupTasksByTaskDueDate = (goals: Goal[]) => {
+    const groupedByTaskDueDate: { [date: string]: Goal[] } = {};
+    
+    console.log("=== TASK DUE DATE GROUPING DEBUG ===");
+    console.log("Input goals:", goals.length);
+    
+    goals
+      .filter(goal => goal.goal_id !== "Google Calendar") // Exclude Google Calendar events
+      .forEach(goal => {
+        let key: string;
+        
+        console.log("Processing goal for sidebar:", {
+          task_id: goal.task_id,
+          subtask_id: goal.subtask_id,
+          task_title: goal.task_title,
+          subtask_descr: goal.subtask_descr,
+          task_due_date: goal.task_due_date,
+          due_date: goal.due_date,
+          start_time: goal.start_time,
+          end_time: goal.end_time,
+          goal_id: goal.goal_id
+        });
+        
+        // For calendar events, use task_due_date if available, otherwise use start_time
+        if (goal.start_time && goal.end_time) {
+          if (goal.task_due_date) {
+            key = getDateKeyFromDateString(goal.task_due_date);
+            console.log("  → Calendar event with task_due_date, using task_due_date for key:", key);
+          } else {
+            key = getLocalDateKey(new Date(goal.start_time));
+            console.log("  → Calendar event without task_due_date, using start_time for key:", key);
+          }
+        } 
+        // For non-calendar tasks, use task_due_date if available, otherwise fall back to due_date
+        else if (goal.task_due_date) {
+          key = getDateKeyFromDateString(goal.task_due_date);
+          console.log("  → Non-calendar task, using task_due_date for key:", key);
+        } else if (goal.due_date) {
+          key = getDateKeyFromDateString(goal.due_date);
+          console.log("  → Non-calendar task, using due_date for key:", key);
+        } else {
+          // Fallback to current date if no date is available
+          key = getLocalDateKey(new Date());
+          console.log("  → No date available, using current date for key:", key);
+        }
+        
+        if (!groupedByTaskDueDate[key]) {
+          groupedByTaskDueDate[key] = [];
+        }
+        groupedByTaskDueDate[key].push(goal);
+        console.log("  → Added to group:", key);
+      });
+    
+    console.log("Final groupedByTaskDueDate:", groupedByTaskDueDate);
+    return groupedByTaskDueDate;
+  };
+
   // Helper functions to categorize tasks
   const categorizeTasks = () => {
     const today = startOfToday();
@@ -1974,50 +2054,58 @@ export function CalendarScheduler() {
     const future: { [date: string]: Goal[] } = {};
     const completed: { [date: string]: Goal[] } = {};
 
-    // Group filtered goals by date, excluding Google Calendar events
-    const filteredGoalsByDate: GoalsByDate = {};
-    filteredGoals
-      .filter(goal => goal.goal_id !== "Google Calendar") // Exclude Google Calendar events
-      .forEach(goal => {
-        let key: string;
-        
-        // For calendar events, use the existing logic
-        if (goal.start_time && goal.end_time) {
-          key = getLocalDateKey(new Date(goal.start_time));
-        } 
-        // For non-calendar tasks, use task_due_date if available, otherwise fall back to due_date
-        else if (goal.task_due_date) {
-          key = getDateKeyFromDateString(goal.task_due_date);
-        } else if (goal.due_date) {
-          key = getDateKeyFromDateString(goal.due_date);
-        } else {
-          // Fallback to current date if no date is available
-          key = getLocalDateKey(new Date());
-        }
-        (filteredGoalsByDate[key] ??= []).push(goal);
-      });
+    console.log("=== SIDEBAR GROUPING DEBUG ===");
+    console.log("filteredGoals:", filteredGoals);
+    console.log("Today:", today.toISOString());
+    console.log("Week start:", weekStart.toISOString());
+    console.log("Week end:", weekEnd.toISOString());
+
+    // Use the new helper function to group by task_due_date
+    const filteredGoalsByDate = groupTasksByTaskDueDate(filteredGoals);
 
     Object.entries(filteredGoalsByDate).forEach(([date, goals]) => {
       const taskDate = new Date(date + 'T00:00:00');
+      
+      console.log("Processing date group:", date, "with", goals.length, "goals");
+      console.log("  Task date:", taskDate.toISOString());
+      console.log("  Goals:", goals.map(g => ({
+        task_id: g.task_id,
+        subtask_id: g.subtask_id,
+        task_title: g.task_title,
+        task_completed: g.task_completed
+      })));
 
       // Separate completed tasks
       const completedGoals = goals.filter(goal => goal.task_completed);
       const incompleteGoals = goals.filter(goal => !goal.task_completed);
+      
+      console.log("  Completed goals:", completedGoals.length);
+      console.log("  Incomplete goals:", incompleteGoals.length);
 
       if (completedGoals.length > 0) {
         completed[date] = completedGoals;
+        console.log("  → Added to completed section");
       }
 
       if (incompleteGoals.length > 0) {
         if (taskDate < today) {
           overdue[date] = incompleteGoals;
+          console.log("  → Added to overdue section");
         } else if (taskDate >= today && taskDate <= weekEnd) {
           upcoming[date] = incompleteGoals;
+          console.log("  → Added to upcoming section");
         } else {
           future[date] = incompleteGoals;
+          console.log("  → Added to future section");
         }
       }
     });
+
+    console.log("Final categorization:");
+    console.log("  Overdue:", Object.keys(overdue));
+    console.log("  Upcoming:", Object.keys(upcoming));
+    console.log("  Future:", Object.keys(future));
+    console.log("  Completed:", Object.keys(completed));
 
     return { overdue, upcoming, future, completed };
   };
