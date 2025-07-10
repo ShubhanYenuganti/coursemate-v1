@@ -4,6 +4,13 @@ import { Move } from "lucide-react";
 
 import { Goal } from "../utils/goal.types";
 
+function formatEventTime(start: string, end: string) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const options: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
+  return `${startDate.toLocaleTimeString([], options)} to ${endDate.toLocaleTimeString([], options)}`;
+}
+
 export const AllDayRow = ({
     days,
     getGoalsForDate,
@@ -49,30 +56,14 @@ export const AllDayRow = ({
         {/* Day buckets with fixed-width layout */}
         <div className="flex flex-1">
           {dayList.map((d, idx) => {
-            const goals = getGoalsForDate(d).filter(isAllDay)
-            const groupedTasks = groupTasksByTaskId(goals)
-            const groupedGoals = Object.values(groupedTasks).map(group => ({
-              ...group.subtasks[0], // Use first subtask as representative
-              task_title: group.taskTitle,
-              task_descr: group.taskDescr,
-              start_time: group.startTime,
-              end_time: group.endTime,
-              course_id: group.courseId,
-              google_calendar_color: group.googleCalendarColor,
-              // Add progress information
-              progress: group.progress,
-              totalSubtasks: group.totalSubtasks,
-              completedSubtasks: group.completedSubtasks,
-              subtasks: group.subtasks,
-              // Calculate status
-              status: calculateStatus(group.subtasks[0])
-            }))
-  
+            const goals = getGoalsForDate(d).filter(isAllDay);
+            // Render each subtask (row) as its own all-day event
+
             /* add a right border when we're in week-view (i.e. days is an array)
                and this bucket is NOT the last one                              */
             const showDivider =
               Array.isArray(days) && idx < dayList.length - 1 ? "border-r border-gray-200" : "";
-  
+
             return (
               <div
                 key={d.toISOString()}
@@ -97,7 +88,7 @@ export const AllDayRow = ({
                 <div className="min-h-[32px] p-1">
                   <div className="grid grid-cols-2 gap-1 h-24">
                     {/* First 2 event slots - each takes 2 columns */}
-                    {groupedGoals.slice(0, 2).map((g, index) => (
+                    {goals.slice(0, 2).map((g, index) => (
                       <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
                         className={`h-6 px-2 rounded text-xs font-medium text-white cursor-grab active:cursor-grabbing truncate hover:opacity-90 transition-opacity flex items-center col-span-2 ${
@@ -118,35 +109,29 @@ export const AllDayRow = ({
                         onDragStart={(e) => handleTaskDragStart?.(e, g)}
                         onDragEnd={(e) => handleTaskDragEnd?.(e)}
                       >
-                        <span className="flex-1 truncate">
-                          {g.task_title ?? "(untitled)"}
-                          {/* Show progress indicator for grouped tasks */}
-                          {g.totalSubtasks && g.totalSubtasks > 1 && (
-                            <span className="ml-1 opacity-75">({g.completedSubtasks}/{g.totalSubtasks})</span>
-                          )}
-                        </span>
+                        <div className="font-semibold leading-tight truncate">
+                          {g.goal_id === 'Google Calendar' ? (g.task_title ?? "(untitled)") : (g.subtask_descr ?? "(untitled)")}
+                        </div>
                         <Move className="w-3 h-3 opacity-50 hover:opacity-100 transition-opacity flex-shrink-0" />
                       </div>
                     ))}
-                    
                     {/* +more indicator if there are more than 2 events */}
-                    {groupedGoals.length > 2 && (
+                    {goals.length > 2 && (
                       <div 
                         className="h-6 px-2 rounded text-xs font-medium text-gray-600 bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors flex items-center col-span-2"
-                        title={`${groupedGoals.length - 2} more events`}
+                        title={`${goals.length - 2} more events`}
                         onClick={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
                           // Only pass the additional events (beyond the first 2)
-                          const additionalEvents = groupedGoals.slice(2);
+                          const additionalEvents = goals.slice(2);
                           onOverflowClick(additionalEvents, { x: rect.left, y: rect.bottom }, d);
                         }}
                       >
-                        +{groupedGoals.length - 2} more
+                        +{goals.length - 2} more
                       </div>
                     )}
-                    
                     {/* Empty slots to fill the grid */}
-                    {Array.from({ length: Math.max(0, 4 - Math.min(groupedGoals.length, 2) - (groupedGoals.length > 2 ? 1 : 0)) }, (_, index) => (
+                    {Array.from({ length: Math.max(0, 4 - Math.min(goals.length, 2) - (goals.length > 2 ? 1 : 0)) }, (_, index) => (
                       <div key={`empty-${index}`} className="h-6 col-span-2 empty-slot"></div>
                     ))}
                   </div>

@@ -1002,7 +1002,7 @@ def delete_subtask(subtask_id):
         current_app.logger.error(f"Error deleting subtask: {str(e)}")
         return jsonify({'error': 'An error occurred while deleting the subtask'}), 500
 
-
+# call this when moving a created subtask elsewhere in the google calendar
 @goals_bp.route('/api/goals/tasks/subtasks/<subtask_id>', methods=['PUT'])
 @jwt_required()
 def update_subtask(subtask_id):
@@ -1028,6 +1028,14 @@ def update_subtask(subtask_id):
         
         if 'subtask_order' in data:
             subtask.subtask_order = data['subtask_order']
+        
+        # add a check before submitting request that the start_time is before the task due_date
+        if 'subtask_start_time' in data:
+            subtask.start_time = data['subtask_start_time']
+        
+        # add a check before submitting request that the end_time is before the task due_date
+        if 'subtask_end_time' in data:
+            subtask.end_time = data['subtask_end_time']
         
         if 'subtask_completed' in data:
             subtask.subtask_completed = data['subtask_completed']
@@ -1091,7 +1099,7 @@ def update_subtask(subtask_id):
         current_app.logger.error(f"Error updating subtask: {str(e)}")
         return jsonify({'error': 'An error occurred while updating the subtask'}), 500
 
-
+# call this when adding a new subtask
 @goals_bp.route('/api/goals/tasks/<task_id>/subtasks', methods=['POST'])
 @jwt_required()
 def create_subtask(task_id):
@@ -1168,6 +1176,8 @@ def create_subtask(task_id):
             subtask_descr=data['subtask_descr'],
             subtask_type=data.get('subtask_type', 'other'),
             subtask_completed=data.get('subtask_completed', False),
+            start_time = data.get('subtask_start_time'),
+            end_time = data.get('subtask_end_time'),
             subtask_order=subtask_order
         )
         
@@ -1266,31 +1276,25 @@ def create_empty_task(goal_id):
         return jsonify({'error': 'An error occurred while creating empty task'}), 500
 
 
+# current approach -- get all rows that have scheduled start and times (these are subtasks)
 @goals_bp.route("/api/goals/user", methods=["GET"])
 @jwt_required()                               # still requires a valid JWT
-def get_goals_by_user():
+def get_subtasks_by_user():
     # we ignore the real identity for test mode
     user = get_jwt_identity()
 
     try:
         goals = Goal.query.filter_by(user_id=user).all()
 
+        # Only keep rows with both start_time and end_time (calendar events)
+        calendar_goals = [g for g in goals if getattr(g, 'start_time', None) and getattr(g, 'end_time', None)]
+
         # -------- group by end_date --------
         grouped: dict[str, list[dict]] = defaultdict(list)
 
-        for g in goals:
+        for g in calendar_goals:
             # For calendar events, use start_time for grouping
-            # For non-calendar tasks, use task_due_date if available, otherwise fall back to due_date
-            if g.start_time and g.end_time:
-                # Calendar event - use start_time
-                end_dt = g.start_time
-            elif hasattr(g, 'task_due_date') and g.task_due_date:
-                # Non-calendar task with task_due_date
-                end_dt = g.task_due_date
-            else:
-                # Fall back to due_date
-                end_dt = getattr(g, "due_date", None)
-            
+            end_dt = g.start_time
             if end_dt is None:
                 key = "unscheduled"
             else:

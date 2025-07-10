@@ -46,14 +46,6 @@ function formatDate(dateString: string) {
   });
 }
 
-// Helper to get a Date object from a date string, always as UTC for date-only values
-function getUtcDate(dateString: string) {
-  if (!dateString) return null;
-  // Handles both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' formats
-  const datePart = dateString.split('T')[0];
-  return new Date(datePart + 'T00:00:00Z');
-}
-
 // Refactor updateCourseTitles to accept courses array and return new array
 async function updateCourseTitles(courseIds: string[], token: string, courses: Course[]): Promise<Course[]> {
   const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
@@ -255,6 +247,13 @@ export function CalendarScheduler() {
     task: any;
   } | null>(null);
 
+  /** View Subtask modal state */
+  const [viewSubtaskModal, setViewSubtaskModal] = useState<{
+    isOpen: boolean;
+    subtask: Goal | null;
+    position: { x: number; y: number };
+  } | null>(null);
+
   /** Undo state for deleted tasks */
   const [deletedTask, setDeletedTask] = useState<Goal | null>(null);
   const [showUndoToast, setShowUndoToast] = useState(false);
@@ -308,15 +307,26 @@ export function CalendarScheduler() {
   };
 
   const handleSubtasksModalMouseMove = (e: MouseEvent) => {
-    if (!isSubtasksModalDragging || !subtasksModal) return;
+    if (!isSubtasksModalDragging) return;
 
     const newX = e.clientX - subtasksModalDragOffset.x;
     const newY = e.clientY - subtasksModalDragOffset.y;
 
-    setSubtasksModal(prev => prev ? {
-      ...prev,
-      position: { x: newX, y: newY }
-    } : null);
+    // Update subtasks modal if it exists
+    if (subtasksModal) {
+      setSubtasksModal(prev => prev ? {
+        ...prev,
+        position: { x: newX, y: newY }
+      } : null);
+    }
+
+    // Update view subtask modal if it exists
+    if (viewSubtaskModal) {
+      setViewSubtaskModal(prev => prev ? {
+        ...prev,
+        position: { x: newX, y: newY }
+      } : null);
+    }
   };
 
   const handleSubtasksModalMouseUp = () => {
@@ -395,15 +405,74 @@ export function CalendarScheduler() {
   };
 
   const handleGoalClick = (event: Goal | any, clickEvent?: React.MouseEvent) => {
-    if (clickEvent) {
-      setGoalDisplayPosition({ x: clickEvent.clientX, y: clickEvent.clientY })
+    // Check if this is a subtask event (has start_time and end_time)
+    if (event.start_time && event.end_time) {
+      // Show View Subtask modal for subtask events
+      setViewSubtaskModal({
+        isOpen: true,
+        subtask: event,
+        position: { x: clickEvent?.clientX || 100, y: clickEvent?.clientY || 100 }
+      });
+    } else {
+      // Show regular task modal for task events
+      setSelectedGoal(event);
     }
-    // Reset expanded task if clicking on a different task
-    if (selectedGoal?.task_id !== event.task_id) {
-      setExpandedTaskId(null)
+  };
+
+  const openViewSubtaskModal = (subtask: Goal) => {
+    setViewSubtaskModal({
+      isOpen: true,
+      subtask: subtask,
+      position: { x: 100, y: 100 }
+    });
+  };
+
+  const closeViewSubtaskModal = () => {
+    setViewSubtaskModal(null);
+  };
+
+  const formatEventTime = (start: string, end: string) => {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const options: Intl.DateTimeFormatOptions = { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    };
+    return `${startDate.toLocaleTimeString([], options)} - ${endDate.toLocaleTimeString([], options)}`;
+  };
+
+  const getSubtaskTypeDisplay = (type: string) => {
+    const typeMap: Record<string, string> = {
+      'reading': 'Reading',
+      'flashcard': 'Flashcard',
+      'quiz': 'Quiz',
+      'writing': 'Writing',
+      'research': 'Research',
+      'presentation': 'Presentation',
+      'lab': 'Lab Work',
+      'discussion': 'Discussion',
+      'other': 'Other'
+    };
+    return typeMap[type] || type;
+  };
+
+  const calculateSubtaskStatus = (subtask: Goal) => {
+    if (subtask.subtask_completed) {
+      return "Completed";
     }
-    setSelectedGoal((p: Goal | null) => (p?.id === event.id ? null : event))
-  }
+    
+    if (subtask.end_time) {
+      const endTime = new Date(subtask.end_time);
+      const now = new Date();
+      
+      if (now > endTime) {
+        return "Overdue";
+      }
+    }
+    
+    return "In Progress";
+  };
 
   const handleOverflowClick = (events: Goal[], position: { x: number; y: number }, day: Date) => {
     setOverflowEvents({ events, position, day })
@@ -1711,13 +1780,20 @@ export function CalendarScheduler() {
           closeSubtasksModal();
         }
       }
+
+      if (viewSubtaskModal) {
+        const target = event.target as Element;
+        if (!target.closest('.subtasks-modal')) {
+          closeViewSubtaskModal();
+        }
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [selectedGoal, goalDisplayPosition, overflowEvents, subtasksModal]);
+  }, [selectedGoal, goalDisplayPosition, overflowEvents, subtasksModal, viewSubtaskModal]);
 
   // Handle mouse events for dragging
   useEffect(() => {
@@ -1824,12 +1900,20 @@ export function CalendarScheduler() {
     setFilteredGoals(filtered);
   }, [goalsByDate, courseVisibility]);
 
-  /** Return the list of goals whose due-date === that calendar day */
+  /** Return the list of subtasks whose start_time and end_time fall on that calendar day (local time) */
   const getGoalsForDate = (date: Date): Goal[] => {
-    const key = getLocalDateKey(date);
-    const dateGoals = goalsByDate[key] ?? [];
-    // Filter goals based on course visibility
-    return dateGoals.filter(goal => courseVisibility[goal.course_id] !== false);
+    // Always check all events, regardless of backend grouping
+    const allGoals = Object.values(goalsByDate).flat();
+    return allGoals.filter(goal => {
+      if (!goal.start_time || !goal.end_time || courseVisibility[goal.course_id] === false) return false;
+      // Convert UTC start_time to local time
+      const start = new Date(goal.start_time);
+      return (
+        start.getFullYear() === date.getFullYear() &&
+        start.getMonth() === date.getMonth() &&
+        start.getDate() === date.getDate()
+      );
+    });
   };
 
   // Helper functions to categorize tasks
@@ -3269,6 +3353,91 @@ export function CalendarScheduler() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* View Subtask Modal */}
+      {viewSubtaskModal?.isOpen && viewSubtaskModal?.subtask && (
+        <>
+          {/* Backdrop for click-outside-to-close */}
+          <div 
+            className="fixed inset-0 z-[9998]"
+            onClick={closeViewSubtaskModal}
+          />
+          <div
+            className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg subtasks-modal"
+            style={{
+              left: Math.max(10, viewSubtaskModal.position.x),
+              top: Math.max(10, viewSubtaskModal.position.y),
+              width: '400px',
+              maxHeight: '500px',
+              minWidth: '320px',
+              minHeight: '200px',
+            }}
+            onMouseDown={(e) => {
+              // Prevent backdrop click when clicking on modal
+              e.stopPropagation();
+            }}
+          >
+            <Card className="border-0 shadow-none h-full">
+              <CardHeader className="pb-3">
+                <div
+                  className="flex items-center justify-between cursor-move"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setIsSubtasksModalDragging(true);
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setSubtasksModalDragOffset({
+                      x: e.clientX - rect.left,
+                      y: e.clientY - rect.top
+                    });
+                  }}
+                  style={{ cursor: isSubtasksModalDragging ? 'grabbing' : 'grab' }}
+                >
+                  <div className="flex items-center gap-2">
+                    <GripVertical className="w-4 h-4 text-gray-400" />
+                    <CardTitle className="text-lg truncate">
+                      <span className={`px-2 py-1 rounded text-sm font-medium ${
+                        calculateSubtaskStatus(viewSubtaskModal.subtask) === "Completed" 
+                          ? "bg-green-100 text-green-800" 
+                          : calculateSubtaskStatus(viewSubtaskModal.subtask) === "Overdue"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}>
+                        {calculateSubtaskStatus(viewSubtaskModal.subtask)}
+                      </span>
+                    </CardTitle>
+                  </div>
+                  <button
+                    onClick={closeViewSubtaskModal}
+                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 hover:bg-gray-100 rounded"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-y-auto" style={{ maxHeight: '400px' }}>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <div>
+                      <h4 className="font-medium text-gray-900">{viewSubtaskModal.subtask.subtask_descr}</h4>
+                      <p className="text-sm text-gray-600">{getSubtaskTypeDisplay(viewSubtaskModal.subtask.subtask_type || 'other')}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Time: {formatEventTime(viewSubtaskModal.subtask.start_time!, viewSubtaskModal.subtask.end_time!)}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-3 border-t border-gray-200">
+                    <p className="text-sm text-gray-600">
+                      {viewSubtaskModal.subtask.task_title}: {viewSubtaskModal.subtask.goal_descr}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
     </div>
   )

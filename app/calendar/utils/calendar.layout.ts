@@ -41,9 +41,9 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
         const eventStartInHour = Math.max(goalStart, hourStart.getTime());
         const eventEndInHour = Math.min(goalEnd, hourEnd.getTime());
 
-        // Calculate top position (minutes from start of hour)
+        // Calculate top position (minutes from start of hour) with small gap
         const topMinutes = (eventStartInHour - hourStart.getTime()) / (1000 * 60);
-        const top = (topMinutes / 60) * 100;
+        const top = (topMinutes / 60) * 100 + 2; // Add 2% gap at top
 
         // Calculate height - allow events to extend beyond hour boundaries
         let height: number;
@@ -51,18 +51,18 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
             // Event started before this hour - extend from top
             const eventEndInHour = Math.min(goalEnd, hourEnd.getTime());
             const heightMinutes = (eventEndInHour - hourStart.getTime()) / (1000 * 60);
-            height = (heightMinutes / 60) * 100;
+            height = (heightMinutes / 60) * 100 - 4; // Subtract 4% for gaps (2% top + 2% bottom)
         } else if (goalEnd > hourEnd.getTime()) {
             // Event ends after this hour - extend to bottom and beyond
             const eventStartInHour = Math.max(goalStart, hourStart.getTime());
             const heightMinutes = (goalEnd - eventStartInHour) / (1000 * 60);
-            height = (heightMinutes / 60) * 100;
+            height = (heightMinutes / 60) * 100 - 4; // Subtract 4% for gaps
             // Ensure it extends beyond the hour boundary
-            height = Math.max(height, 120); // Extend 20% beyond the hour
+            height = Math.max(height, 116); // Extend 16% beyond the hour (120% - 4% gaps)
         } else {
             // Event is contained within this hour
             const heightMinutes = (eventEndInHour - eventStartInHour) / (1000 * 60);
-            height = (heightMinutes / 60) * 100;
+            height = (heightMinutes / 60) * 100 - 4; // Subtract 4% for gaps
         }
 
         // Show title only if event starts in this hour
