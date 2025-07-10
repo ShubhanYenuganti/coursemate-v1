@@ -8,9 +8,10 @@ interface TaskScaffoldingScreenProps {
   goal: GoalWithProgress;
   onBack: () => void;
   onSave: (tasks: Task[], subtasks: Subtask[]) => void;
+  onAIGenerate: () => void;
 }
 
-const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onBack, onSave }) => {
+const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onBack, onSave, onAIGenerate }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [currentStep, setCurrentStep] = useState<'tasks' | 'subtasks'>('tasks');
@@ -90,6 +91,8 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
             name: '',
             type,
             estimatedTimeMinutes: Math.ceil(goal.workMinutesPerDay / 3),
+            actualTimeMinutes: 0,
+            isTimeTracking: false,
             completed: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -115,6 +118,8 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
       name: '',
       type: 'other',
       estimatedTimeMinutes: 15,
+      actualTimeMinutes: 0,
+      isTimeTracking: false,
       completed: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -219,12 +224,14 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Step 1: Define Your Tasks</h2>
-            <button
-              onClick={generateTaskSchedule}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Auto-generate Schedule
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                onClick={onAIGenerate}
+              >
+                AI Generate
+              </button>
+            </div>
           </div>
 
           <div className="space-y-4">

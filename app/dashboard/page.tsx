@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Header } from "./components/header";
 import MyCourses from "./components/MyCourses";
 import ChecklistWidget from "./components/CalendarChecklistWidget";
-import CommunityActivity from "./components/recent-activity";
+import NotificationsCenter from "./components/recent-activity";
 import AnalyticsCards from "./components/summary-cards";
 import CourseTasksModal from "./components/CourseTasksModal";
 import { courseService, CourseData } from "../../lib/api/courseService";
@@ -108,29 +108,6 @@ const Dashboard = () => {
     }
   };
 
-  const activities = [
-    {
-      id: 1,
-      user: "Priya Patel",
-      avatar: "PP",
-      action: "posted in",
-      target: "Calculus Study Group",
-      content:
-        '"Anyone else stuck on problem 5 of the latest assignment? Would love some hints!"',
-      time: "25 min ago",
-    },
-    {
-      id: 2,
-      user: "David Lee",
-      avatar: "DL",
-      action: "shared a resource in",
-      target: "Physics Help Forum",
-      time: "1 hour ago",
-    },
-  ];
-
-  const calendarDays = Array.from({ length: 14 }, (_, i) => i + 1);
-
   const loading = useAuthRedirect()
 
   if (loading) {
@@ -162,7 +139,7 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Motivation analytics */}
+          {/* Analytics Cards */}
           <div className="mb-6">
             <AnalyticsCards />
           </div>
@@ -183,16 +160,16 @@ const Dashboard = () => {
             onTaskToggle={handleTaskToggle}
             onAddTask={() => {console.log("Add Task")}}
           />
-          <CommunityActivity />
+          <NotificationsCenter />
         </div>
       </div>
 
       {/* Course Tasks Modal */}
-      {selectedCourse && (
+      {isCourseTasksModalOpen && selectedCourse && (
         <CourseTasksModal
           isOpen={isCourseTasksModalOpen}
-          onClose={handleCloseCourseTasksModal}
           course={selectedCourse}
+          onClose={handleCloseCourseTasksModal}
         />
       )}
     </div>

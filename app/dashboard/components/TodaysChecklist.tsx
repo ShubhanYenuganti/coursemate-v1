@@ -38,7 +38,7 @@ const TodaysChecklist: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [userCourses, setUserCourses] = useState<CourseData[]>([]);
@@ -68,22 +68,54 @@ const TodaysChecklist: React.FC = () => {
 
   // Fetch tasks based on selected filter
   useEffect(() => {
-    const fetchTasks = async () => {
+    const fetchChecklistTasks = async () => {
       setIsLoading(true);
       try {
-        const apiTasks = await taskService.getTasks('all');
-        const transformedTasks: Task[] = apiTasks.map(task => ({
-          id: task.id,
-          title: task.title,
-          course: task.course,
-          dueDate: task.due_date,
-          completed: task.completed,
-          color: task.color,
-          time: format(parseISO(task.due_date), 'MMM d'),
-        }));
-        setTasks(transformedTasks);
+        const api = process.env.BACKEND_URL || "http://localhost:5173";
+        const token = localStorage.getItem('token');
+        // Fetch all courses for the user
+        const coursesResponse = await fetch(`${api}/api/courses`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const coursesData = await coursesResponse.json();
+        const allGoals: any[] = [];
+        // For each course, fetch its goals
+        for (const course of coursesData) {
+          const goalsResponse = await fetch(`${api}/api/courses/${course.id}/goals`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!goalsResponse.ok) continue;
+          const goals = await goalsResponse.json();
+          allGoals.push(...goals.map((g: any) => ({ ...g, course })));
+        }
+        // For each goal, fetch its tasks
+        const allTasks: any[] = [];
+        for (const goal of allGoals) {
+          const tasksResponse = await fetch(`${api}/api/goals/${goal.goal_id}/tasks`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!tasksResponse.ok) continue;
+          const tasksData = await tasksResponse.json();
+          // Group by task_id and flatten
+          const taskMap = new Map();
+          tasksData.forEach((row: any) => {
+            if (!taskMap.has(row.task_id)) {
+              taskMap.set(row.task_id, {
+                id: row.task_id,
+                title: row.task_title,
+                course: goal.course?.title || '',
+                dueDate: row.due_date,
+                completed: row.task_completed,
+                color: '#0ea5e9', // default color
+                time: row.due_date ? format(parseISO(row.due_date), 'MMM d') : '',
+              });
+            }
+          });
+          allTasks.push(...Array.from(taskMap.values()));
+        }
+        setTasks(allTasks);
       } catch (error) {
-        console.error('❌ Failed to fetch tasks:', error);
+        console.error('Failed to fetch checklist tasks from study plan:', error);
       } finally {
         setIsLoading(false);
       }
@@ -98,8 +130,10 @@ const TodaysChecklist: React.FC = () => {
 
   // Date helpers
   const todayDate = new Date();
+
   const filterTasks = (tasks: Task[]) => {
     return tasks.filter(task => {
+      if (!task.dueDate) return false;
       const due = parseISO(task.dueDate);
       if (selectedFilter === 'today') {
         return isToday(due);
@@ -112,6 +146,7 @@ const TodaysChecklist: React.FC = () => {
     });
   };
   const filteredTasks = filterTasks(tasks);
+
   const isTaskOverdue = (task: Task) => {
     const due = parseISO(task.dueDate);
     return isBefore(due, todayDate) && !isToday(due);
@@ -212,7 +247,7 @@ const TodaysChecklist: React.FC = () => {
     }
   };
 
-  const handleEditClick = (task: Task) => {
+  const handleEditClick = (task: any) => {
     console.log('✏️ Edit clicked for task:', task);
     setIsEditMode(true);
     setEditTaskId(task.id);
@@ -242,14 +277,14 @@ const TodaysChecklist: React.FC = () => {
     try {
       console.log('🔄 Refreshing tasks...');
       const apiTasks = await taskService.getTasks('all');
-      const transformedTasks: Task[] = apiTasks.map(task => ({
+      const transformedTasks: any[] = apiTasks.map(task => ({
         id: task.id,
         title: task.title,
         course: task.course,
         dueDate: task.due_date,
         completed: task.completed,
         color: task.color,
-        time: format(parseISO(task.due_date), 'MMM d'),
+        time: task.due_date ? format(parseISO(task.due_date), 'MMM d') : '',
       }));
       setTasks(transformedTasks);
       console.log('✅ Tasks refreshed:', transformedTasks);
@@ -320,6 +355,8 @@ const TodaysChecklist: React.FC = () => {
                 </div>
                 <div className={`text-xs ml-auto ${overdue ? 'text-red-600 font-medium' : 'text-gray-600'}`}>{task.time}</div>
               </div>
+              <div className={`text-xs ml-auto ${overdue ? 'text-red-600 font-medium' : 'text-gray-600'}`}>{task.time}</div>
+              
               {/* Subtasks Dropdown */}
               {expandedTasks[task.id] && subtasks.length > 0 && (
                 <div className="pl-10 pr-4 pb-4">

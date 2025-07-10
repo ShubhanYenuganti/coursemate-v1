@@ -1,6 +1,6 @@
 from collections import defaultdict
 from flask import Blueprint, request, jsonify, current_app, g
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import uuid
 from app.models.goal import Goal
 from app.models.course import Course
@@ -165,17 +165,8 @@ def create_goal(course_id):
                         subtask_type='other'
                     )
                     rows_to_add.append(subtask)
-        elif not skip_default_task:
-            # Create default task and subtask if none provided and not skipping default task
-            new_goal, _, _ = Goal.create_for_goal(
-                user_id=user_id,
-                course_id=course_id,
-                goal_descr=goal_descr,
-                due_date=due_date
-            )
-            rows_to_add.append(new_goal)
         else:
-            # Create a placeholder row with just the goal information
+            # Create a placeholder row with just the goal information (no default tasks)
             placeholder_goal = Goal(
                 user_id=user_id,
                 course_id=course_id,
@@ -396,10 +387,18 @@ def delete_goal(goal_id):
         # Get current user from JWT
         user_id = get_jwt_identity()
         
+        # Debug logging
+        print(f"🔍 Delete Goal Debug - Goal ID: {goal_id}")
+        print(f"🔍 Delete Goal Debug - User ID: {user_id}")
+        print(f"🔍 Delete Goal Debug - Authorization header: {request.headers.get('Authorization', 'Not found')}")
+        
         # Get all rows for this goal
         goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
         
+        print(f"🔍 Delete Goal Debug - Goals found: {len(goals)}")
+        
         if not goals:
+            print(f"🔍 Delete Goal Debug - No goals found for goal_id: {goal_id} and user_id: {user_id}")
             return jsonify({'error': 'Goal not found or you do not have access'}), 404
         
         # Delete all rows for this goal
@@ -408,15 +407,18 @@ def delete_goal(goal_id):
         
         db.session.commit()
         
+        print(f"🔍 Delete Goal Debug - Successfully deleted goal: {goal_id}")
         return jsonify({'message': 'Goal deleted successfully'}), 200
         
     except SQLAlchemyError as e:
         db.session.rollback()
         current_app.logger.error(f"Database error: {str(e)}")
+        print(f"🔍 Delete Goal Debug - Database error: {str(e)}")
         return jsonify({'error': 'Database error occurred'}), 500
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting goal: {str(e)}")
+        print(f"🔍 Delete Goal Debug - Exception: {str(e)}")
         return jsonify({'error': 'An error occurred while deleting the goal'}), 500
 
 
@@ -727,31 +729,29 @@ def save_tasks_and_subtasks(goal_id):
 @goals_bp.route('/api/goals/<goal_id>/tasks/<task_id>', methods=['DELETE'])
 @jwt_required()
 def delete_task(goal_id, task_id):
-    """Delete a task and all its subtasks"""
+    """Delete a specific task and all its subtasks"""
     try:
         # Get current user from JWT
         user_id = get_jwt_identity()
         
-        # Check if goal exists
-        goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
-        if not goals:
-            return jsonify({'error': 'Goal not found or you do not have access'}), 404
-        
-        # Get all rows for this task
-        task_rows = Goal.query.filter_by(goal_id=goal_id, task_id=task_id, user_id=user_id).all()
-        if not task_rows:
+        # Find the task
+        task = Goal.query.filter_by(goal_id=goal_id, task_id=task_id, user_id=user_id).first()
+        if not task:
             return jsonify({'error': 'Task not found or you do not have access'}), 404
         
-        # Delete all rows for this task
-        deleted_count = 0
-        for row in task_rows:
-            db.session.delete(row)
-            deleted_count += 1
+        # Delete all subtasks for this task
+        subtasks = Goal.query.filter_by(goal_id=goal_id, task_id=task_id, user_id=user_id).all()
+        for subtask in subtasks:
+            db.session.delete(subtask)
         
         db.session.commit()
         
-        current_app.logger.info(f"Deleted task {task_id} with {deleted_count} subtasks from goal {goal_id}")
-        return jsonify({'message': f'Task deleted successfully with {deleted_count} subtasks'}), 200
+        current_app.logger.info(f"Deleted task {task_id} from goal {goal_id}")
+        
+        return jsonify({
+            'message': 'Task deleted successfully',
+            'deleted_subtasks': len(subtasks)
+        }), 200
         
     except SQLAlchemyError as e:
         db.session.rollback()
@@ -807,59 +807,69 @@ def delete_subtask(subtask_id):
 @goals_bp.route('/api/goals/tasks/subtasks/<subtask_id>', methods=['PUT'])
 @jwt_required()
 def update_subtask(subtask_id):
-    """Update a subtask"""
+    """Update a specific subtask"""
     try:
         # Get current user from JWT
         user_id = get_jwt_identity()
         
-        # Get the subtask row
+        # Find the subtask
         subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
-        
         if not subtask:
             return jsonify({'error': 'Subtask not found or you do not have access'}), 404
         
         data = request.get_json()
         
-        # Update subtask fields
+        # Update fields if provided
         if 'subtask_descr' in data:
             subtask.subtask_descr = data['subtask_descr']
-        
         if 'subtask_type' in data:
             subtask.subtask_type = data['subtask_type']
-        
         if 'subtask_completed' in data:
             subtask.subtask_completed = data['subtask_completed']
             
-            # Get all rows for this task
-            task_rows = Goal.query.filter_by(task_id=subtask.task_id, user_id=user_id).all()
-            
-            # Check if all subtasks are completed to update task completion status
-            all_subtasks_completed = all(row.subtask_completed for row in task_rows)
-            
-            # Update task completion status in all rows for this task
-            for row in task_rows:
-                row.task_completed = all_subtasks_completed
-            
-            # Get all rows for this goal
-            goal_rows = Goal.query.filter_by(goal_id=subtask.goal_id, user_id=user_id).all()
-            
-            # Get unique task IDs and their completion status
-            task_completion_status = {}
-            for row in goal_rows:
-                if row.task_id not in task_completion_status:
-                    task_completion_status[row.task_id] = row.task_completed
-            
-            # Check if all tasks are completed to update goal completion status
-            all_tasks_completed = all(task_completion_status.values()) if task_completion_status else False
-            
-            # Update goal completion status in all rows for this goal
-            for row in goal_rows:
-                row.goal_completed = all_tasks_completed
-        
-        subtask.updated_at = datetime.utcnow()
         db.session.commit()
         
-        return jsonify(subtask.to_dict()), 200
+        # Check if all subtasks in the task are completed to update task completion
+        task_subtasks = Goal.query.filter_by(task_id=subtask.task_id, user_id=user_id).all()
+        all_subtasks_completed = all(st.subtask_completed for st in task_subtasks)
+        
+        # Update task completion status
+        for task_subtask in task_subtasks:
+            task_subtask.task_completed = all_subtasks_completed
+        
+        # If all subtasks are completed and task is being tracked, stop tracking
+        if all_subtasks_completed:
+            for task_subtask in task_subtasks:
+                if task_subtask.task_is_being_tracked and task_subtask.task_engagement_start and not task_subtask.task_has_ever_been_completed:
+                    # Calculate time spent
+                    end_time = datetime.now(timezone.utc)
+                    time_spent = (end_time - task_subtask.task_engagement_start).total_seconds() / 60
+                    
+                    # Update task tracking
+                    task_subtask.task_is_being_tracked = False
+                    task_subtask.task_engagement_end = end_time
+                    task_subtask.task_actual_time_minutes += int(time_spent)
+                    task_subtask.task_has_ever_been_completed = True
+                    break  # Only update one row since they all represent the same task
+        
+        # Check if all tasks in the goal are completed to update goal completion
+        goal_tasks = Goal.query.filter_by(goal_id=subtask.goal_id, user_id=user_id).all()
+        all_tasks_completed = all(gt.task_completed for gt in goal_tasks)
+        
+        # Update goal completion status
+        for goal_task in goal_tasks:
+            goal_task.goal_completed = all_tasks_completed
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Subtask updated successfully',
+            'subtask_id': subtask_id,
+            'subtask_descr': subtask.subtask_descr,
+            'subtask_completed': subtask.subtask_completed,
+            'task_completed': all_subtasks_completed,
+            'goal_completed': all_tasks_completed
+        }), 200
         
     except SQLAlchemyError as e:
         db.session.rollback()
@@ -871,18 +881,273 @@ def update_subtask(subtask_id):
         return jsonify({'error': 'An error occurred while updating the subtask'}), 500
 
 
-@goals_bp.route('/api/goals/tasks/<task_id>/subtasks', methods=['POST'])
+@goals_bp.route('/api/goals/<goal_id>/time-analytics', methods=['GET'])
 @jwt_required()
-def create_subtask(task_id):
-    """Create a new subtask for a task"""
+def get_goal_time_analytics(goal_id):
+    """Get time analytics for a goal including estimated vs actual time comparisons"""
     try:
         # Get current user from JWT
         user_id = get_jwt_identity()
         
-        # Check if task exists and belongs to the user
-        task_rows = Goal.query.filter_by(task_id=task_id, user_id=user_id).all()
+        # Get all subtasks for this goal
+        subtasks = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
         
-        if not task_rows:
+        if not subtasks:
+            return jsonify({'error': 'Goal not found or you do not have access'}), 404
+        
+        # Calculate time analytics
+        total_estimated = sum(subtask.estimated_time_minutes for subtask in subtasks)
+        total_actual = sum(subtask.actual_time_minutes for subtask in subtasks)
+        
+        # Calculate efficiency percentage
+        efficiency_percentage = 0
+        if total_estimated > 0:
+            efficiency_percentage = round((total_estimated / total_actual) * 100, 1) if total_actual > 0 else 0
+        
+        # Get subtask-level analytics
+        subtask_analytics = []
+        for subtask in subtasks:
+            subtask_efficiency = 0
+            if subtask.estimated_time_minutes > 0 and subtask.actual_time_minutes > 0:
+                subtask_efficiency = round((subtask.estimated_time_minutes / subtask.actual_time_minutes) * 100, 1)
+            
+            subtask_analytics.append({
+                'subtask_id': subtask.subtask_id,
+                'subtask_descr': subtask.subtask_descr,
+                'estimated_time_minutes': subtask.estimated_time_minutes,
+                'actual_time_minutes': subtask.actual_time_minutes,
+                'efficiency_percentage': subtask_efficiency,
+                'is_completed': subtask.subtask_completed
+            })
+        
+        return jsonify({
+            'goal_id': goal_id,
+            'total_estimated_time_minutes': total_estimated,
+            'total_actual_time_minutes': total_actual,
+            'efficiency_percentage': efficiency_percentage,
+            'subtask_analytics': subtask_analytics
+        }), 200
+        
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error getting time analytics: {str(e)}")
+        return jsonify({'error': 'An error occurred while getting time analytics'}), 500
+
+
+@goals_bp.route('/api/goals/tasks/<task_id>/start-tracking', methods=['POST'])
+@jwt_required()
+def start_task_tracking(task_id):
+    """Start time tracking for a task when user first interacts with it"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Find the task
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
+        if not task:
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        # Check if already tracking - if so, don't restart
+        if task.task_is_being_tracked:
+            return jsonify({
+                'message': 'Task time tracking already started',
+                'task_id': task_id,
+                'task_engagement_start': task.task_engagement_start.isoformat(),
+                'started_by_subtask': task.started_by_subtask
+            }), 200
+        
+        # Get the subtask ID that started tracking
+        data = request.get_json() or {}
+        started_by_subtask = data.get('started_by_subtask')
+        
+        # Start time tracking
+        task.task_is_being_tracked = True
+        task.task_engagement_start = datetime.now(timezone.utc)
+        if started_by_subtask:
+            task.started_by_subtask = started_by_subtask
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Task time tracking started',
+            'task_id': task_id,
+            'task_engagement_start': task.task_engagement_start.isoformat(),
+            'started_by_subtask': task.started_by_subtask
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@goals_bp.route('/api/goals/tasks/<task_id>/current-time', methods=['GET'])
+@jwt_required()
+def get_current_task_time(task_id):
+    """Get current elapsed time for an actively tracked task"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Find the task
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
+        if not task:
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        # If not tracking, return 0
+        if not task.task_is_being_tracked or not task.task_engagement_start:
+            return jsonify({
+                'task_id': task_id,
+                'current_time_minutes': 0,
+                'total_actual_time_minutes': task.task_actual_time_minutes or 0,
+                'is_tracking': False
+            }), 200
+        
+        # Calculate current elapsed time
+        current_time = datetime.now(timezone.utc)
+        elapsed_minutes = (current_time - task.task_engagement_start).total_seconds() / 60
+        
+        return jsonify({
+            'task_id': task_id,
+            'current_time_minutes': int(elapsed_minutes),
+            'total_actual_time_minutes': task.task_actual_time_minutes or 0,
+            'is_tracking': True,
+            'engagement_start': task.task_engagement_start.isoformat()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@goals_bp.route('/api/goals/tasks/<task_id>/stop-tracking', methods=['POST'])
+@jwt_required()
+def stop_task_tracking(task_id):
+    """Stop time tracking for a task when it's completed"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Debug logging
+        print(f"🔍 Backend Debug - Stop tracking called for task_id: {task_id}")
+        print(f"🔍 Backend Debug - User ID: {user_id}")
+        
+        # Find the task
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
+        print(f"🔍 Backend Debug - Task found: {task is not None}")
+        
+        if not task:
+            print(f"🔍 Backend Debug - Task not found for task_id: {task_id}")
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        # Check if tracking was started
+        if not task.task_is_being_tracked or not task.task_engagement_start:
+            return jsonify({'error': 'Time tracking was not started for this task'}), 400
+        
+        # Calculate time spent
+        end_time = datetime.now(timezone.utc)
+        time_spent = (end_time - task.task_engagement_start).total_seconds() / 60  # Convert to minutes
+        
+        # Update task
+        task.task_is_being_tracked = False
+        task.task_engagement_end = end_time
+        task.task_actual_time_minutes += int(time_spent)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Task time tracking stopped',
+            'task_id': task_id,
+            'time_spent_minutes': int(time_spent),
+            'total_actual_time_minutes': task.task_actual_time_minutes
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@goals_bp.route('/api/goals/tasks/<task_id>/update-estimate', methods=['PUT'])
+@jwt_required()
+def update_task_estimate(task_id):
+    """Update estimated time for a task"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Find the task
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
+        if not task:
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        data = request.get_json()
+        estimated_time = data.get('estimated_time_minutes')
+        
+        if estimated_time is not None:
+            task.task_estimated_time_minutes = estimated_time
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Task estimate updated',
+            'task_id': task_id,
+            'task_estimated_time_minutes': task.task_estimated_time_minutes
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@goals_bp.route('/api/goals/tasks/<task_id>/time-analytics', methods=['GET'])
+@jwt_required()
+def get_task_time_analytics(task_id):
+    """Get time analytics for a task including estimated vs actual time comparisons"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Find the task
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
+        if not task:
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        # Calculate time analytics
+        estimated_time = task.task_estimated_time_minutes or 0
+        actual_time = task.task_actual_time_minutes or 0
+        
+        # Calculate efficiency percentage
+        efficiency_percentage = 0
+        if estimated_time > 0 and actual_time > 0:
+            efficiency_percentage = round((estimated_time / actual_time) * 100, 1)
+        
+        return jsonify({
+            'task_id': task_id,
+            'task_title': task.task_title,
+            'estimated_time_minutes': estimated_time,
+            'actual_time_minutes': actual_time,
+            'efficiency_percentage': efficiency_percentage,
+            'is_completed': task.task_completed,
+            'is_being_tracked': task.task_is_being_tracked,
+            'engagement_start': task.task_engagement_start.isoformat() if task.task_engagement_start else None,
+            'engagement_end': task.task_engagement_end.isoformat() if task.task_engagement_end else None
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@goals_bp.route('/api/goals/tasks/<task_id>/subtasks', methods=['POST'])
+@jwt_required()
+def create_subtask(task_id):
+    """Create a new subtask for a specific task"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Find the task to get goal information
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
+        if not task:
             return jsonify({'error': 'Task not found or you do not have access'}), 404
         
         data = request.get_json()
@@ -890,36 +1155,33 @@ def create_subtask(task_id):
         if not data or 'subtask_descr' not in data:
             return jsonify({'error': 'Subtask description is required'}), 400
         
-        # Use the first row to get goal and task info
-        task_row = task_rows[0]
-        
-        # Create a new subtask
-        subtask_id = str(uuid.uuid4())
-        
+        # Create new subtask
         new_subtask = Goal(
             user_id=user_id,
-            course_id=task_row.course_id,
-            goal_id=task_row.goal_id,
-            goal_descr=task_row.goal_descr,
-            due_date=task_row.due_date,
-            goal_completed=task_row.goal_completed,
+            course_id=task.course_id,
+            goal_id=task.goal_id,
+            goal_descr=task.goal_descr,
+            due_date=task.due_date,
             task_id=task_id,
-            task_title=task_row.task_title,
-            task_descr=task_row.task_descr,
-            task_completed=task_row.task_completed,
-            subtask_id=subtask_id,
+            task_title=task.task_title,
+            task_descr=task.task_descr,
+            subtask_id=str(uuid.uuid4()),
             subtask_descr=data['subtask_descr'],
             subtask_type=data.get('subtask_type', 'other'),
-            subtask_completed=data.get('subtask_completed', False)
+            subtask_completed=False
         )
         
         db.session.add(new_subtask)
         db.session.commit()
         
-        # Return the created subtask
-        result = new_subtask.to_dict()
-        return jsonify(result), 201
-        
+        return jsonify({
+            'message': 'Subtask created successfully',
+            'subtask_id': new_subtask.subtask_id,
+            'subtask_descr': new_subtask.subtask_descr,
+            'subtask_type': new_subtask.subtask_type,
+            'subtask_completed': new_subtask.subtask_completed
+        }), 201
+
     except SQLAlchemyError as e:
         db.session.rollback()
         current_app.logger.error(f"Database error: {str(e)}")
@@ -928,104 +1190,3 @@ def create_subtask(task_id):
         db.session.rollback()
         current_app.logger.error(f"Error creating subtask: {str(e)}")
         return jsonify({'error': 'An error occurred while creating the subtask'}), 500
-
-
-@goals_bp.route('/api/goals/<goal_id>/create-empty-task', methods=['POST'])
-@jwt_required()
-def create_empty_task(goal_id):
-    """Create an empty task for a goal when there are no tasks"""
-    try:
-        # Get current user from JWT
-        user_id = get_jwt_identity()
-        
-        # Check if goal exists
-        existing_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
-        if not existing_goals:
-            return jsonify({'error': 'Goal not found or you do not have access'}), 404
-        
-        # Delete any placeholder rows
-        placeholder_rows = [goal for goal in existing_goals if goal.task_id == 'placeholder']
-        for placeholder in placeholder_rows:
-            db.session.delete(placeholder)
-        
-        # Get reference goal data from an existing row (non-placeholder)
-        reference_goal = next((goal for goal in existing_goals if goal.task_id != 'placeholder'), existing_goals[0])
-        
-        # Create a new task with a default subtask
-        task_id = str(uuid.uuid4())
-        subtask_id = str(uuid.uuid4())
-        
-        new_task = Goal(
-            user_id=user_id,
-            course_id=reference_goal.course_id,
-            goal_id=goal_id,
-            goal_descr=reference_goal.goal_descr,
-            due_date=reference_goal.due_date,
-            goal_completed=reference_goal.goal_completed,
-            task_id=task_id,
-            task_title="New Task",
-            task_descr="",
-            task_completed=False,
-            subtask_id=subtask_id,
-            subtask_descr="Default Subtask",
-            subtask_type="other",
-            subtask_completed=False
-        )
-        
-        db.session.add(new_task)
-        db.session.commit()
-        
-        return jsonify({
-            'message': 'Empty task created successfully',
-            'task': new_task.to_dict()
-        }), 201
-        
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error(f"Database error: {str(e)}")
-        return jsonify({'error': 'Database error occurred'}), 500
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error creating empty task: {str(e)}")
-        return jsonify({'error': 'An error occurred while creating empty task'}), 500 
-        return jsonify({'error': 'An error occurred while saving tasks'}), 500 
-    
-@goals_bp.route("/api/goals/user", methods=["GET"])
-@jwt_required()                               # still requires a valid JWT
-def get_goals_by_user():
-    # we ignore the real identity for test mode
-    user = get_jwt_identity()
-
-    try:
-        goals = Goal.query.filter_by(user_id=user).all()
-
-        # -------- group by end_date --------
-        grouped: dict[str, list[dict]] = defaultdict(list)
-
-        for g in goals:
-            # Pick your date field here
-            end_dt = getattr(g, "due_date", None)   # <─ change if it's called due_date
-            if end_dt is None:
-                key = "unscheduled"
-            else:
-                # Ensure we serialize to plain YYYY-MM-DD
-                if isinstance(end_dt, datetime):
-                    key = end_dt.date().isoformat()
-                elif isinstance(end_dt, date):
-                    key = end_dt.isoformat()
-                else:                               # already a str or something
-                    key = str(end_dt)
-
-            grouped[key].append(g.to_dict())
-
-        # optional: sort the dict by date keys for stable output
-        grouped_sorted = dict(sorted(grouped.items()))
-
-        return jsonify(grouped_sorted), 200
-
-    except SQLAlchemyError as e:
-        current_app.logger.error(f"Database error: {e}")
-        return jsonify({"error": "Database error occurred"}), 500
-    except Exception as e:
-        current_app.logger.error(f"Error getting user goals: {e}")
-        return jsonify({"error": "An error occurred while getting user goals"}), 500

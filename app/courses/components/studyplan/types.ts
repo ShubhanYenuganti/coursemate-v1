@@ -27,10 +27,12 @@ export interface Subtask {
   id: string;
   taskId: string;
   name: string;
-  description?: string;
   type: 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review' | 'assessment' | 'other';
-  estimatedMinutes?: number;
-  estimatedTimeMinutes?: number;
+  estimatedTimeMinutes: number;
+  actualTimeMinutes: number;
+  timeTrackingStart?: string;
+  timeTrackingEnd?: string;
+  isTimeTracking: boolean;
   completed: boolean;
   createdAt?: string;
   updatedAt?: string;
