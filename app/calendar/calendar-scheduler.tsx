@@ -481,15 +481,26 @@ export function CalendarScheduler() {
     // Check if the target date is past the task's due date
     const taskDueDate = draggedTask.task_due_date || draggedTask.due_date;
     if (taskDueDate) {
-      const dueDate = new Date(taskDueDate);
+      // Parse the due date from UTC and convert to local date
+      const dueDateUTC = new Date(taskDueDate);
+      // Convert UTC date to local date by creating a new date with local components
+      const dueDateLocal = new Date(
+        dueDateUTC.getUTCFullYear(),
+        dueDateUTC.getUTCMonth(),
+        dueDateUTC.getUTCDate()
+      );
+      
+      // Create target date in local timezone
       const targetDateTime = new Date(targetDate);
       targetDateTime.setHours(targetHour, targetMinute, 0, 0);
+      const targetDateLocal = new Date(
+        targetDateTime.getFullYear(),
+        targetDateTime.getMonth(),
+        targetDateTime.getDate()
+      );
       
-      // Compare dates (ignore time for due date comparison)
-      const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-      const targetDateOnly = new Date(targetDateTime.getFullYear(), targetDateTime.getMonth(), targetDateTime.getDate());
-      
-      if (targetDateOnly > dueDateOnly) {
+      // Compare local dates (ignoring time and timezone)
+      if (targetDateLocal > dueDateLocal) {
         // Show warning modal instead of proceeding
         setDueDateWarningModal({
           isOpen: true,
@@ -3739,7 +3750,15 @@ export function CalendarScheduler() {
                     <span className="text-sm font-medium text-gray-700">Task due date:</span>
                     <span className="text-sm text-gray-900">
                       {dueDateWarningModal.subtask.task_due_date || dueDateWarningModal.subtask.due_date 
-                        ? new Date(dueDateWarningModal.subtask.task_due_date || dueDateWarningModal.subtask.due_date!).toLocaleDateString()
+                        ? (() => {
+                            const dueDateUTC = new Date(dueDateWarningModal.subtask.task_due_date || dueDateWarningModal.subtask.due_date!);
+                            const dueDateLocal = new Date(
+                              dueDateUTC.getUTCFullYear(),
+                              dueDateUTC.getUTCMonth(),
+                              dueDateUTC.getUTCDate()
+                            );
+                            return dueDateLocal.toLocaleDateString();
+                          })()
                         : 'Not set'
                       }
                     </span>
