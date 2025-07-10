@@ -124,21 +124,21 @@ const MyCourses: React.FC<MyCoursesProps> = ({
               <div className="flex gap-3 mt-4">
                 <button
                   onClick={() => router.push(`/courses/${course.dbId}?tab=study`)}
-                  className="flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-md text-xs font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
+                  className="flex-1 bg-blue-100 text-blue-700 py-2 px-3 rounded-md text-xs font-medium hover:bg-blue-200 transition-colors flex items-center justify-center gap-1"
                 >
                   <span role="img" aria-label="Study Plan">📋</span>
                   Study Plan
                 </button>
                 <button
                   onClick={() => router.push(`/courses/${course.dbId}?tab=materials`)}
-                  className="flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-md text-xs font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
+                  className="flex-1 bg-green-100 text-green-700 py-2 px-3 rounded-md text-xs font-medium hover:bg-green-200 transition-colors flex items-center justify-center gap-1"
                 >
                   <span role="img" aria-label="Materials">📚</span>
                   Materials
                 </button>
                 <button
                   onClick={() => router.push(`/courses/${course.dbId}?tab=ai`)}
-                  className="flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-md text-xs font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
+                  className="flex-1 bg-purple-100 text-purple-700 py-2 px-3 rounded-md text-xs font-medium hover:bg-purple-200 transition-colors flex items-center justify-center gap-1"
                 >
                   <span role="img" aria-label="AI Chat">🤖</span>
                   AI Chat

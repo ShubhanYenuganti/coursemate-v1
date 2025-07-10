@@ -165,17 +165,8 @@ def create_goal(course_id):
                         subtask_type='other'
                     )
                     rows_to_add.append(subtask)
-        elif not skip_default_task:
-            # Create default task and subtask if none provided and not skipping default task
-            new_goal, _, _ = Goal.create_for_goal(
-                user_id=user_id,
-                course_id=course_id,
-                goal_descr=goal_descr,
-                due_date=due_date
-            )
-            rows_to_add.append(new_goal)
         else:
-            # Create a placeholder row with just the goal information
+            # Create a placeholder row with just the goal information (no default tasks)
             placeholder_goal = Goal(
                 user_id=user_id,
                 course_id=course_id,

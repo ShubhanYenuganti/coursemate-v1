@@ -35,6 +35,12 @@ class User(db.Model):
     google_refresh_token = db.Column(db.Text, unique=True, nullable=True)  # Changed to Text for unlimited length
     token_expiry = db.Column(db.DateTime(timezone=True), nullable=True)
     google_sync_tokens = db.Column(db.JSON, default=dict)
+    
+    # Streak tracking fields
+    last_visit_date = db.Column(db.Date, nullable=True)
+    current_streak = db.Column(db.Integer, default=0)
+    longest_streak = db.Column(db.Integer, default=0)
+    
     # Relationships
     goals = db.relationship("Goal", back_populates="user", lazy=True)
     
@@ -78,3 +84,32 @@ class User(db.Model):
             self.password_reset_token = None
             
         return True
+    
+    def update_streak(self):
+        """Update the user's streak based on their visit today"""
+        today = datetime.utcnow().date()
+        
+        # If this is the first visit or no last visit recorded
+        if not self.last_visit_date:
+            self.last_visit_date = today
+            self.current_streak = 1
+            self.longest_streak = max(self.longest_streak, 1)
+            return
+        
+        # If already visited today, don't update
+        if self.last_visit_date == today:
+            return
+        
+        # Calculate days difference
+        days_diff = (today - self.last_visit_date).days
+        
+        if days_diff == 1:
+            # Consecutive day - increment streak
+            self.current_streak += 1
+            self.longest_streak = max(self.longest_streak, self.current_streak)
+        elif days_diff > 1:
+            # Streak broken - reset to 1
+            self.current_streak = 1
+        # If days_diff == 0, already visited today (handled above)
+        
+        self.last_visit_date = today

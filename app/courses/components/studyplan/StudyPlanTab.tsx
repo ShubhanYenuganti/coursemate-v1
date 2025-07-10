@@ -6,6 +6,12 @@ import { PomodoroProvider, usePomodoro } from '../../../study-plan/PomodoroConte
 import { PomodoroTimer } from '../../../study-plan/PomodoroTimer';
 import { toast } from 'react-hot-toast';
 import { Toaster } from 'react-hot-toast';
+import FeedbackSection from './FeedbackSection';
+import TaskScaffoldingScreen from './TaskScaffoldingScreen';
+import AddGoalModal from './AddGoalModal';
+import AddTaskModal from './AddTaskModal';
+import AddSubtaskModal from './AddSubtaskModal';
+import AIGenerateScreen from './AIGenerateScreen';
 
 interface StudyPlanTabProps {
   courseId: string;
@@ -93,6 +99,17 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const [editingSubtask, setEditingSubtask] = useState<{ goalId: string; taskId: string; subtaskId: string } | null>(null);
   const [editingSubtaskName, setEditingSubtaskName] = useState('');
   const [currentTaskTimes, setCurrentTaskTimes] = useState<Record<string, number>>({});
+  const [activeGoalForTaskSetup, setActiveGoalForTaskSetup] = useState<GoalWithProgress | null>(null);
+  const [startedSubtasks, setStartedSubtasks] = useState<Set<string>>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('startedSubtasks') : null;
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  const [showAIGenerateScreen, setShowAIGenerateScreen] = useState(false);
+
+  // Persist startedSubtasks to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('startedSubtasks', JSON.stringify(Array.from(startedSubtasks)));
+  }, [startedSubtasks]);
 
   // Move these functions outside AddGoalModal so they can be used in main component
   const handleSubtaskChange = useCallback((taskId: string, subtaskId: string, field: string, value: any) => {
@@ -136,7 +153,7 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         console.log('🔍 Debug - Token exists:', !!token);
         console.log('🔍 Debug - Token preview:', token ? `${token.substring(0, 20)}...` : 'No token');
         
-        const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
+        const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -159,13 +176,13 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         const transformedGoals: GoalWithProgress[] = data.map((goal: any) => {
           return {
             id: goal.goal_id || goal.id,
-          courseId: courseId,
-          title: goal.goal_descr,
-          targetDate: goal.due_date || new Date().toISOString(),
+            courseId: courseId,
+            title: goal.goal_descr,
+            targetDate: goal.due_date || new Date().toISOString(),
             workMinutesPerDay: 60,
             frequency: 'daily',
-          createdAt: goal.created_at,
-          updatedAt: goal.updated_at,
+            createdAt: goal.created_at,
+            updatedAt: goal.updated_at,
             progress: goal.progress || 0,
             totalTasks: goal.total_tasks || 0,
             completedTasks: goal.completed_tasks || 0
@@ -234,7 +251,7 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
               // If tasks fetch fails, use empty array
               allTasksData[goal.id] = [];
             }
-      } catch (error) {
+          } catch (error) {
             console.error(`Error fetching tasks for goal ${goal.id}:`, error);
             allTasksData[goal.id] = [];
           }
@@ -626,674 +643,6 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       </div>
     </div>
   );
-
-  const AddGoalModal = ({ onClose }: { onClose: () => void }) => {
-    const taskTypes = [
-      { value: 'reading', label: 'Reading', icon: '📖' },
-      { value: 'studying', label: 'Studying', icon: '📚' },
-      { value: 'problems', label: 'Problems', icon: '🧮' },
-      { value: 'writing', label: 'Writing', icon: '✍️' },
-      { value: 'research', label: 'Research', icon: '🔍' },
-      { value: 'practice', label: 'Practice', icon: '🎯' }
-    ];
-
-    const handleGoalTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-      setNewGoalData(prev => ({ ...prev, title: e.target.value }));
-    }, []);
-
-    const handleTargetDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-      setNewGoalData(prev => ({ ...prev, targetDate: e.target.value }));
-    }, []);
-
-    const handleGoalSubmit = () => {
-      if (newGoalData.title && newGoalData.targetDate) {
-        setGoalCreationStep('tasks');
-      }
-    };
-
-    const handleAddTask = () => {
-      const newTask = {
-        id: `temp-${Date.now()}`,
-        name: '',
-        type: 'reading' as const,
-        scheduledDate: new Date().toISOString().split('T')[0],
-        estimatedTimeMinutes: 60,
-        subtasks: []
-      };
-      setNewGoalData(prev => ({
-        ...prev,
-        tasks: [...prev.tasks, newTask]
-      }));
-    };
-
-    const handleTaskChange = useCallback((taskId: string, field: string, value: any) => {
-      setNewGoalData(prev => ({
-        ...prev,
-        tasks: prev.tasks.map(task => 
-          task.id === taskId ? { ...task, [field]: value } : task
-        )
-      }));
-    }, []);
-
-    const handleRemoveTask = useCallback((taskId: string) => {
-      setNewGoalData(prev => ({
-        ...prev,
-        tasks: prev.tasks.filter(task => task.id !== taskId)
-      }));
-    }, []);
-
-    const handleTasksSubmit = () => {
-      if (newGoalData.tasks.length > 0) {
-        setGoalCreationStep('subtasks');
-      }
-    };
-
-    const handleAddSubtask = useCallback((taskId: string) => {
-      const newSubtask = {
-        id: `subtask-${Date.now()}`,
-        name: '',
-        type: 'Study',
-        estimatedTimeMinutes: 30
-      };
-      setNewGoalData(prev => ({
-        ...prev,
-        tasks: prev.tasks.map(task => 
-          task.id === taskId 
-            ? { ...task, subtasks: [...task.subtasks, newSubtask] }
-            : task
-        )
-      }));
-    }, []);
-
-    const handleFinish = async () => {
-      try {
-        const api = process.env.BACKEND_URL || "http://localhost:5173";
-        let goalId;
-
-        if (newGoalData.title) {
-          // Creating a new goal with tasks
-          console.log('Creating goal with data:', {
-            goal_descr: newGoalData.title,
-            due_date: newGoalData.targetDate,
-            skip_default_task: true
-          });
-          
-          const goalResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-              goal_descr: newGoalData.title,
-              due_date: newGoalData.targetDate,
-              skip_default_task: true
-            })
-          });
-
-          console.log('Goal response status:', goalResponse.status);
-          console.log('Goal response headers:', goalResponse.headers);
-
-          if (!goalResponse.ok) {
-            const errorText = await goalResponse.text();
-            console.error('Goal creation error response:', errorText);
-            throw new Error(`Failed to create goal: ${goalResponse.status} ${goalResponse.statusText}`);
-          }
-
-          const goalData = await goalResponse.json();
-          goalId = goalData[0].goal_id;
-        } else if (currentGoalId) {
-          // Adding tasks to an existing goal
-          goalId = currentGoalId;
-        } else {
-          throw new Error('No goal ID available');
-        }
-
-        // Save tasks and subtasks
-        const tasksData = newGoalData.tasks.map(task => ({
-          task_title: task.name,
-          task_descr: '',
-          task_completed: false,
-          task_type: task.type,
-          due_date: task.scheduledDate,
-          subtasks: task.subtasks.map(subtask => ({
-            subtask_descr: subtask.name,
-            subtask_completed: false
-          }))
-        }));
-      
-        console.log('Saving tasks with data:', { tasks: tasksData });
-      
-        const tasksResponse = await fetch(`${api}/api/goals/${goalId}/save-tasks`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ tasks: tasksData })
-      });
-        
-        console.log('Tasks response status:', tasksResponse.status);
-      
-      if (!tasksResponse.ok) {
-          const errorText = await tasksResponse.text();
-          console.error('Tasks creation error response:', errorText);
-          throw new Error(`Failed to save tasks: ${tasksResponse.status} ${tasksResponse.statusText}`);
-        }
-
-        // Refresh goals data
-        window.location.reload();
-        onClose();
-        setGoalCreationStep('goal');
-        setCurrentGoalId(null);
-        setNewGoalData({ title: '', targetDate: '', tasks: [] });
-        toast.success('Tasks created successfully!');
-
-      } catch (error) {
-        console.error('Error creating tasks:', error);
-        toast.error('Failed to create tasks. Please try again.');
-      }
-    };
-
-    const handleBack = () => {
-      if (goalCreationStep === 'tasks') {
-        setGoalCreationStep('goal');
-      } else if (goalCreationStep === 'subtasks') {
-        setGoalCreationStep('tasks');
-      }
-    };
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-        <div className="relative bg-white rounded-lg shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-            <X className="w-6 h-6" />
-          </button>
-          
-          {/* Step Indicator */}
-          <div className="flex items-center justify-center mb-6">
-            <div className="flex items-center space-x-4">
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${goalCreationStep === 'goal' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                1
-              </div>
-              <div className={`w-8 h-1 ${goalCreationStep === 'tasks' || goalCreationStep === 'subtasks' ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${goalCreationStep === 'tasks' ? 'bg-blue-600 text-white' : goalCreationStep === 'subtasks' ? 'bg-gray-200 text-gray-600' : 'bg-gray-200 text-gray-600'}`}>
-                {currentGoalId ? '1' : '2'}
-              </div>
-              <div className={`w-8 h-1 ${goalCreationStep === 'subtasks' ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${goalCreationStep === 'subtasks' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                {currentGoalId ? '2' : '3'}
-              </div>
-            </div>
-          </div>
-
-          {/* Step 1: Goal Creation */}
-          {goalCreationStep === 'goal' && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Create New Goal</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Goal Title</label>
-                  <input
-                    type="text"
-                    value={newGoalData.title}
-                    onChange={handleGoalTitleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter goal title..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
-                  <input
-                    type="date"
-                    value={newGoalData.targetDate}
-                    onChange={handleTargetDateChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    onClick={onClose}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleGoalSubmit}
-                    disabled={!newGoalData.title || !newGoalData.targetDate}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next: Create Tasks
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Task Creation */}
-          {goalCreationStep === 'tasks' && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                {newGoalData.title ? `Create Tasks for: ${newGoalData.title}` : 'Create New Tasks'}
-              </h2>
-              <div className="space-y-4">
-                {newGoalData.tasks.map((task, index) => (
-                  <div key={task.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-medium text-gray-900">Task {index + 1}</h3>
-                      <button
-                        onClick={() => handleRemoveTask(task.id)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Task Name</label>
-                        <input
-                          type="text"
-                          value={task.name}
-                          onChange={(e) => handleTaskChange(task.id, 'name', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="Enter task name..."
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Task Type</label>
-                        <select
-                          value={task.type}
-                          onChange={(e) => handleTaskChange(task.id, 'type', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          {taskTypes.map(type => (
-                            <option key={type.value} value={type.value}>
-                              {type.icon} {type.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
-                        <input
-                          type="date"
-                          value={task.scheduledDate}
-                          onChange={(e) => handleTaskChange(task.id, 'scheduledDate', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Time (minutes)</label>
-                        <input
-                          type="number"
-                          value={task.estimatedTimeMinutes}
-                          onChange={(e) => handleTaskChange(task.id, 'estimatedTimeMinutes', parseInt(e.target.value))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          min="1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                <div className="flex space-x-3">
-                  <button
-                    onClick={handleAddTask}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Task
-                  </button>
-                  <button
-                    onClick={() => toast.success('AI task generation coming soon!')}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2"
-                  >
-                    🤖 AI Generate Tasks
-                  </button>
-                </div>
-
-                <div className="flex justify-between pt-4">
-                  <button
-                    onClick={handleBack}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    onClick={handleTasksSubmit}
-                    disabled={newGoalData.tasks.length === 0}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next: Create Subtasks
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Subtask Creation */}
-          {goalCreationStep === 'subtasks' && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Create Subtasks</h2>
-              <div className="space-y-6">
-                {newGoalData.tasks.map((task, taskIndex) => (
-                  <div key={task.id} className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-medium text-gray-900 mb-3">{task.name}</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h5 className="font-medium text-gray-800 text-base">Subtasks:</h5>
-                        <button
-                          onClick={() => handleAddSubtask(task.id)}
-                          className="bg-purple-600 text-white px-2 py-1 rounded text-xs hover:bg-purple-700 transition-colors flex items-center gap-1"
-                        >
-                          <Plus className="w-3 h-3" />
-                          Add Subtask
-                        </button>
-                      </div>
-                      {task.subtasks.length === 0 ? (
-                        <p className="text-gray-500 text-sm">No subtasks yet.</p>
-                      ) : (
-                        task.subtasks.map(subtask => (
-                          <div key={subtask.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                            <div className="flex items-center space-x-3">
-                              <input
-                                type="text"
-                                value={subtask.name}
-                                onChange={e => handleSubtaskChange(task.id, subtask.id, 'name', e.target.value)}
-                                className="text-sm text-gray-700 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Enter subtask name..."
-                              />
-                            </div>
-                            <button
-                              onClick={() => handleRemoveSubtask(task.id, subtask.id)}
-                              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                              title="Delete subtask"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <div className="flex justify-between pt-4">
-                  <button
-                    onClick={handleBack}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    onClick={handleFinish}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                  >
-                    Create Goal & Tasks
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const AddTaskModal = ({ goalId, onClose }: { goalId: string, onClose: () => void }) => {
-    const [taskName, setTaskName] = useState('');
-    const [taskDate, setTaskDate] = useState(new Date().toISOString().split('T')[0]);
-    const [taskType, setTaskType] = useState('reading');
-    const [estimatedTime, setEstimatedTime] = useState(60);
-
-    const taskTypes = [
-      { value: 'reading', label: 'Reading', icon: '📖' },
-      { value: 'studying', label: 'Studying', icon: '📚' },
-      { value: 'problems', label: 'Problems', icon: '🧮' },
-      { value: 'writing', label: 'Writing', icon: '✍️' },
-      { value: 'research', label: 'Research', icon: '🔍' },
-      { value: 'practice', label: 'Practice', icon: '🎯' }
-    ];
-
-    const handleSubmit = async () => {
-      if (!taskName.trim()) {
-        toast.error('Please enter a task name');
-        return;
-      }
-
-      try {
-        const api = process.env.BACKEND_URL || "http://localhost:5173";
-        
-        // Add task to existing goal
-        const tasksResponse = await fetch(`${api}/api/goals/${goalId}/save-tasks`, {
-          method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({
-            tasks: [{
-              task_title: taskName,
-              task_descr: '',
-              task_completed: false,
-              task_type: taskType,
-              due_date: taskDate,
-              subtasks: []
-            }]
-          })
-        });
-
-        if (!tasksResponse.ok) {
-          throw new Error('Failed to save task');
-        }
-
-        // Update local state immediately instead of reloading
-        const newTask: TaskWithSubtasks = {
-          id: `temp-${Date.now()}`, // This will be replaced when data is refetched
-          name: taskName,
-          scheduledDate: taskDate,
-          completed: false,
-          type: taskType,
-          estimatedTimeMinutes: estimatedTime,
-          actualTimeMinutes: 0,
-          timeTrackingStart: undefined,
-          timeTrackingEnd: undefined,
-          isTimeTracking: false,
-          subtasks: []
-        };
-
-        setTasksData(prev => ({
-          ...prev,
-          [goalId]: [...(prev[goalId] || []), newTask]
-        }));
-
-        onClose();
-        toast.success('Task added successfully!');
-
-    } catch (error) {
-        console.error('Error adding task:', error);
-        toast.error('Failed to add task. Please try again.');
-      }
-    };
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-        <div className="relative bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
-          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-            <X className="w-6 h-6" />
-          </button>
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Add New Task</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Task Name</label>
-              <input
-                type="text"
-                value={taskName}
-                onChange={(e) => setTaskName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter task name..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Task Type</label>
-              <select
-                value={taskType}
-                onChange={(e) => setTaskType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {taskTypes.map(type => (
-                  <option key={type.value} value={type.value}>
-                    {type.icon} {type.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
-              <input
-                type="date"
-                value={taskDate}
-                onChange={(e) => setTaskDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Time (minutes)</label>
-              <input
-                type="number"
-                value={estimatedTime}
-                onChange={(e) => setEstimatedTime(parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min="1"
-              />
-            </div>
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!taskName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Add Task
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const AddSubtaskModal = ({ goalId, taskId, onClose }: { goalId: string; taskId: string; onClose: () => void }) => {
-    const [subtaskName, setSubtaskName] = useState('');
-    const [estimatedTime, setEstimatedTime] = useState(30);
-
-    const handleSubmit = async () => {
-      if (!subtaskName.trim()) {
-        toast.error('Please enter a subtask name');
-        return;
-      }
-
-      try {
-        const api = process.env.BACKEND_URL || "http://localhost:5173";
-        
-        const response = await fetch(`${api}/api/goals/tasks/${taskId}/subtasks`, {
-          method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-            subtask_descr: subtaskName.trim()
-        })
-      });
-
-        if (response.ok) {
-          const newSubtask = await response.json();
-          
-          // Update local state
-          setTasksData(prev => ({
-            ...prev,
-            [goalId]: prev[goalId].map(task => 
-              task.id === taskId 
-                ? {
-                    ...task,
-                    subtasks: [...task.subtasks, {
-                      id: newSubtask.subtask_id,
-                      name: newSubtask.subtask_descr,
-                      type: 'Study',
-                      completed: false
-                    }]
-                  }
-                : task
-            )
-          }));
-          
-          onClose();
-          toast.success('Subtask added successfully!');
-        } else {
-          toast.error('Failed to add subtask');
-        }
-      } catch (error) {
-        console.error('Error adding subtask:', error);
-        toast.error('Failed to add subtask');
-      }
-    };
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-        <div className="relative bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
-          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-            <X className="w-6 h-6" />
-          </button>
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Add New Subtask</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Subtask Name</label>
-              <input
-                type="text"
-                value={subtaskName}
-                onChange={(e) => setSubtaskName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter subtask name..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Time (minutes)</label>
-              <input
-                type="number"
-                value={estimatedTime}
-                onChange={(e) => setEstimatedTime(parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min="1"
-              />
-            </div>
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!subtaskName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Add Subtask
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   const handleAddSubtaskToTask = async (goalId: string, taskId: string) => {
     try {
@@ -1725,7 +1074,7 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           estimated_time_minutes: estimatedTime
         });
         onClose();
-    } catch (error) {
+      } catch (error) {
         console.error('Error updating task:', error);
       }
     };
@@ -1848,7 +1197,7 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     );
   };
 
-  const refreshTaskData = async (goalId: string, taskId: string) => {
+  const refreshTaskData = async (goalId: string, taskId?: string) => {
     try {
       const api = process.env.BACKEND_URL || "http://localhost:5173";
       const token = localStorage.getItem('token');
@@ -1900,11 +1249,59 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           }
         });
 
-        // Update only the specific goal's tasks
-        setTasksData(prev => ({
-          ...prev,
-          [goalId]: Array.from(taskMap.values())
-        }));
+        // Preserve original subtask order by merging with existing data
+        setTasksData(prev => {
+          const existingTasks = prev[goalId] || [];
+          const newTasks = Array.from(taskMap.values());
+          
+          // For each new task, preserve the original order of subtasks
+          const mergedTasks = newTasks.map(newTask => {
+            const existingTask = existingTasks.find(et => et.id === newTask.id);
+            if (existingTask) {
+              // Create a map of existing subtasks by ID for quick lookup
+              const existingSubtasksMap = new Map(
+                existingTask.subtasks.map(subtask => [subtask.id, subtask])
+              );
+              
+              // Create a map of new subtasks by ID
+              const newSubtasksMap = new Map(
+                newTask.subtasks.map(subtask => [subtask.id, subtask])
+              );
+              
+              // Preserve original order but update completion status
+              const preservedSubtasks = existingTask.subtasks.map(existingSubtask => {
+                const updatedSubtask = newSubtasksMap.get(existingSubtask.id);
+                if (updatedSubtask) {
+                  return {
+                    ...existingSubtask,
+                    completed: updatedSubtask.completed,
+                    name: updatedSubtask.name,
+                    type: updatedSubtask.type
+                  };
+                }
+                return existingSubtask;
+              });
+              
+              // Add any new subtasks that weren't in the original list
+              newTask.subtasks.forEach(newSubtask => {
+                if (!existingSubtasksMap.has(newSubtask.id)) {
+                  preservedSubtasks.push(newSubtask);
+                }
+              });
+              
+              return {
+                ...newTask,
+                subtasks: preservedSubtasks
+              };
+            }
+            return newTask;
+          });
+
+          return {
+            ...prev,
+            [goalId]: mergedTasks
+          };
+        });
       }
     } catch (error) {
       console.error('Error refreshing task data:', error);
@@ -1934,7 +1331,15 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     try {
       // Start time tracking for the task
       await startTaskTracking(taskId, subtaskId);
-      
+      // Mark this subtask as started in the UI
+      setStartedSubtasks(prev => new Set(prev).add(subtaskId));
+      // Open Pomodoro timer modal for this subtask
+      const goal = goals.find(g => g.id === goalId);
+      const task = (tasksData[goalId] || []).find(t => t.id === taskId);
+      const subtask = task?.subtasks.find(s => s.id === subtaskId);
+      if (goal && task && subtask) {
+        setPomodoroTimerModal({ subtask, task, goal });
+      }
       toast.success('Time tracking started for this task');
     } catch (error) {
       console.error('Error starting time tracking:', error);
@@ -1968,10 +1373,91 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     );
   }
 
+  if (activeGoalForTaskSetup) {
+    return (
+      <TaskScaffoldingScreen
+        goal={activeGoalForTaskSetup}
+        onBack={() => setActiveGoalForTaskSetup(null)}
+        onSave={async (tasks, subtasks) => {
+          try {
+            const api = process.env.BACKEND_URL || "http://localhost:5173";
+            const token = localStorage.getItem('token');
+            const goalId = activeGoalForTaskSetup.id;
+            
+            console.log('🔍 Save Study Plan Debug:', {
+              api,
+              token: token ? 'Present' : 'Missing',
+              goalId,
+              tasksCount: tasks.length,
+              subtasksCount: subtasks.length
+            });
+            
+            // Prepare tasks and subtasks payload
+            const tasksData = tasks.map(task => ({
+              task_title: task.name,
+              task_descr: '',
+              task_completed: false,
+              task_type: 'Study', // or use task.type if available
+              due_date: task.scheduledDate,
+              subtasks: subtasks.filter(st => st.taskId === task.id).map(subtask => ({
+                subtask_descr: subtask.name,
+                subtask_type: subtask.type,
+                subtask_completed: false
+              }))
+            }));
+            
+            console.log('🔍 Tasks Data to send:', tasksData);
+            
+            const response = await fetch(`${api}/api/goals/${goalId}/save-tasks`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ tasks: tasksData })
+            });
+            
+            console.log('🔍 Response status:', response.status);
+            console.log('🔍 Response headers:', Object.fromEntries(response.headers.entries()));
+            
+            if (!response.ok) {
+              let errorData;
+              const contentType = response.headers.get('content-type');
+              if (contentType && contentType.includes('application/json')) {
+                errorData = await response.json();
+              } else {
+                errorData = { error: await response.text() };
+              }
+              console.error('🔍 Error response:', errorData);
+              toast.error(errorData.error || 'Failed to save tasks');
+              return;
+            }
+            
+            const result = await response.json();
+            console.log('🔍 Success response:', result);
+            
+            setActiveGoalForTaskSetup(null);
+            toast.success('Study plan saved successfully!');
+            window.location.reload();
+          } catch (error) {
+            console.error('🔍 Error saving tasks/subtasks:', error);
+            toast.error('Failed to save study plan. Please try again.');
+          }
+        }}
+        onAIGenerate={() => setShowAIGenerateScreen(true)}
+      />
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Toaster position="top-right" />
-        
+      {showAIGenerateScreen && (
+        <AIGenerateScreen 
+          onComplete={() => setShowAIGenerateScreen(false)}
+          goalTitle="your study goal"
+        />
+      )}
       {/* Header with Add Goal Button */}
       <div className="flex items-center justify-between">
         <div>
@@ -1989,20 +1475,20 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
 
       {/* Goals List */}
       {goals.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">📚</div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">No Study Goals Yet</h3>
-          <p className="text-gray-600 mb-6">Create your first study goal to start tracking your progress</p>
+        <div className="text-center py-16 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
+          <div className="text-8xl mb-6">📚</div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-3">No Study Goals Yet</h3>
+          <p className="text-gray-600 mb-8 text-lg max-w-md mx-auto">Create your first study goal to start tracking your progress and building better study habits</p>
           <button
             onClick={() => setShowAddGoalModal(true)}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-5 h-5 mr-2" />
             Create Your First Goal
           </button>
-          </div>
+        </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {goals.map(goal => {
             const goalTasks = tasksData[goal.id] || [];
             const completedTasks = goalTasks.filter(task => {
@@ -2018,75 +1504,87 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
             );
 
             return (
-              <div key={goal.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div key={goal.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
                 {/* Goal Header */}
-                <div className="p-4">
+                <div className="p-6 bg-gradient-to-r from-gray-50 to-gray-100/50">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-4">
                       <button
                         onClick={() => toggleGoalExpansion(goal.id)}
-                        className="p-1 hover:bg-gray-100 rounded transition-colors"
+                        className="p-2 hover:bg-white/80 rounded-xl transition-all duration-200 shadow-sm"
                       >
                         {expandedGoals.has(goal.id) ? (
-                          <ChevronDown className="w-5 h-5 text-gray-500" />
+                          <ChevronDown className="w-5 h-5 text-gray-600" />
                         ) : (
-                          <ChevronRight className="w-5 h-5 text-gray-500" />
+                          <ChevronRight className="w-5 h-5 text-gray-600" />
                         )}
                       </button>
                       <div>
-                        <h4 className="font-medium text-gray-900 text-lg">{goal.title}</h4>
-                        <div className="flex items-center space-x-3 text-sm text-gray-600 mt-1">
-                          <span className="flex items-center">
-                            <Calendar className="w-4 h-4 mr-1" />
+                        <h4 className="font-bold text-gray-900 text-xl mb-2">{goal.title}</h4>
+                        <div className="flex items-center space-x-4 text-sm text-gray-600">
+                          <span className="flex items-center bg-white/60 px-3 py-1 rounded-full">
+                            <Calendar className="w-4 h-4 mr-2 text-blue-500" />
                             Due: {new Date(goal.targetDate).toLocaleDateString()}
                           </span>
-                          <span className="flex items-center">
-                            <Clock className="w-4 h-4 mr-1" />
+                          <span className="flex items-center bg-white/60 px-3 py-1 rounded-full">
+                            <Clock className="w-4 h-4 mr-2 text-green-500" />
                             {goal.workMinutesPerDay} min/day
                           </span>
-        </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600 mt-1">
-                          {completedSubtasks}/{totalSubtasks} subtasks
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right bg-white/60 px-4 py-2 rounded-xl">
+                        <p className="text-sm font-medium text-gray-700">
+                          {completedTasks}/{totalTasks} tasks
                         </p>
+                        <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                          <div 
+                            className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-300" 
+                            style={{ width: `${totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0}%` }}
+                          ></div>
+                        </div>
                       </div>
-          <button
+                      <button
                         onClick={() => setEditGoalModal({ goal })}
-                        className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                        className="p-3 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-all duration-200 shadow-sm"
                         title="Edit goal"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => deleteGoal(goal.id)}
-                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                        className="p-3 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all duration-200 shadow-sm"
                         title="Delete goal"
                       >
                         <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Goal Content (Collapsible) */}
                 {expandedGoals.has(goal.id) && (
-                  <div className="border-t border-gray-200 p-4 bg-gray-50">
-                    <div className="space-y-3">
+                  <div className="p-6 bg-gray-50/50">
+                    <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <h5 className="font-medium text-gray-800 text-base">Tasks:</h5>
+                        <h5 className="font-semibold text-gray-800 text-lg flex items-center">
+                          <Target className="w-5 h-5 mr-2 text-blue-500" />
+                          Tasks
+                        </h5>
                         <button
                           onClick={() => setShowAddTaskModal({ goalId: goal.id })}
-                          className="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700 transition-colors flex items-center gap-1"
+                          className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2"
                         >
-                          <Plus className="w-3 h-3" />
+                          <Plus className="w-4 h-4" />
                           Add Task
                         </button>
                       </div>
                       {goalTasks.length === 0 ? (
-                        <p className="text-gray-500 text-sm">No tasks yet. Add your first task!</p>
+                        <div className="text-center py-8 bg-white/60 rounded-xl border border-gray-200">
+                          <div className="text-4xl mb-3">📋</div>
+                          <p className="text-gray-600 font-medium">No tasks yet. Add your first task!</p>
+                        </div>
                       ) : (
                         goalTasks.map(task => {
                           const completedSubtaskCount = task.subtasks.filter(subtask => subtask.completed).length;
@@ -2094,14 +1592,14 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
                           const isTaskComplete = task.subtasks.length > 0 && completedSubtaskCount === task.subtasks.length;
 
                           return (
-                            <div key={task.id} className="bg-white rounded-lg border border-gray-200">
+                            <div key={task.id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
                               {/* Task Header */}
-                              <div className="p-3">
+                              <div className="p-5 border-b border-gray-100">
                                 <div className="flex items-center justify-between">
-                                  <div className="flex items-center space-x-3">
+                                  <div className="flex items-center space-x-4">
                                     <button
                                       onClick={() => toggleTaskExpansion(task.id)}
-                                      className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                      className="p-2 hover:bg-gray-50 rounded-lg transition-all duration-200"
                                     >
                                       {expandedTasks.has(task.id) ? (
                                         <ChevronDown className="w-4 h-4 text-gray-500" />
@@ -2109,123 +1607,112 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
                                         <ChevronRight className="w-4 h-4 text-gray-500" />
                                       )}
                                     </button>
-                                    <div className="flex items-center space-x-2">
-                                      {isTaskComplete ? (
-                                        <CheckCircle className="w-4 h-4 text-green-600" />
-                                      ) : (
-                                        <Circle className="w-4 h-4 text-gray-400" />
-                                      )}
-                                      <span className={`text-sm font-medium ${isTaskComplete ? 'text-gray-900' : 'text-gray-600'}`}>
-                                        {task.name}
+                                    <div>
+                                      <span className={`block text-lg font-semibold ${isTaskComplete ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{task.name}</span>
+                                      <span className="block text-sm text-gray-500 mt-1 flex items-center">
+                                        <Clock className="w-3 h-3 mr-1" />
+                                        {task.task_estimated_time_minutes || task.estimatedTimeMinutes} min
                                       </span>
                                     </div>
                                   </div>
                                   <div className="flex items-center space-x-3">
-                                    <div className="flex items-center space-x-2 text-xs text-gray-500">
-                                      <span>{new Date(task.scheduledDate).toLocaleDateString()}</span>
-                                      <span>Est: {task.task_estimated_time_minutes || task.estimatedTimeMinutes}min</span>
+                                    <div className="flex items-center space-x-3 text-xs text-gray-500">
+                                      <span className="bg-gray-100 px-2 py-1 rounded-full">{new Date(task.scheduledDate).toLocaleDateString()}</span>
                                       {task.task_is_being_tracked && currentTaskTimes[task.id] > 0 && (
-                                        <span className="text-blue-600 font-medium">
-                                          Tracking: {currentTaskTimes[task.id]}min
+                                        <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">
+                                          ⏱️ {currentTaskTimes[task.id]}min
                                         </span>
                                       )}
                                       {(task.task_actual_time_minutes || task.actualTimeMinutes) > 0 && (
-                                        <span>Actual: {task.task_actual_time_minutes || task.actualTimeMinutes}min</span>
+                                        <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                                          ✓ {task.task_actual_time_minutes || task.actualTimeMinutes}min
+                                        </span>
                                       )}
                                     </div>
 
                                     {isTaskComplete && (
                                       <button
                                         onClick={() => setFeedbackModal({ task, goal, feedback: generateFeedbackForTask(task, goal) })}
-                                        className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                                        className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200"
                                         title="View feedback"
                                       >
-                                        <MessageSquare className="w-3 h-3" />
+                                        <MessageSquare className="w-4 h-4" />
                                       </button>
                                     )}
                                     <button
                                       onClick={() => setEditTaskModal({ task, goal })}
-                                      className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                                      className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200"
                                       title="Edit task"
                                     >
-                                      <Edit className="w-3 h-3" />
+                                      <Edit className="w-4 h-4" />
                                     </button>
                                     <button
                                       onClick={() => deleteTask(goal.id, task.id)}
-                                      className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
                                       title="Delete task"
                                     >
-                                      <Trash2 className="w-3 h-3" />
+                                      <Trash2 className="w-4 h-4" />
                                     </button>
+
                                   </div>
                                 </div>
                               </div>
                               
                               {/* Subtasks (Collapsible) */}
                               {expandedTasks.has(task.id) && (
-                                <div className="border-t border-gray-100 p-3 bg-gray-50">
-                                  <div className="flex items-center justify-between mb-3">
-                                    <h6 className="font-medium text-gray-700 text-sm">Subtasks:</h6>
+                                <div className="p-5 bg-gray-50/30">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <h6 className="font-semibold text-gray-700 text-base flex items-center">
+                                      <FileText className="w-4 h-4 mr-2 text-purple-500" />
+                                      Subtasks
+                                    </h6>
                                     <button
                                       onClick={() => setShowAddSubtaskModal({ goalId: goal.id, taskId: task.id })}
-                                      className="bg-purple-600 text-white px-2 py-1 rounded text-xs hover:bg-purple-700 transition-colors flex items-center gap-1"
+                                      className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1.5 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-1.5 text-sm"
                                     >
                                       <Plus className="w-3 h-3" />
                                       Add Subtask
                                     </button>
                                   </div>
-                                  <div className="space-y-2">
+                                  <div className="space-y-3">
                                     {task.subtasks.length === 0 ? (
-                                      <p className="text-gray-500 text-sm">No subtasks yet.</p>
+                                      <div className="text-center py-6 bg-white/60 rounded-lg border border-gray-200">
+                                        <div className="text-2xl mb-2">📝</div>
+                                        <p className="text-gray-500 text-sm">No subtasks yet.</p>
+                                      </div>
                                     ) : (
                                       task.subtasks.map(subtask => (
-                                        <div key={subtask.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                                          <div className="flex items-center space-x-3">
+                                        <div key={subtask.id} className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 min-h-[72px]">
+                                          <div className="flex items-center space-x-4">
                                             <input
                                               type="checkbox"
                                               checked={subtask.completed}
                                               onChange={() => handleSubtaskToggleWithAPI(goal.id, task.id, subtask.id)}
-                                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                                              className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded-lg focus:ring-blue-500 focus:ring-2 transition-all duration-200"
                                             />
-                                            <button
-                                              onClick={() => handleSubtaskClick(goal, task, subtask)}
-                                              className={`text-sm underline cursor-pointer hover:text-blue-600 transition-colors ${subtask.completed ? 'line-through text-gray-500' : 'text-gray-700'}`}
-                                            >
-                                              {subtask.name}
-                                            </button>
+                                            <div>
+                                              <div className={`text-base font-semibold ${subtask.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>{subtask.name}</div>
+                                              <div className="text-xs text-gray-500 mt-1 bg-gray-100 px-2 py-1 rounded-full inline-block">{subtask.type}</div>
+                                            </div>
                                           </div>
                                           <div className="flex items-center space-x-2">
                                             {/* Start Tracking Button */}
                                             {!subtask.completed && (
-                                              <>
-                                                {!task.task_is_being_tracked && (
+                                              startedSubtasks.has(subtask.id) ? (
+                                                <span className="px-3 py-1.5 text-xs bg-gray-500 text-white rounded-lg font-medium">Started</span>
+                                              ) : (
                                                   <button
                                                     onClick={() => handleSubtaskStartTracking(goal.id, task.id, subtask.id)}
-                                                    className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                                  className="px-3 py-1.5 text-xs bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-sm"
                                                     title="Start time tracking for this task"
                                                   >
                                                     Start
                                                   </button>
-                                                )}
-                                                {task.task_is_being_tracked && task.started_by_subtask === subtask.id && (
-                                                  <span className="px-2 py-1 text-xs bg-gray-500 text-white rounded">
-                                                    Started
-                                                  </span>
-                                                )}
-                                                {task.task_is_being_tracked && task.started_by_subtask !== subtask.id && (
-                                                  <button
-                                                    onClick={() => handleSubtaskStartTracking(goal.id, task.id, subtask.id)}
-                                                    className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                                                    title="Time tracking already started by another subtask"
-                                                  >
-                                                    Start
-                                                  </button>
-                                                )}
-                                              </>
+                                              )
                                             )}
                                             <button
                                               onClick={() => handleSubtaskToggleWithAPI(goal.id, task.id, subtask.id)}
-                                              className={`px-2 py-1 text-xs rounded transition-colors ${
+                                              className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-200 shadow-sm ${
                                                 subtask.completed 
                                                   ? 'bg-green-100 text-green-700 hover:bg-green-200' 
                                                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -2236,14 +1723,14 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
                                             </button>
                                             <button
                                               onClick={() => setEditSubtaskModal({ subtask, task, goal })}
-                                              className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                                              className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200"
                                               title="Edit subtask"
                                             >
                                               <Edit className="w-3 h-3" />
                                             </button>
                                             <button
                                               onClick={() => deleteSubtask(goal.id, task.id, subtask.id)}
-                                              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                              className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
                                               title="Delete subtask"
                                             >
                                               <Trash2 className="w-3 h-3" />
@@ -2268,16 +1755,10 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         </div>
       )}
 
+      {/* Statistics/Insights Section */}
+      <FeedbackSection goals={goals} tasksData={tasksData} />
+
       {/* Pomodoro Timer Section */}
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-          <Clock className="w-5 h-5 mr-2" />
-          Pomodoro Timer
-        </h2>
-        <div className="bg-white rounded-lg p-8 border border-gray-200">
-          <PomodoroTimer large />
-        </div>
-      </div>
 
       {/* Modals */}
       {feedbackModal && (
@@ -2290,7 +1771,7 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       )}
       {pomodoroTimerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-8 relative flex flex-col items-center">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 relative flex flex-col items-center">
             <button onClick={() => setPomodoroTimerModal(null)} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600">
               <X className="w-7 h-7" />
             </button>
@@ -2301,22 +1782,38 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           </div>
         </div>
       )}
-      {showAddGoalModal && (
-        <AddGoalModal onClose={() => {
+      <AddGoalModal
+        isOpen={showAddGoalModal}
+        onClose={() => setShowAddGoalModal(false)}
+        courseId={courseId}
+        onGoalAdded={(goal) => {
           setShowAddGoalModal(false);
-          setGoalCreationStep('goal');
-          setCurrentGoalId(null);
-          setNewGoalData({ title: '', targetDate: '', tasks: [] });
-        }} />
-      )}
+          setActiveGoalForTaskSetup(goal);
+        }}
+      />
       {showAddTaskModal && (
-        <AddTaskModal goalId={showAddTaskModal!.goalId} onClose={() => setShowAddTaskModal(null)} />
+        <AddTaskModal
+          isOpen={!!showAddTaskModal}
+          onClose={() => setShowAddTaskModal(null)}
+          goalId={showAddTaskModal.goalId}
+          onTaskAdded={async (task) => {
+            await refreshTaskData(showAddTaskModal.goalId);
+            setShowAddTaskModal(null);
+          }}
+          onAIGenerate={() => setShowAIGenerateScreen(true)}
+        />
       )}
       {showAddSubtaskModal && (
         <AddSubtaskModal 
-          goalId={showAddSubtaskModal!.goalId} 
-          taskId={showAddSubtaskModal!.taskId} 
+          isOpen={!!showAddSubtaskModal}
           onClose={() => setShowAddSubtaskModal(null)} 
+          goalId={showAddSubtaskModal.goalId}
+          taskId={showAddSubtaskModal.taskId}
+          onSubtaskAdded={() => {
+            // Refresh tasks for this goal (subtasks are nested under tasks)
+            refreshTaskData(showAddSubtaskModal.goalId, showAddSubtaskModal.taskId);
+            setShowAddSubtaskModal(null);
+          }}
         />
       )}
       {editGoalModal && (

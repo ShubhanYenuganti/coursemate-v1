@@ -79,31 +79,52 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
     return Object.keys(newErrors).length === 0;
   }, [formData]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
-
-    const newGoal: Goal = {
-      id: Date.now().toString(),
-      courseId,
-      title: formData.title.trim(),
-      targetDate: formData.targetDate,
-      workMinutesPerDay: formData.workMinutesPerDay,
-      frequency: formData.frequency,
-      customScheduleDays: formData.frequency === 'custom' ? formData.customScheduleDays : undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    const goalWithProgress: GoalWithProgress = {
-      ...newGoal,
-      progress: 0,
-      totalTasks: 0,
-      completedTasks: 0
-    };
-
-    onGoalAdded(goalWithProgress);
+    try {
+      const api = process.env.BACKEND_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          goal_descr: formData.title.trim(),
+          due_date: formData.targetDate,
+          work_minutes_per_day: formData.workMinutesPerDay,
+          frequency: formData.frequency,
+          custom_schedule_days: formData.frequency === 'custom' ? formData.customScheduleDays : undefined
+        })
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to create goal');
+      }
+      const data = await response.json();
+      // Assume backend returns an array of goals, take the first
+      const backendGoal = data[0];
+      const newGoal: GoalWithProgress = {
+        id: backendGoal.goal_id || backendGoal.id,
+        courseId,
+        title: backendGoal.goal_descr,
+        targetDate: backendGoal.due_date,
+        workMinutesPerDay: backendGoal.work_minutes_per_day || formData.workMinutesPerDay,
+        frequency: backendGoal.frequency || formData.frequency,
+        customScheduleDays: backendGoal.custom_schedule_days || formData.customScheduleDays,
+        createdAt: backendGoal.created_at || new Date().toISOString(),
+        updatedAt: backendGoal.updated_at || new Date().toISOString(),
+        progress: backendGoal.progress || 0,
+        totalTasks: backendGoal.total_tasks || 0,
+        completedTasks: backendGoal.completed_tasks || 0
+      };
+      onGoalAdded(newGoal);
+    } catch (error) {
+      alert('Failed to create goal. Please try again.');
+      console.error(error);
+    }
   };
 
   const handleCustomDayToggle = (dayNumber: number) => {
