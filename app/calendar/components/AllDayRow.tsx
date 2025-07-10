@@ -17,6 +17,7 @@ export const AllDayRow = ({
     handleGoalClick,
     onOverflowClick,
     getCourseColor,
+    getEventColor,
     handleTaskDragStart,
     handleTaskDragEnd,
     handleDayDragOver,
@@ -33,6 +34,7 @@ export const AllDayRow = ({
     handleGoalClick: (g: Goal, e?: React.MouseEvent) => void;
     onOverflowClick: (events: Goal[], position: { x: number; y: number }, day: Date) => void;
     getCourseColor: (courseId: string) => string;
+    getEventColor: (goal: Goal) => string;
     handleTaskDragStart?: (e: React.DragEvent, task: Goal) => void;
     handleTaskDragEnd?: (e: React.DragEvent) => void;
     handleDayDragOver?: (e: React.DragEvent, date: Date) => void;
@@ -94,7 +96,7 @@ export const AllDayRow = ({
                         className={`h-6 px-2 rounded text-xs font-medium text-white cursor-grab active:cursor-grabbing truncate hover:opacity-90 transition-opacity flex items-center col-span-2 ${
                           isDraggingTask ? 'opacity-50' : ''
                         }`}
-                        style={{ backgroundColor: getCourseColor(g.course_id) }}
+                        style={{ backgroundColor: getEventColor(g) }}
                         title={g.goal_descr ?? g.task_title ?? ""}
                         tabIndex={0}
                         onClick={(e) => {

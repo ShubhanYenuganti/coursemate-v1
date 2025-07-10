@@ -19,6 +19,7 @@ export const MonthView = ({
   handleGoalClick, 
   handleOverflowClick, 
   getCourseColor,
+  getEventColor,
   handleTaskDragStart,
   handleTaskDragEnd,
   handleDayDragOver,
@@ -130,7 +131,7 @@ export const MonthView = ({
                         className={`text-xs p-1 rounded text-white font-medium truncate cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity ${
                           isDraggingTask ? 'opacity-30' : ''
                         }`}
-                        style={{ backgroundColor: getCourseColor(g.course_id) }}
+                        style={{ backgroundColor: getEventColor(g) }}
                         tabIndex={0}
                         onClick={(e) => {
                           // Prevent click if we're dragging
@@ -159,7 +160,7 @@ export const MonthView = ({
                         className={`text-xs p-1 rounded text-white font-medium truncate cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity ${
                           isDraggingTask ? 'opacity-30' : ''
                         }`}
-                        style={{ backgroundColor: getCourseColor(g.course_id) }}
+                        style={{ backgroundColor: getEventColor(g) }}
                         tabIndex={0}
                         onClick={(e) => {
                           // Prevent click if we're dragging

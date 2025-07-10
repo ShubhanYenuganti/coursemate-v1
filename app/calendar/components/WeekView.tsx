@@ -24,6 +24,7 @@ export const WeekView = ({
   formatHourLabel, 
   handleOverflowClick, 
   getCourseColor,
+  getEventColor,
   handleTaskDragStart,
   handleTaskDragEnd,
   handleDayDragOver,
@@ -95,6 +96,7 @@ export const WeekView = ({
       handleGoalClick={handleGoalClick}
       onOverflowClick={handleOverflowClick}
       getCourseColor={getCourseColor}
+      getEventColor={getEventColor}
       handleTaskDragStart={handleTaskDragStart}
       handleTaskDragEnd={handleTaskDragEnd}
       handleDayDragOver={handleDayDragOver}
@@ -131,7 +133,7 @@ export const WeekView = ({
                       key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
                       className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90 shadow-sm"
                       style={{
-                        backgroundColor: getCourseColor(pos.goal.course_id),
+                        backgroundColor: getEventColor(pos.goal),
                         width: `${pos.width}%`,
                         left: `${pos.left}%`,
                         top: `${pos.top}%`,

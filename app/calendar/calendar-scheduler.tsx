@@ -1668,6 +1668,51 @@ export function CalendarScheduler() {
     return course?.color || "#6b7280"; // fallback to gray
   };
 
+  // Helper function to get task color based on task_id
+  const getTaskColor = (taskId: string | null): string => {
+    // Handle null task_id
+    if (!taskId) {
+      return "#6b7280"; // fallback to gray
+    }
+    
+    // Generate a consistent color based on task_id
+    const colors = [
+      "#3b82f6", // blue
+      "#ef4444", // red
+      "#10b981", // green
+      "#f59e0b", // amber
+      "#8b5cf6", // violet
+      "#06b6d4", // cyan
+      "#f97316", // orange
+      "#ec4899", // pink
+      "#84cc16", // lime
+      "#6366f1", // indigo
+      "#14b8a6", // teal
+      "#f43f5e", // rose
+    ];
+    
+    // Use task_id to generate a consistent index
+    let hash = 0;
+    for (let i = 0; i < taskId.length; i++) {
+      const char = taskId.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
+  };
+
+  // Helper function to get color for events - uses task color for subtasks, course color for Google Calendar events
+  const getEventColor = (goal: Goal): string => {
+    // For Google Calendar events, use course color
+    if (goal.goal_id === 'Google Calendar') {
+      return getCourseColor(goal.course_id);
+    }
+    // For subtask events, use task color
+    return getTaskColor(goal.task_id);
+  };
+
   useEffect(() => {
     const fetchGoals = async () => {
       try {
@@ -2046,7 +2091,7 @@ export function CalendarScheduler() {
                         >
                           <div
                             className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
-                            style={{ backgroundColor: getCourseColor(group.courseId) }}
+                            style={{ backgroundColor: getTaskColor(group.taskId) }}
                           />
                           <div className="flex-1 min-w-0">
                             <div
@@ -2201,27 +2246,28 @@ export function CalendarScheduler() {
         </div>
         {/* ───────── DAY VIEW ───────── */}
         {currentView === "day" ? (
-          <DayView
-            currentDate={currentDate}
-            setCurrentDate={setCurrentDate}
-            hours={hours}
-            getGoalsForDate={getGoalsForDate}
-            handleGoalClick={handleGoalClick}
-            setTimelineRef={setTimelineRef}
-            formatHourLabel={formatHourLabel}
-            handleOverflowClick={handleOverflowClick}
-            getCourseColor={getCourseColor}
-            handleTaskDragStart={handleTaskDragStart}
-            handleTaskDragEnd={handleTaskDragEnd}
-            handleDayDragOver={handleDayDragOver}
-            handleDayDragLeave={handleDayDragLeave}
-            handleDayDrop={handleDayDrop}
-            isDraggingTask={isDraggingTask}
-            dragOverDate={dragOverDate}
-            onDayClick={handleDayClick}
-            onTaskHover={handleTaskHover}
-            onTaskMouseLeave={handleTaskMouseLeave}
-          />
+                      <DayView
+              currentDate={currentDate}
+              setCurrentDate={setCurrentDate}
+              hours={hours}
+              getGoalsForDate={getGoalsForDate}
+              handleGoalClick={handleGoalClick}
+              setTimelineRef={setTimelineRef}
+              formatHourLabel={formatHourLabel}
+              handleOverflowClick={handleOverflowClick}
+              getCourseColor={getCourseColor}
+              getEventColor={getEventColor}
+              handleTaskDragStart={handleTaskDragStart}
+              handleTaskDragEnd={handleTaskDragEnd}
+              handleDayDragOver={handleDayDragOver}
+              handleDayDragLeave={handleDayDragLeave}
+              handleDayDrop={handleDayDrop}
+              isDraggingTask={isDraggingTask}
+              dragOverDate={dragOverDate}
+              onDayClick={handleDayClick}
+              onTaskHover={handleTaskHover}
+              onTaskMouseLeave={handleTaskMouseLeave}
+            />
         ) : currentView === "week" ? (
           <WeekView
             currentDate={currentDate}
@@ -2234,6 +2280,7 @@ export function CalendarScheduler() {
             formatHourLabel={formatHourLabel}
             handleOverflowClick={handleOverflowClick}
             getCourseColor={getCourseColor}
+            getEventColor={getEventColor}
             handleTaskDragStart={handleTaskDragStart}
             handleTaskDragEnd={handleTaskDragEnd}
             handleDayDragOver={handleDayDragOver}
@@ -2253,6 +2300,7 @@ export function CalendarScheduler() {
             handleGoalClick={handleGoalClick}
             handleOverflowClick={handleOverflowClick}
             getCourseColor={getCourseColor}
+            getEventColor={getEventColor}
             handleTaskDragStart={handleTaskDragStart}
             handleTaskDragEnd={handleTaskDragEnd}
             handleDayDragOver={handleDayDragOver}
@@ -2418,7 +2466,7 @@ export function CalendarScheduler() {
             }}>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(selectedGoal.course_id) }}></div>
+                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getEventColor(selectedGoal) }}></div>
                   <h3 className="font-semibold text-[#18181b] truncate">{selectedGoal.task_title}</h3>
                 </div>
 
@@ -2566,7 +2614,7 @@ export function CalendarScheduler() {
                   >
                     <div
                       className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: getCourseColor(event.course_id) }}
+                      style={{ backgroundColor: getEventColor(event) }}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-gray-900 truncate">
@@ -2969,7 +3017,7 @@ export function CalendarScheduler() {
               <div className="space-y-3">
                 {/* Task Info */}
                 <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
-                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(subtasksModal.task.course_id) }}></div>
+                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getEventColor(subtasksModal.task) }}></div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 truncate">{subtasksModal.task.task_title}</h3>
                     {subtasksModal.task.task_descr && (
@@ -3083,7 +3131,7 @@ export function CalendarScheduler() {
                   </p>
                   <div className="bg-gray-50 rounded-lg p-4 mb-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(deleteModal.task.course_id) }}></div>
+                      <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getEventColor(deleteModal.task) }}></div>
                       <div className="flex-1 text-left">
                         <h3 className="font-semibold text-gray-900">{deleteModal.task.task_title || '(untitled)'}</h3>
                         {deleteModal.task.task_descr && (
@@ -3153,7 +3201,7 @@ export function CalendarScheduler() {
                   </p>
                   <div className="bg-gray-50 rounded-lg p-4 mb-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(deleteSubtaskModal.subtask.course_id) }}></div>
+                      <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getEventColor(deleteSubtaskModal.subtask) }}></div>
                       <div className="flex-1 text-left">
                         <h3 className="font-semibold text-gray-900">{deleteSubtaskModal.subtask.subtask_descr || '(untitled)'}</h3>
                         {deleteSubtaskModal.subtask.task_title && (
@@ -3218,7 +3266,7 @@ export function CalendarScheduler() {
                 {/* Task Info */}
                 <div className="bg-gray-50 rounded-lg p-3 mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getCourseColor(addSubtaskModal.task.course_id) }}></div>
+                    <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getEventColor(addSubtaskModal.task) }}></div>
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-900">{addSubtaskModal.task.task_title}</h3>
                       <p className="text-sm text-gray-600">Adding subtask to this task</p>
