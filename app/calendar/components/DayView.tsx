@@ -19,13 +19,16 @@ export const DayView = ({
   handleOverflowClick, 
   getCourseColor,
   getEventColor,
-  handleTaskDragStart,
-  handleTaskDragEnd,
-  handleDayDragOver,
-  handleDayDragLeave,
-  handleDayDrop,
+  handleSubtaskDragStart,
+  handleSubtaskDragEnd,
+  handleTimeSlotDragOver,
+  handleTimeSlotDragLeave,
+  handleTimeSlotDrop,
   isDraggingTask,
   dragOverDate,
+  dragTargetHour,
+  dragTargetMinute,
+  dragTargetDate,
   onDayClick,
   onTaskHover,
   onTaskMouseLeave
@@ -68,11 +71,11 @@ export const DayView = ({
         onOverflowClick={handleOverflowClick}
         getCourseColor={getCourseColor}
         getEventColor={getEventColor}
-        handleTaskDragStart={handleTaskDragStart}
-        handleTaskDragEnd={handleTaskDragEnd}
-        handleDayDragOver={handleDayDragOver}
-        handleDayDragLeave={handleDayDragLeave}
-        handleDayDrop={handleDayDrop}
+        handleSubtaskDragStart={handleSubtaskDragStart}
+        handleSubtaskDragEnd={handleSubtaskDragEnd}
+        handleTimeSlotDragOver={handleTimeSlotDragOver}
+        handleTimeSlotDragLeave={handleTimeSlotDragLeave}
+        handleTimeSlotDrop={handleTimeSlotDrop}
         isDraggingTask={isDraggingTask}
         dragOverDate={dragOverDate}
         onDayClick={onDayClick}
@@ -99,8 +102,37 @@ export const DayView = ({
               // Render each subtask (row) as its own event
               const eventPositions = calculateEventPositions(goals, h, currentDate);
 
+              // Check if this hour cell should show drag target shading
+              const isDragTarget = isDraggingTask && dragTargetHour === h && dragTargetDate?.toDateString() === currentDate.toDateString();
+
               return (
-                <div key={h} className="h-20 border-b border-gray-200 relative p-1 overflow-visible">
+                <div 
+                  key={h} 
+                  className={`h-20 border-b border-gray-200 relative p-1 overflow-visible transition-all duration-200 ${
+                    isDragTarget ? 'bg-blue-50 border-2 border-blue-300 shadow-lg' : ''
+                  }`}
+                  onDragOver={(e) => {
+                    // Calculate minute based on mouse position within the hour cell
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const relativeY = e.clientY - rect.top;
+                    const cellHeight = rect.height;
+                    const minute = Math.floor((relativeY / cellHeight) * 60);
+                    // Snap to 30-minute intervals
+                    const snappedMinute = Math.round(minute / 30) * 30;
+                    handleTimeSlotDragOver?.(e, currentDate, h, snappedMinute);
+                  }}
+                  onDragLeave={(e) => handleTimeSlotDragLeave?.(e)}
+                  onDrop={(e) => {
+                    // Calculate minute based on mouse position within the hour cell
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const relativeY = e.clientY - rect.top;
+                    const cellHeight = rect.height;
+                    const minute = Math.floor((relativeY / cellHeight) * 60);
+                    // Snap to 30-minute intervals
+                    const snappedMinute = Math.round(minute / 30) * 30;
+                    handleTimeSlotDrop?.(e, currentDate, h, snappedMinute);
+                  }}
+                >
                   {eventPositions.map((pos) => (
                     <div
                       key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
@@ -118,6 +150,9 @@ export const DayView = ({
                       onClick={(e) => handleGoalClick(pos.goal, e)}
                       onMouseEnter={(e) => onTaskHover?.(pos.goal, e)}
                       onMouseLeave={() => onTaskMouseLeave?.()}
+                      draggable={pos.goal.goal_id !== "Google Calendar"}
+                      onDragStart={(e) => handleSubtaskDragStart?.(e, pos.goal)}
+                      onDragEnd={(e) => handleSubtaskDragEnd?.(e)}
                     >
                       {pos.showTitle && (
                         <div className="font-semibold leading-tight truncate" style={{ zIndex: pos.zIndex + 20 }}>

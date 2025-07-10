@@ -25,13 +25,16 @@ export const WeekView = ({
   handleOverflowClick, 
   getCourseColor,
   getEventColor,
-  handleTaskDragStart,
-  handleTaskDragEnd,
-  handleDayDragOver,
-  handleDayDragLeave,
-  handleDayDrop,
+  handleSubtaskDragStart,
+  handleSubtaskDragEnd,
+  handleTimeSlotDragOver,
+  handleTimeSlotDragLeave,
+  handleTimeSlotDrop,
   isDraggingTask,
   dragOverDate,
+  dragTargetHour,
+  dragTargetMinute,
+  dragTargetDate,
   onDayClick,
   onTaskHover,
   onTaskMouseLeave
@@ -97,11 +100,11 @@ export const WeekView = ({
       onOverflowClick={handleOverflowClick}
       getCourseColor={getCourseColor}
       getEventColor={getEventColor}
-      handleTaskDragStart={handleTaskDragStart}
-      handleTaskDragEnd={handleTaskDragEnd}
-      handleDayDragOver={handleDayDragOver}
-      handleDayDragLeave={handleDayDragLeave}
-      handleDayDrop={handleDayDrop}
+      handleSubtaskDragStart={handleSubtaskDragStart}
+      handleSubtaskDragEnd={handleSubtaskDragEnd}
+      handleTimeSlotDragOver={handleTimeSlotDragOver}
+      handleTimeSlotDragLeave={handleTimeSlotDragLeave}
+      handleTimeSlotDrop={handleTimeSlotDrop}
       isDraggingTask={isDraggingTask}
       dragOverDate={dragOverDate}
       onDayClick={onDayClick}
@@ -126,8 +129,37 @@ export const WeekView = ({
               // Render each subtask (row) as its own event
               const eventPositions = calculateEventPositions(goals, h, d);
 
+              // Check if this hour cell should show drag target shading
+              const isDragTarget = isDraggingTask && dragTargetHour === h && dragTargetDate?.toDateString() === d.toDateString();
+
               return (
-                <div key={h} className="h-16 border-b border-gray-200 p-1 relative overflow-visible">
+                <div 
+                  key={h} 
+                  className={`h-16 border-b border-gray-200 p-1 relative overflow-visible transition-all duration-200 ${
+                    isDragTarget ? 'bg-blue-50 border-2 border-blue-300 shadow-lg' : ''
+                  }`}
+                  onDragOver={(e) => {
+                    // Calculate minute based on mouse position within the hour cell
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const relativeY = e.clientY - rect.top;
+                    const cellHeight = rect.height;
+                    const minute = Math.floor((relativeY / cellHeight) * 60);
+                    // Snap to 30-minute intervals
+                    const snappedMinute = Math.round(minute / 30) * 30;
+                    handleTimeSlotDragOver?.(e, d, h, snappedMinute);
+                  }}
+                  onDragLeave={(e) => handleTimeSlotDragLeave?.(e)}
+                  onDrop={(e) => {
+                    // Calculate minute based on mouse position within the hour cell
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const relativeY = e.clientY - rect.top;
+                    const cellHeight = rect.height;
+                    const minute = Math.floor((relativeY / cellHeight) * 60);
+                    // Snap to 30-minute intervals
+                    const snappedMinute = Math.round(minute / 30) * 30;
+                    handleTimeSlotDrop?.(e, d, h, snappedMinute);
+                  }}
+                >
                   {eventPositions.map((pos) => (
                     <div
                       key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
@@ -145,6 +177,9 @@ export const WeekView = ({
                       onClick={(e) => handleGoalClick(pos.goal, e)}
                       onMouseEnter={(e) => onTaskHover?.(pos.goal, e)}
                       onMouseLeave={() => onTaskMouseLeave?.()}
+                      draggable={pos.goal.goal_id !== "Google Calendar"}
+                      onDragStart={(e) => handleSubtaskDragStart?.(e, pos.goal)}
+                      onDragEnd={(e) => handleSubtaskDragEnd?.(e)}
                     >
                       {pos.showTitle && (
                         <div className="font-semibold leading-tight truncate" style={{ zIndex: pos.zIndex + 20 }}>

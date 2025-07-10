@@ -262,6 +262,11 @@ export function CalendarScheduler() {
   const [deletedSubtask, setDeletedSubtask] = useState<Goal | null>(null);
   const [showUndoSubtaskToast, setShowUndoSubtaskToast] = useState(false);
 
+  /** Drag target state for responsive shading */
+  const [dragTargetHour, setDragTargetHour] = useState<number | null>(null);
+  const [dragTargetMinute, setDragTargetMinute] = useState<number | null>(null);
+  const [dragTargetDate, setDragTargetDate] = useState<Date | null>(null);
+
   /** Subtasks modal drag state */
   const [isSubtasksModalDragging, setIsSubtasksModalDragging] = useState(false);
   const [subtasksModalDragOffset, setSubtasksModalDragOffset] = useState({ x: 0, y: 0 });
@@ -333,72 +338,131 @@ export function CalendarScheduler() {
     setIsSubtasksModalDragging(false);
   };
 
-  // Drag and drop handlers for task events
-  const handleTaskDragStart = (e: React.DragEvent, task: Goal) => {
+  // Drag and drop handlers for subtask events
+  const handleSubtaskDragStart = (e: React.DragEvent, subtask: Goal) => {
     // Prevent dragging for Google Calendar events
-    if (task.goal_id === "Google Calendar") {
+    if (subtask.goal_id === "Google Calendar") {
       e.preventDefault();
       return;
     }
     
     e.stopPropagation();
     setIsDraggingTask(true);
-    setDraggedTask(task);
+    setDraggedTask(subtask);
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', JSON.stringify(task));
+    e.dataTransfer.setData('text/plain', JSON.stringify(subtask));
   };
 
-  const handleTaskDragEnd = (e: React.DragEvent) => {
+  const handleSubtaskDragEnd = (e: React.DragEvent) => {
     e.stopPropagation();
     setIsDraggingTask(false);
     setDraggedTask(null);
     setDragOverDate(null);
+    setDragTargetHour(null);
+    setDragTargetMinute(null);
+    setDragTargetDate(null);
   };
 
-  const handleDayDragOver = (e: React.DragEvent, date: Date) => {
+  const handleTimeSlotDragOver = (e: React.DragEvent, date: Date, hour: number, minute: number = 0) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     setDragOverDate(date);
+    setDragTargetHour(hour);
+    setDragTargetMinute(minute);
+    setDragTargetDate(date);
   };
 
-  const handleDayDragLeave = (e: React.DragEvent) => {
+  const handleTimeSlotDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverDate(null);
+    setDragTargetHour(null);
+    setDragTargetMinute(null);
+    setDragTargetDate(null);
   };
 
-  const handleDayDrop = async (e: React.DragEvent, targetDate: Date) => {
+  const handleTimeSlotDrop = async (e: React.DragEvent, targetDate: Date, targetHour: number, targetMinute: number = 0) => {
     e.preventDefault();
     e.stopPropagation();
     
     if (!draggedTask) return;
 
-    // Convert the target date to ISO string format
-    const newDueDate = targetDate.toISOString().split('T')[0];
-    
-    // Only update if the date actually changed
-    const currentDueDate = draggedTask.task_due_date || draggedTask.due_date;
-    if (currentDueDate) {
-      const currentDateStr = currentDueDate.split('T')[0];
-      if (currentDateStr === newDueDate) {
-        setDragOverDate(null);
-        return; // No change needed
-      }
-    }
-
     try {
-      // Call the handleTaskDueDateChange function
-      await handleTaskDueDateChange(draggedTask, newDueDate);
-      toast.success(`Task moved to ${targetDate.toLocaleDateString()}`);
+      // Calculate new start and end times based on drop location
+      const targetDateTime = new Date(targetDate);
+      targetDateTime.setHours(targetHour, targetMinute, 0, 0);
+      
+      // Calculate duration from original subtask
+      const originalStart = new Date(draggedTask.start_time!);
+      const originalEnd = new Date(draggedTask.end_time!);
+      const durationMs = originalEnd.getTime() - originalStart.getTime();
+      
+      // Set new start time to the target hour and minute
+      const newStartTime = new Date(targetDateTime);
+      const newEndTime = new Date(targetDateTime.getTime() + durationMs);
+      
+      // Call the update_subtask endpoint
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const payload = {
+        subtask_start_time: newStartTime.toISOString(),
+        subtask_end_time: newEndTime.toISOString()
+      };
+
+      const res = await fetch(`${api}/api/goals/tasks/subtasks/${draggedTask.subtask_id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to update subtask: ${res.status}`);
+      }
+
+      // Refresh the goals data to show the updated subtask
+      const fetchGoals = async () => {
+        try {
+          const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/user`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          
+          const grouped = await res.json() as Record<string, Goal[]>;
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) { 
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      await fetchGoals();
+      
+      toast.success(`Subtask moved to ${targetDate.toLocaleDateString()} at ${targetHour}:00`);
       
       // Close the overflow modal if it's open
       if (overflowEvents) {
         setOverflowEvents(null);
       }
     } catch (error) {
-      console.error('Failed to move task:', error);
-      toast.error('Failed to move task');
+      console.error('Failed to move subtask:', error);
+      toast.error('Failed to move subtask');
     } finally {
       setDragOverDate(null);
     }
@@ -2347,13 +2411,16 @@ export function CalendarScheduler() {
               handleOverflowClick={handleOverflowClick}
               getCourseColor={getCourseColor}
               getEventColor={getEventColor}
-              handleTaskDragStart={handleTaskDragStart}
-              handleTaskDragEnd={handleTaskDragEnd}
-              handleDayDragOver={handleDayDragOver}
-              handleDayDragLeave={handleDayDragLeave}
-              handleDayDrop={handleDayDrop}
+              handleSubtaskDragStart={handleSubtaskDragStart}
+              handleSubtaskDragEnd={handleSubtaskDragEnd}
+              handleTimeSlotDragOver={handleTimeSlotDragOver}
+              handleTimeSlotDragLeave={handleTimeSlotDragLeave}
+              handleTimeSlotDrop={handleTimeSlotDrop}
               isDraggingTask={isDraggingTask}
               dragOverDate={dragOverDate}
+              dragTargetHour={dragTargetHour}
+              dragTargetMinute={dragTargetMinute}
+              dragTargetDate={dragTargetDate}
               onDayClick={handleDayClick}
               onTaskHover={handleTaskHover}
               onTaskMouseLeave={handleTaskMouseLeave}
@@ -2371,13 +2438,16 @@ export function CalendarScheduler() {
             handleOverflowClick={handleOverflowClick}
             getCourseColor={getCourseColor}
             getEventColor={getEventColor}
-            handleTaskDragStart={handleTaskDragStart}
-            handleTaskDragEnd={handleTaskDragEnd}
-            handleDayDragOver={handleDayDragOver}
-            handleDayDragLeave={handleDayDragLeave}
-            handleDayDrop={handleDayDrop}
+            handleSubtaskDragStart={handleSubtaskDragStart}
+            handleSubtaskDragEnd={handleSubtaskDragEnd}
+            handleTimeSlotDragOver={handleTimeSlotDragOver}
+            handleTimeSlotDragLeave={handleTimeSlotDragLeave}
+            handleTimeSlotDrop={handleTimeSlotDrop}
             isDraggingTask={isDraggingTask}
             dragOverDate={dragOverDate}
+            dragTargetHour={dragTargetHour}
+            dragTargetMinute={dragTargetMinute}
+            dragTargetDate={dragTargetDate}
             onDayClick={handleDayClick}
             onTaskHover={handleTaskHover}
             onTaskMouseLeave={handleTaskMouseLeave}
@@ -2391,11 +2461,11 @@ export function CalendarScheduler() {
             handleOverflowClick={handleOverflowClick}
             getCourseColor={getCourseColor}
             getEventColor={getEventColor}
-            handleTaskDragStart={handleTaskDragStart}
-            handleTaskDragEnd={handleTaskDragEnd}
-            handleDayDragOver={handleDayDragOver}
-            handleDayDragLeave={handleDayDragLeave}
-            handleDayDrop={handleDayDrop}
+            handleSubtaskDragStart={handleSubtaskDragStart}
+            handleSubtaskDragEnd={handleSubtaskDragEnd}
+            handleTimeSlotDragOver={handleTimeSlotDragOver}
+            handleTimeSlotDragLeave={handleTimeSlotDragLeave}
+            handleTimeSlotDrop={handleTimeSlotDrop}
             isDraggingTask={isDraggingTask}
             dragOverDate={dragOverDate}
             onDayClick={handleDayClick}
@@ -2699,8 +2769,8 @@ export function CalendarScheduler() {
                     onMouseEnter={(e) => handleTaskHover(event, e)}
                     onMouseLeave={handleTaskMouseLeave}
                     draggable={event.goal_id !== "Google Calendar"}
-                    onDragStart={(e) => handleTaskDragStart(e, event)}
-                    onDragEnd={(e) => handleTaskDragEnd(e)}
+                                          onDragStart={(e) => handleSubtaskDragStart(e, event)}
+                      onDragEnd={(e) => handleSubtaskDragEnd(e)}
                   >
                     <div
                       className="w-3 h-3 rounded-full flex-shrink-0"

@@ -18,11 +18,11 @@ export const AllDayRow = ({
     onOverflowClick,
     getCourseColor,
     getEventColor,
-    handleTaskDragStart,
-    handleTaskDragEnd,
-    handleDayDragOver,
-    handleDayDragLeave,
-    handleDayDrop,
+    handleSubtaskDragStart,
+    handleSubtaskDragEnd,
+    handleTimeSlotDragOver,
+    handleTimeSlotDragLeave,
+    handleTimeSlotDrop,
     isDraggingTask,
     dragOverDate,
     onDayClick,
@@ -35,11 +35,11 @@ export const AllDayRow = ({
     onOverflowClick: (events: Goal[], position: { x: number; y: number }, day: Date) => void;
     getCourseColor: (courseId: string) => string;
     getEventColor: (goal: Goal) => string;
-    handleTaskDragStart?: (e: React.DragEvent, task: Goal) => void;
-    handleTaskDragEnd?: (e: React.DragEvent) => void;
-    handleDayDragOver?: (e: React.DragEvent, date: Date) => void;
-    handleDayDragLeave?: (e: React.DragEvent) => void;
-    handleDayDrop?: (e: React.DragEvent, date: Date) => void;
+    handleSubtaskDragStart?: (e: React.DragEvent, subtask: Goal) => void;
+    handleSubtaskDragEnd?: (e: React.DragEvent) => void;
+    handleTimeSlotDragOver?: (e: React.DragEvent, date: Date, hour: number) => void;
+    handleTimeSlotDragLeave?: (e: React.DragEvent) => void;
+    handleTimeSlotDrop?: (e: React.DragEvent, date: Date, hour: number) => void;
     isDraggingTask?: boolean;
     dragOverDate?: Date | null;
     onDayClick?: (date: Date) => void;
@@ -69,16 +69,10 @@ export const AllDayRow = ({
             return (
               <div
                 key={d.toISOString()}
-                className={`flex-1 min-w-0 ${showDivider} transition-all duration-200 cursor-pointer hover:bg-gray-50 ${
-                  dragOverDate && dragOverDate.toDateString() === d.toDateString() 
-                    ? 'bg-blue-50 border-2 border-blue-300 shadow-lg' 
-                    : isDraggingTask 
-                      ? 'border-2 border-dashed border-gray-300' 
-                      : ''
-                }`}
-                onDragOver={(e) => handleDayDragOver?.(e, d)}
-                onDragLeave={(e) => handleDayDragLeave?.(e)}
-                onDrop={(e) => handleDayDrop?.(e, d)}
+                className={`flex-1 min-w-0 ${showDivider} transition-all duration-200 cursor-pointer hover:bg-gray-50`}
+                onDragOver={(e) => handleTimeSlotDragOver?.(e, d, 0, 0)}
+                onDragLeave={(e) => handleTimeSlotDragLeave?.(e)}
+                onDrop={(e) => handleTimeSlotDrop?.(e, d, 0, 0)}
                 onClick={(e) => {
                   // Only trigger if clicking on the day column itself, not on events
                   if (e.target === e.currentTarget || (e.target as Element).closest('.empty-slot')) {
@@ -108,8 +102,8 @@ export const AllDayRow = ({
                         onMouseEnter={(e) => onTaskHover?.(g, e)}
                         onMouseLeave={() => onTaskMouseLeave?.()}
                         draggable={g.goal_id !== "Google Calendar"}
-                        onDragStart={(e) => handleTaskDragStart?.(e, g)}
-                        onDragEnd={(e) => handleTaskDragEnd?.(e)}
+                        onDragStart={(e) => handleSubtaskDragStart?.(e, g)}
+                        onDragEnd={(e) => handleSubtaskDragEnd?.(e)}
                       >
                         <div className="font-semibold leading-tight truncate">
                           {g.goal_id === 'Google Calendar' ? (g.task_title ?? "(untitled)") : (g.subtask_descr ?? "(untitled)")}

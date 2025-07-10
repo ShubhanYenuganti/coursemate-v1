@@ -20,11 +20,11 @@ export const MonthView = ({
   handleOverflowClick, 
   getCourseColor,
   getEventColor,
-  handleTaskDragStart,
-  handleTaskDragEnd,
-  handleDayDragOver,
-  handleDayDragLeave,
-  handleDayDrop,
+  handleSubtaskDragStart,
+  handleSubtaskDragEnd,
+  handleTimeSlotDragOver,
+  handleTimeSlotDragLeave,
+  handleTimeSlotDrop,
   isDraggingTask,
   dragOverDate,
   onDayClick,
@@ -100,9 +100,9 @@ export const MonthView = ({
                     ? 'border-2 border-dashed border-gray-300' 
                     : ''
                 }`}
-                onDragOver={(e) => handleDayDragOver?.(e, d)}
-                onDragLeave={(e) => handleDayDragLeave?.(e)}
-                onDrop={(e) => handleDayDrop?.(e, d)}
+                onDragOver={(e) => handleTimeSlotDragOver?.(e, d, 0)}
+                onDragLeave={(e) => handleTimeSlotDragLeave?.(e)}
+                onDrop={(e) => handleTimeSlotDrop?.(e, d, 0)}
                 onClick={(e) => {
                   // Only trigger if clicking on the day cell itself, not on events
                   if (e.target === e.currentTarget || (e.target as Element).closest('.day-cell-content')) {
@@ -142,8 +142,8 @@ export const MonthView = ({
                         onMouseEnter={(e) => onTaskHover?.(g, e)}
                         onMouseLeave={() => onTaskMouseLeave?.()}
                         draggable={g.goal_id !== "Google Calendar"}
-                        onDragStart={(e) => handleTaskDragStart?.(e, g)}
-                        onDragEnd={(e) => handleTaskDragEnd?.(e)}
+                        onDragStart={(e) => handleSubtaskDragStart?.(e, g)}
+                        onDragEnd={(e) => handleSubtaskDragEnd?.(e)}
                       >
                         <div className="font-semibold leading-tight truncate">
                           {g.goal_id === 'Google Calendar' ? (g.task_title ?? "(untitled)") : (g.subtask_descr ?? "(untitled)")}
@@ -171,8 +171,8 @@ export const MonthView = ({
                         onMouseEnter={(e) => onTaskHover?.(g, e)}
                         onMouseLeave={() => onTaskMouseLeave?.()}
                         draggable={g.goal_id !== "Google Calendar"}
-                        onDragStart={(e) => handleTaskDragStart?.(e, g)}
-                        onDragEnd={(e) => handleTaskDragEnd?.(e)}
+                        onDragStart={(e) => handleSubtaskDragStart?.(e, g)}
+                        onDragEnd={(e) => handleSubtaskDragEnd?.(e)}
                       >
                         <div className="font-semibold leading-tight truncate">
                           {g.goal_id === 'Google Calendar' ? (g.task_title ?? "(untitled)") : (g.subtask_descr ?? "(untitled)")}
