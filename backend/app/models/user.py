@@ -38,6 +38,7 @@ class User(db.Model):
     google_sync_tokens = db.Column(db.JSON, default=dict)
     # Relationships
     goals = db.relationship("Goal", back_populates="user", lazy=True)
+    document_embeddings = db.relationship("DocumentEmbedding", back_populates="user")
     
     # Friend relationships
     sent_friend_requests = relationship('Friend', foreign_keys='Friend.requester_id', back_populates='requester', lazy='dynamic')

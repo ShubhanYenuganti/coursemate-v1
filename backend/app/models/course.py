@@ -50,6 +50,8 @@ class Course(db.Model):
     # Relationship to Goals
     goals = db.relationship("Goal", back_populates="course", lazy=True, cascade='all, delete-orphan')
     
+    document_embeddings = db.relationship("DocumentEmbedding", back_populates="course")
+    
     def to_dict(self):
         """Convert course to dictionary for JSON serialization"""
         

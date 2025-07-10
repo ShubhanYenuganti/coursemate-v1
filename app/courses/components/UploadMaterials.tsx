@@ -9,6 +9,9 @@ interface UploadedFile {
   name: string;
   url: string;
   type: string;
+  vector_processed?: boolean;
+  chunks_processed?: number;
+  warning?: string;
 }
 
 const UploadMaterials: React.FC<UploadMaterialsProps> = ({ courseId, onUploadComplete }) => {
@@ -48,6 +51,9 @@ const UploadMaterials: React.FC<UploadMaterialsProps> = ({ courseId, onUploadCom
             name: file.name,
             url: data.url,
             type: file.type,
+            vector_processed: data.vector_processed,
+            chunks_processed: data.chunks_processed,
+            warning: data.warning,
           });
         } else {
           setUploadError('Failed to upload one or more files.');
@@ -113,7 +119,19 @@ const UploadMaterials: React.FC<UploadMaterialsProps> = ({ courseId, onUploadCom
               ) : (
                 <span className="w-16 h-16 flex items-center justify-center bg-gray-200 rounded text-gray-500">FILE</span>
               )}
+              <div className="flex-1">
               <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">{file.name}</a>
+                {file.vector_processed && (
+                  <div className="text-xs text-green-600 mt-1">
+                    ✅ Vector processed ({file.chunks_processed} chunks)
+                  </div>
+                )}
+                {file.warning && (
+                  <div className="text-xs text-yellow-600 mt-1">
+                    ⚠️ {file.warning}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
