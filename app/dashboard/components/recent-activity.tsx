@@ -10,6 +10,19 @@ export interface UnreadMessage {
   content: string;
   timestamp: string;
   unreadCount: number;
+import { Button } from '../../../components/ui/button';
+import { Textarea } from '../../../components/ui/textarea';
+
+export interface Activity {
+  id: string;
+  user?: string;
+  avatar: string;
+  action: string;
+  target?: string;
+  content?: string;
+  time: string;
+  type: 'message';
+  conversationId: string;
 }
 
 interface NotificationsCenterProps {
@@ -215,44 +228,49 @@ const NotificationsCenter: React.FC<NotificationsCenterProps> = ({
                 </div>
                 <div className="text-xs text-gray-500">
                   {formatTime(selectedMessage.timestamp)}
+                  {modalActivity.user}
                 </div>
               </div>
             </div>
 
-            {/* Message Content */}
-            <div className="mb-6">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 text-base whitespace-pre-line">
-                  {selectedMessage.content}
-                </p>
-              </div>
+            {/* Original Message */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              {modalActivity.content && (
+                <div className="text-gray-700 text-base whitespace-pre-line">
+                  {modalActivity.content}
+                </div>
+              )}
             </div>
-
+            
             {/* Reply Section */}
             <div className="space-y-3">
-              <h4 className="font-medium text-gray-800">Reply</h4>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Type your reply..."
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendReply();
-                    }
-                  }}
-                />
-                <button
-                  onClick={handleSendReply}
-                  disabled={!replyText.trim() || isSending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              <div className="text-sm font-medium text-gray-700">Reply to {modalActivity.user}</div>
+              <Textarea
+                placeholder="Type your reply..."
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                className="min-h-[100px] resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendReply();
+                  }
+                }}
+              />
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={handleCloseModal}
+                  disabled={sendingReply}
                 >
-                  <Send className="w-4 h-4" />
-                  {isSending ? 'Sending...' : 'Send'}
-                </button>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSendReply}
+                  disabled={!replyText.trim() || sendingReply}
+                >
+                  {sendingReply ? 'Sending...' : 'Send Reply'}
+                </Button>
               </div>
             </div>
           </div>

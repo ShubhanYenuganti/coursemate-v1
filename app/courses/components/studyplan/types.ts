@@ -12,27 +12,30 @@ export interface Goal {
 
 export interface Task {
   id: string;
-  goalId: string;
+  goalId?: string;
   name: string;
+  description?: string;
   scheduledDate: string; // ISO date string
   completed: boolean;
-  createdAt: string;
-  updatedAt: string;
+  estimatedHours?: number;
+  priority?: 'high' | 'medium' | 'low';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Subtask {
   id: string;
   taskId: string;
   name: string;
-  type: 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review' | 'other';
+  type: 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review' | 'assessment' | 'other';
   estimatedTimeMinutes: number;
   actualTimeMinutes: number;
   timeTrackingStart?: string;
   timeTrackingEnd?: string;
   isTimeTracking: boolean;
   completed: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface StudyPlanStats {
