@@ -267,6 +267,15 @@ export function CalendarScheduler() {
   const [dragTargetMinute, setDragTargetMinute] = useState<number | null>(null);
   const [dragTargetDate, setDragTargetDate] = useState<Date | null>(null);
 
+  /** Warning modal for past due date drops */
+  const [dueDateWarningModal, setDueDateWarningModal] = useState<{
+    isOpen: boolean;
+    subtask: Goal | null;
+    targetDate: Date | null;
+    targetHour: number | null;
+    targetMinute: number | null;
+  } | null>(null);
+
   /** Subtasks modal drag state */
   const [isSubtasksModalDragging, setIsSubtasksModalDragging] = useState(false);
   const [subtasksModalDragOffset, setSubtasksModalDragOffset] = useState({ x: 0, y: 0 });
@@ -382,20 +391,15 @@ export function CalendarScheduler() {
     setDragTargetDate(null);
   };
 
-  const handleTimeSlotDrop = async (e: React.DragEvent, targetDate: Date, targetHour: number, targetMinute: number = 0) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!draggedTask) return;
-
+  const performSubtaskDrop = async (subtask: Goal, targetDate: Date, targetHour: number, targetMinute: number = 0) => {
     try {
       // Calculate new start and end times based on drop location
       const targetDateTime = new Date(targetDate);
       targetDateTime.setHours(targetHour, targetMinute, 0, 0);
       
       // Calculate duration from original subtask
-      const originalStart = new Date(draggedTask.start_time!);
-      const originalEnd = new Date(draggedTask.end_time!);
+      const originalStart = new Date(subtask.start_time!);
+      const originalEnd = new Date(subtask.end_time!);
       const durationMs = originalEnd.getTime() - originalStart.getTime();
       
       // Set new start time to the target hour and minute
@@ -412,7 +416,7 @@ export function CalendarScheduler() {
         subtask_end_time: newEndTime.toISOString()
       };
 
-      const res = await fetch(`${api}/api/goals/tasks/subtasks/${draggedTask.subtask_id}`, {
+      const res = await fetch(`${api}/api/goals/tasks/subtasks/${subtask.subtask_id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -454,7 +458,7 @@ export function CalendarScheduler() {
 
       await fetchGoals();
       
-      toast.success(`Subtask moved to ${targetDate.toLocaleDateString()} at ${targetHour}:00`);
+      toast.success(`Subtask moved to ${targetDate.toLocaleDateString()} at ${targetHour}:${targetMinute.toString().padStart(2, '0')}`);
       
       // Close the overflow modal if it's open
       if (overflowEvents) {
@@ -466,6 +470,55 @@ export function CalendarScheduler() {
     } finally {
       setDragOverDate(null);
     }
+  };
+
+  const handleTimeSlotDrop = async (e: React.DragEvent, targetDate: Date, targetHour: number, targetMinute: number = 0) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedTask) return;
+
+    // Check if the target date is past the task's due date
+    const taskDueDate = draggedTask.task_due_date || draggedTask.due_date;
+    if (taskDueDate) {
+      const dueDate = new Date(taskDueDate);
+      const targetDateTime = new Date(targetDate);
+      targetDateTime.setHours(targetHour, targetMinute, 0, 0);
+      
+      // Compare dates (ignore time for due date comparison)
+      const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+      const targetDateOnly = new Date(targetDateTime.getFullYear(), targetDateTime.getMonth(), targetDateTime.getDate());
+      
+      if (targetDateOnly > dueDateOnly) {
+        // Show warning modal instead of proceeding
+        setDueDateWarningModal({
+          isOpen: true,
+          subtask: draggedTask,
+          targetDate: targetDate,
+          targetHour: targetHour,
+          targetMinute: targetMinute
+        });
+        return;
+      }
+    }
+
+    // Proceed with the drop if no due date conflict
+    await performSubtaskDrop(draggedTask, targetDate, targetHour, targetMinute);
+  };
+
+  const handleDueDateWarningConfirm = async () => {
+    if (dueDateWarningModal) {
+      const { subtask, targetDate, targetHour, targetMinute } = dueDateWarningModal;
+      setDueDateWarningModal(null);
+      
+      if (subtask && targetDate && targetHour !== null) {
+        await performSubtaskDrop(subtask, targetDate, targetHour, targetMinute || 0);
+      }
+    }
+  };
+
+  const handleDueDateWarningCancel = () => {
+    setDueDateWarningModal(null);
   };
 
   const handleGoalClick = (event: Goal | any, clickEvent?: React.MouseEvent) => {
@@ -3646,6 +3699,80 @@ export function CalendarScheduler() {
             </Card>
           </div>
         </>
+      )}
+
+      {/* Due Date Warning Modal */}
+      {dueDateWarningModal?.isOpen && dueDateWarningModal?.subtask && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Past Due Date Warning</h2>
+                </div>
+                <button
+                  onClick={handleDueDateWarningCancel}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-sm font-medium text-gray-900 mb-1">
+                    {dueDateWarningModal.subtask.subtask_descr}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    Task: {dueDateWarningModal.subtask.task_title}
+                  </p>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Task due date:</span>
+                    <span className="text-sm text-gray-900">
+                      {dueDateWarningModal.subtask.task_due_date || dueDateWarningModal.subtask.due_date 
+                        ? new Date(dueDateWarningModal.subtask.task_due_date || dueDateWarningModal.subtask.due_date!).toLocaleDateString()
+                        : 'Not set'
+                      }
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Target date:</span>
+                    <span className="text-sm text-gray-900">
+                      {dueDateWarningModal.targetDate?.toLocaleDateString()} at {dueDateWarningModal.targetHour}:{(dueDateWarningModal.targetMinute || 0).toString().padStart(2, '0')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleDueDateWarningCancel}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDueDateWarningConfirm}
+                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                    >
+                      Continue Anyway
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
