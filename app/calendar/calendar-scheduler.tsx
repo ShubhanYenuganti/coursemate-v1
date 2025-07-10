@@ -842,7 +842,9 @@ export function CalendarScheduler() {
         subtask_descr: deletedSubtask.subtask_descr,
         subtask_type: deletedSubtask.subtask_type || 'other',
         subtask_completed: deletedSubtask.subtask_completed || false,
-        task_due_date: deletedSubtask.task_due_date || deletedSubtask.due_date
+        task_due_date: deletedSubtask.task_due_date || deletedSubtask.due_date,
+        subtask_start_time: deletedSubtask.start_time,
+        subtask_end_time: deletedSubtask.end_time
       };
 
       const res = await fetch(`${api}/api/goals/tasks/${deletedSubtask.task_id}/subtasks`, {
