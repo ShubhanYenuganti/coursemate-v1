@@ -1,8 +1,8 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { Plus, Target, TrendingUp, Brain, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Target, TrendingUp, Brain, X, ChevronDown, ChevronRight, Calendar, Clock, Edit, Trash2, FileText, MessageSquare } from 'lucide-react';
 import { getGoalsWithProgress } from './mockData';
-import { GoalWithProgress, Goal, Task, Subtask } from './types';
+import { GoalWithProgress, Goal, Task, Subtask, StudyPlanStats } from './types';
 import GoalCard from './GoalCard';
 import AddGoalModal from './AddGoalModal';
 import TaskScaffoldingScreen from './TaskScaffoldingScreen';
@@ -13,6 +13,11 @@ import { toast } from 'react-hot-toast';
 import { Toaster } from 'react-hot-toast';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Portal } from '../../../../components/Portal';
+import { PomodoroProvider } from '../PomodoroContext';
+import { PomodoroTimer } from '../PomodoroTimer';
+import AddTaskModal from './AddTaskModal';
+import AddSubtaskModal from './AddSubtaskModal';
+import AIGenerateScreen from './AIGenerateScreen';
 
 interface StudyPlanTabProps {
   courseId: string;
@@ -106,6 +111,9 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
   const [showAIGenerateScreen, setShowAIGenerateScreen] = useState(false);
+  const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
+  const [newGoal, setNewGoal] = useState<GoalWithProgress | null>(null);
+  const [isScaffoldingOpen, setIsScaffoldingOpen] = useState(false);
 
   // Persist startedSubtasks to localStorage whenever it changes
   useEffect(() => {
@@ -1318,14 +1326,6 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     try {
       const api = process.env.BACKEND_URL || "http://localhost:5173";
       const response = await fetch(`${api}/api/goals/tasks/${taskId}/current-time`, {
-
-  const handleStudyPlanGenerated = async (studyPlan: any) => {
-    setIsAIGenerating(false);
-    setShowAIGenerator(false);
-    // Trigger a refresh of the goals list
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -1339,6 +1339,44 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       console.error('Error getting current task time:', error);
     }
     return null;
+  };
+
+  const handleStudyPlanGenerated = async (studyPlan: any) => {
+    setIsAIGenerating(false);
+    setShowAIGenerator(false);
+    // Trigger a refresh of the goals list
+    setLoading(true);
+    try {
+      const api = process.env.BACKEND_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Transform backend data to match frontend types
+        const transformedGoals: GoalWithProgress[] = data.map((goal: any) => ({
+          id: goal.goal_id || goal.id,
+          courseId: courseId,
+          title: goal.goal_descr,
+          targetDate: goal.due_date || new Date().toISOString(),
+          workMinutesPerDay: 60,
+          frequency: 'daily',
+          createdAt: goal.created_at,
+          updatedAt: goal.updated_at,
+          progress: goal.progress || 0,
+          totalTasks: goal.total_tasks || 0,
+          completedTasks: goal.completed_tasks || 0
+        }));
+        setGoals(transformedGoals);
+      }
+    } catch (error) {
+      toast.error('Failed to refresh goals after AI generation.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubtaskStartTracking = async (goalId: string, taskId: string, subtaskId: string) => {
@@ -1361,86 +1399,11 @@ const StudyPlanTabContent: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     }
   };
 
-  if (isLoading) {
-      if (!response.ok) throw new Error('Failed to fetch goals');
-      const data = await response.json();
-      // Transform backend data to match frontend types
-      const transformedGoals: GoalWithProgress[] = data.map((goal: any) => ({
-        id: goal.goal_id || goal.id,
-        courseId: courseId,
-        title: goal.goal_descr,
-        targetDate: goal.due_date || new Date().toISOString(),
-        workMinutesPerDay: 60,
-        frequency: 'daily',
-        createdAt: goal.created_at,
-        updatedAt: goal.updated_at,
-        progress: goal.progress || 0,
-        totalTasks: goal.total_tasks || 0,
-        completedTasks: goal.completed_tasks || 0
-      }));
-      setGoals(transformedGoals);
-    } catch (error) {
-      toast.error('Failed to refresh goals after AI generation.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Pass this to the AI modal
   const handleAIGenerateStart = () => {
     setIsAIGenerating(true);
   };
 
-  const handleUseStudyPlan = (studyPlan: any) => {
-    // Convert the AI-generated study plan to the format expected by the scaffolding screen
-    const tasks: Task[] = studyPlan.tasks.map((task: any, index: number) => ({
-      id: `task-${index}`,
-      name: task.name,
-      description: task.description,
-      scheduledDate: new Date().toISOString(),
-      completed: false,
-      estimatedHours: task.estimated_hours,
-      priority: task.priority
-    }));
-
-    const subtasks: Subtask[] = studyPlan.tasks.flatMap((task: any, taskIndex: number) =>
-      task.subtasks.map((subtask: any, subtaskIndex: number) => ({
-        id: `subtask-${taskIndex}-${subtaskIndex}`,
-        taskId: `task-${taskIndex}`,
-        name: subtask.name,
-        description: subtask.description,
-        type: subtask.type,
-        completed: false,
-        estimatedMinutes: subtask.estimated_minutes
-      }))
-    );
-
-    // Create a new goal from the study plan
-    const newGoalFromPlan: GoalWithProgress = {
-      id: `temp-${Date.now()}`,
-      courseId: courseId,
-      title: studyPlan.goal_title,
-      targetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-      workMinutesPerDay: 60,
-      frequency: 'daily',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      progress: 0,
-      totalTasks: tasks.length,
-      completedTasks: 0
-    };
-
-    setNewGoal(newGoalFromPlan);
-    setIsScaffoldingOpen(true);
-    setGeneratedStudyPlan(null);
-  };
-
-  const handleRegenerateStudyPlan = () => {
-    setGeneratedStudyPlan(null);
-    setShowAIGenerator(true);
-  };
-
-  if (isScaffoldingOpen && newGoal) {
+  if (isLoading) {
     return (
       <div className="text-center py-12">
         <div className="animate-pulse flex flex-col items-center">

@@ -26,12 +26,12 @@ def get_me():
         'college': user.college,
         'year': user.year,
         'major': user.major,
+        'onboarded': user.onboarded,
         'streak': {
             'current': user.current_streak,
             'longest': user.longest_streak,
             'last_visit': user.last_visit_date.isoformat() if user.last_visit_date else None
         }
-        'onboarded': user.onboarded,
     })
 
 @users_bp.route('/streak', methods=['GET'])

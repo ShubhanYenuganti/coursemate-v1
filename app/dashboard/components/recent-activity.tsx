@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { messageService, Conversation } from '../../../lib/api/messageService';
 import { Send, X, MessageSquare } from 'lucide-react';
+import { Button } from '../../../components/ui/button';
+import { Textarea } from '../../../components/ui/textarea';
 
 export interface UnreadMessage {
   id: string;
@@ -10,8 +12,7 @@ export interface UnreadMessage {
   content: string;
   timestamp: string;
   unreadCount: number;
-import { Button } from '../../../components/ui/button';
-import { Textarea } from '../../../components/ui/textarea';
+}
 
 export interface Activity {
   id: string;
@@ -228,23 +229,26 @@ const NotificationsCenter: React.FC<NotificationsCenterProps> = ({
                 </div>
                 <div className="text-xs text-gray-500">
                   {formatTime(selectedMessage.timestamp)}
-                  {modalActivity.user}
                 </div>
               </div>
             </div>
 
             {/* Original Message */}
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-              {modalActivity.content && (
+              {/* The original code had modalActivity.content, but modalActivity is not defined.
+                  Assuming the intent was to display the content of the selectedMessage.
+                  However, the original code had modalActivity.user, which is also not defined.
+                  I will remove the lines related to modalActivity as they are not defined. */}
+              {selectedMessage.content && (
                 <div className="text-gray-700 text-base whitespace-pre-line">
-                  {modalActivity.content}
+                  {selectedMessage.content}
                 </div>
               )}
             </div>
             
             {/* Reply Section */}
             <div className="space-y-3">
-              <div className="text-sm font-medium text-gray-700">Reply to {modalActivity.user}</div>
+              <div className="text-sm font-medium text-gray-700">Reply to {selectedMessage.senderName}</div>
               <Textarea
                 placeholder="Type your reply..."
                 value={replyText}
@@ -261,15 +265,15 @@ const NotificationsCenter: React.FC<NotificationsCenterProps> = ({
                 <Button
                   variant="outline"
                   onClick={handleCloseModal}
-                  disabled={sendingReply}
+                  disabled={isSending}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleSendReply}
-                  disabled={!replyText.trim() || sendingReply}
+                  disabled={!replyText.trim() || isSending}
                 >
-                  {sendingReply ? 'Sending...' : 'Send Reply'}
+                  {isSending ? 'Sending...' : 'Send Reply'}
                 </Button>
               </div>
             </div>

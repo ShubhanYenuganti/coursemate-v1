@@ -9,8 +9,8 @@ import { PieChart as PieChartComponent } from '@/components/charts/PieChart';
 import { BarChart } from '@/components/charts/BarChart';
 import { GoalWithProgress, Task, Subtask, StudyPlanStats } from '../courses/components/studyplan/types';
 import { courseService } from '@/lib/api/courseService';
-import { PomodoroProvider } from './PomodoroContext';
-import { PomodoroTimer } from './PomodoroTimer';
+import { PomodoroProvider } from '../courses/components/PomodoroContext';
+import { PomodoroTimer } from '../courses/components/PomodoroTimer';
 
 interface CourseData {
   id?: string;
