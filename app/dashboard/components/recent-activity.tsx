@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { messageService, Conversation } from '../../../lib/api/messageService';
+import { Send, X, MessageSquare } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Textarea } from '../../../components/ui/textarea';
+
+export interface UnreadMessage {
+  id: string;
+  conversationId: string;
+  senderName: string;
+  senderId: string;
+  content: string;
+  timestamp: string;
+  unreadCount: number;
+}
 
 export interface Activity {
   id: string;
@@ -199,24 +210,32 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
               </div>
               <div>
                 <div className="font-semibold text-gray-800 text-lg">
-                  {modalActivity.user}
+                  {selectedMessage.senderName}
                 </div>
-                <div className="text-xs text-gray-500">{modalActivity.time}</div>
+                <div className="text-xs text-gray-500">
+                  {formatTime(selectedMessage.timestamp)}
+                  {selectedMessage.senderName}
+                </div>
+                {/* Removed modalActivity.time as modalActivity is not defined */}
               </div>
             </div>
             
             {/* Original Message */}
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-              {modalActivity.content && (
+              {/* The original code had modalActivity.content, but modalActivity is not defined.
+                  Assuming the intent was to display the content of the selectedMessage.
+                  However, the original code had modalActivity.user, which is also not defined.
+                  I will remove the lines related to modalActivity as they are not defined. */}
+              {selectedMessage.content && (
                 <div className="text-gray-700 text-base whitespace-pre-line">
-                  {modalActivity.content}
+                  {selectedMessage.content}
                 </div>
               )}
             </div>
             
             {/* Reply Section */}
             <div className="space-y-3">
-              <div className="text-sm font-medium text-gray-700">Reply to {modalActivity.user}</div>
+              <div className="text-sm font-medium text-gray-700">Reply to {selectedMessage.senderName}</div>
               <Textarea
                 placeholder="Type your reply..."
                 value={replyText}
@@ -233,15 +252,15 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
                 <Button
                   variant="outline"
                   onClick={handleCloseModal}
-                  disabled={sendingReply}
+                  disabled={isSending}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleSendReply}
-                  disabled={!replyText.trim() || sendingReply}
+                  disabled={!replyText.trim() || isSending}
                 >
-                  {sendingReply ? 'Sending...' : 'Send Reply'}
+                  {isSending ? 'Sending...' : 'Send Reply'}
                 </Button>
               </div>
             </div>

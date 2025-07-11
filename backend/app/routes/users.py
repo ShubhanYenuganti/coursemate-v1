@@ -20,6 +20,11 @@ def get_me():
         'year': user.year,
         'major': user.major,
         'onboarded': user.onboarded,
+        'streak': {
+            'current': user.current_streak,
+            'longest': user.longest_streak,
+            'last_visit': user.last_visit_date.isoformat() if user.last_visit_date else None
+        }
     })
 
 @users_bp.route('/', methods=['GET'])
