@@ -804,17 +804,40 @@ export function CalendarScheduler() {
   };
 
   const handleGoalClick = (event: Goal | any, clickEvent?: React.MouseEvent) => {
-    // Check if this is a subtask event (has start_time and end_time)
-    if (event.start_time && event.end_time) {
-      // Show View Subtask modal for subtask events
+    console.log('handleGoalClick called with event:', event);
+    console.log('clickEvent:', clickEvent);
+    
+    // Check if this is coming from the sidebar (has task_title and represents a task, not a subtask)
+    if (event.task_title && (event.totalSubtasks || event.subtasks)) {
+      // Show regular task modal for sidebar task events
+      console.log('Setting selectedGoal for sidebar task');
+      setSelectedGoal(event);
+      // Set the position for the floating goal display
+      if (clickEvent) {
+        setGoalDisplayPosition({ x: clickEvent.clientX - 200, y: clickEvent.clientY });
+      } else {
+        // Default position if no click event
+        setGoalDisplayPosition({ x: 100, y: 100 });
+      }
+    } else if (event.start_time && event.end_time && event.subtask_descr) {
+      // Show View Subtask modal for subtask events (calendar events)
+      console.log('Setting viewSubtaskModal for calendar subtask');
       setViewSubtaskModal({
         isOpen: true,
         subtask: event,
         position: { x: clickEvent?.clientX || 100, y: clickEvent?.clientY || 100 }
       });
     } else {
-      // Show regular task modal for task events
+      // Default to task modal
+      console.log('Setting selectedGoal for default case');
       setSelectedGoal(event);
+      // Set the position for the floating goal display
+      if (clickEvent) {
+        setGoalDisplayPosition({ x: clickEvent.clientX - 200, y: clickEvent.clientY });
+      } else {
+        // Default position if no click event
+        setGoalDisplayPosition({ x: 100, y: 100 });
+      }
     }
   };
 
@@ -3015,7 +3038,6 @@ export function CalendarScheduler() {
                     </div>
                     <ul className="text-sm text-gray-800 space-y-1">
                       <li><strong>Status:</strong> <span className={`font-medium ${getStatusColor(calculateStatus(selectedGoal))}`}>{calculateStatus(selectedGoal)}</span></li>
-                      <li><strong>Assigned:</strong> {formatDate(selectedGoal.updated_at || '')}</li>
                       <li><strong>Due:</strong> {formatDate(selectedGoal.task_due_date || selectedGoal.due_date || '')}</li>
                                           {/* Progress Bar */}
                     {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks >= 1 && (
