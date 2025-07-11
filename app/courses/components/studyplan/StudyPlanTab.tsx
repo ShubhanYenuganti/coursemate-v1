@@ -81,7 +81,6 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   });
   const [showAIGenerateScreen, setShowAIGenerateScreen] = useState(false);
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
-  const [newGoal, setNewGoal] = useState<GoalWithProgress | null>(null);
   const [isScaffoldingOpen, setIsScaffoldingOpen] = useState(false);
 
   // Persist startedSubtasks to localStorage whenever it changes
