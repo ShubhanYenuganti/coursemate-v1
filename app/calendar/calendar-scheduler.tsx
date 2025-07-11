@@ -721,7 +721,7 @@ export function CalendarScheduler() {
           if (!token) return console.warn("No JWT in localStorage");
 
           const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-          const res = await fetch(`${api}/api/goals/user`, {
+          const res = await fetch(`${api}/api/goals/subtasks`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
