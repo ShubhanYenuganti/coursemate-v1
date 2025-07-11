@@ -73,7 +73,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const peer = new Peer();
     peerRef.current = peer;
 
-    peer.on('open', (id: string) => {
+    peer.on('open', (id) => {
       setPeerId(id);
       // Register the peer ID with the backend for call signaling
       if (socket && user?.id) {
@@ -82,7 +82,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    peer.on('call', (call: any) => {
+    peer.on('call', (call) => {
         // This is an incoming call from the other user
         console.log('[CallContext] Received incoming PeerJS call');
         setActiveCall(call);
@@ -104,7 +104,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         answerCall();
         
-        call.on('stream', (remoteUserStream: MediaStream) => {
+        call.on('stream', (remoteUserStream) => {
             console.log('[CallContext] Received remote stream from incoming call');
             setRemoteStream(remoteUserStream);
             setIsCallActive(true);
@@ -115,7 +115,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('[CallContext] Incoming call closed');
         });
 
-        call.on('error', (err: any) => {
+        call.on('error', (err) => {
             console.error('[CallContext] Incoming call error:', err);
         });
     });
@@ -137,7 +137,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 console.log('[CallContext] Local stream available, calling peer with ID:', data.receiver_peer_id);
                 const call = peer.call(data.receiver_peer_id, localStreamRef.current);
                 setActiveCall(call);
-                call.on('stream', (remoteUserStream: MediaStream) => {
+                call.on('stream', (remoteUserStream) => {
                     console.log('[CallContext] Received remote stream from outgoing call');
                     setRemoteStream(remoteUserStream);
                     setIsCallActive(true);
@@ -148,7 +148,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     console.log('[CallContext] Outgoing call closed');
                 });
 
-                call.on('error', (err: any) => {
+                call.on('error', (err) => {
                     console.error('[CallContext] Outgoing call error:', err);
                 });
             } else {
