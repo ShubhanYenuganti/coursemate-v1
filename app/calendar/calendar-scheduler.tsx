@@ -295,6 +295,7 @@ export function CalendarScheduler() {
     endHour: number;
     endMinute: number;
   } | null>(null);
+  const [initialClickPosition, setInitialClickPosition] = useState<{ x: number; y: number } | null>(null);
 
   /** Subtasks modal drag state */
   const [isSubtasksModalDragging, setIsSubtasksModalDragging] = useState(false);
@@ -392,6 +393,9 @@ export function CalendarScheduler() {
     e.preventDefault();
     e.stopPropagation();
     
+    // Store the initial click position
+    setInitialClickPosition({ x: e.clientX, y: e.clientY });
+    
     setIsCreatingSubtask(true);
     setCreateSubtaskStart({ date, hour, minute });
     setCreateSubtaskEnd({ date, hour, minute });
@@ -463,11 +467,19 @@ export function CalendarScheduler() {
       
       setIsCreatingSubtask(false);
       setShowCreateSubtaskModal(true);
-      // Initialize modal position at center of screen
-      setCreateSubtaskModalPosition({
-        x: Math.max(10, window.innerWidth / 2 - 200),
-        y: Math.max(10, window.innerHeight / 2 - 250)
-      });
+              // Initialize modal position so the top-right corner is next to the top-left corner of where the user started the drag
+        if (initialClickPosition) {
+          setCreateSubtaskModalPosition({
+            x: Math.max(10, initialClickPosition.x - 500), // Increased offset to avoid overlap with shaded box
+            y: Math.max(10, initialClickPosition.y)
+          });
+        } else {
+        // Fallback to center if no initial position
+        setCreateSubtaskModalPosition({
+          x: Math.max(10, window.innerWidth / 2 - 200),
+          y: Math.max(10, window.innerHeight / 2 - 250)
+        });
+      }
       fetchAvailableTasks();
       // Keep the drag preview visible during modal creation
       // setDragPreview(null); // Clear preview
@@ -566,6 +578,7 @@ export function CalendarScheduler() {
       setCreateSubtaskStart(null);
       setCreateSubtaskEnd(null);
       setDragPreview(null); // Clear preview when subtask is created
+      setInitialClickPosition(null); // Clear initial click position
       
       // Refresh goals data
       const fetchGoals = async () => {
@@ -610,6 +623,7 @@ export function CalendarScheduler() {
     setCreateSubtaskStart(null);
     setCreateSubtaskEnd(null);
     setDragPreview(null); // Clear preview when modal is cancelled
+    setInitialClickPosition(null); // Clear initial click position
   };
 
   // Drag and drop handlers for subtask events
