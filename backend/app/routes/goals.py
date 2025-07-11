@@ -1,6 +1,6 @@
 from collections import defaultdict
 from flask import Blueprint, request, jsonify, current_app, g
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import uuid
 from app.models.goal import Goal
 from app.models.course import Course
@@ -1029,13 +1029,32 @@ def update_subtask(subtask_id):
         if 'subtask_order' in data:
             subtask.subtask_order = data['subtask_order']
         
-        # add a check before submitting request that the start_time is before the task due_date
+        # Parse and convert times to UTC for storage
         if 'subtask_start_time' in data:
-            subtask.start_time = data['subtask_start_time']
+            try:
+                # Parse the ISO string - it's already in UTC from frontend
+                start_time = datetime.fromisoformat(data['subtask_start_time'].replace('Z', '+00:00'))
+                # Ensure it's in UTC
+                if start_time.tzinfo is None:
+                    start_time = start_time.replace(tzinfo=timezone.utc)
+                else:
+                    start_time = start_time.astimezone(timezone.utc)
+                subtask.start_time = start_time
+            except Exception as e:
+                current_app.logger.error(f"Error parsing start_time: {data['subtask_start_time']}, error: {e}")
         
-        # add a check before submitting request that the end_time is before the task due_date
         if 'subtask_end_time' in data:
-            subtask.end_time = data['subtask_end_time']
+            try:
+                # Parse the ISO string - it's already in UTC from frontend
+                end_time = datetime.fromisoformat(data['subtask_end_time'].replace('Z', '+00:00'))
+                # Ensure it's in UTC
+                if end_time.tzinfo is None:
+                    end_time = end_time.replace(tzinfo=timezone.utc)
+                else:
+                    end_time = end_time.astimezone(timezone.utc)
+                subtask.end_time = end_time
+            except Exception as e:
+                current_app.logger.error(f"Error parsing end_time: {data['subtask_end_time']}, error: {e}")
         
         if 'subtask_completed' in data:
             subtask.subtask_completed = data['subtask_completed']
@@ -1160,6 +1179,34 @@ def create_subtask(task_id):
         print(f"Task due date type: {type(task_due_date)}")
         print(f"Subtask order type: {type(subtask_order)}")
         
+        # Parse and convert times to UTC for storage
+        start_time = None
+        end_time = None
+        
+        if data.get('subtask_start_time'):
+            try:
+                # Parse the ISO string - it's already in UTC from frontend
+                start_time = datetime.fromisoformat(data['subtask_start_time'].replace('Z', '+00:00'))
+                # Ensure it's in UTC
+                if start_time.tzinfo is None:
+                    start_time = start_time.replace(tzinfo=timezone.utc)
+                else:
+                    start_time = start_time.astimezone(timezone.utc)
+            except Exception as e:
+                current_app.logger.error(f"Error parsing start_time: {data['subtask_start_time']}, error: {e}")
+        
+        if data.get('subtask_end_time'):
+            try:
+                # Parse the ISO string - it's already in UTC from frontend
+                end_time = datetime.fromisoformat(data['subtask_end_time'].replace('Z', '+00:00'))
+                # Ensure it's in UTC
+                if end_time.tzinfo is None:
+                    end_time = end_time.replace(tzinfo=timezone.utc)
+                else:
+                    end_time = end_time.astimezone(timezone.utc)
+            except Exception as e:
+                current_app.logger.error(f"Error parsing end_time: {data['subtask_end_time']}, error: {e}")
+        
         new_subtask = Goal(
             user_id=user_id,
             course_id=task_row.course_id,
@@ -1176,8 +1223,8 @@ def create_subtask(task_id):
             subtask_descr=data['subtask_descr'],
             subtask_type=data.get('subtask_type', 'other'),
             subtask_completed=data.get('subtask_completed', False),
-            start_time = data.get('subtask_start_time'),
-            end_time = data.get('subtask_end_time'),
+            start_time=start_time,
+            end_time=end_time,
             subtask_order=subtask_order
         )
         
@@ -1277,7 +1324,7 @@ def create_empty_task(goal_id):
 
 
 # current approach -- get all rows that have scheduled start and times (these are subtasks)
-@goals_bp.route("/api/goals/user", methods=["GET"])
+@goals_bp.route("/api/goals/subtasks", methods=["GET"])
 @jwt_required()                               # still requires a valid JWT
 def get_subtasks_by_user():
     # we ignore the real identity for test mode
@@ -1319,6 +1366,41 @@ def get_subtasks_by_user():
     except Exception as e:
         current_app.logger.error(f"Error getting user goals: {e}")
         return jsonify({"error": "An error occurred while getting user goals"}), 500
+
+
+@goals_bp.route("/api/goals/tasks", methods = ["GET"])
+@jwt_required()
+def get_tasks_by_user():
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        all_rows = Goal.query.filter_by(user_id = user_id).all()
+        
+        # Remove any rows where task_id is "placeholder"
+        all_rows = [row for row in all_rows if getattr(row, "task_id", None) != "placeholder"]
+        
+        # Remove any rows where goal_id is "Google Calendar" 
+        all_rows = [row for row in all_rows if getattr(row, "goal_id", None) != "Google Calendar"]
+        
+        # Return a map of task_title to task_id
+        # Build a dictionary mapping task_title to task_id, only for unique tasks
+        task_map = {}
+        for row in all_rows:
+            # Only add if task_title and task_id are present and not already in the map
+            if getattr(row, "task_title", None) and getattr(row, "task_id", None):
+                if row.task_title not in task_map:
+                    task_map[row.task_title] = row.task_id
+        return jsonify(task_map), 200
+        
+        # Get all tasks
+    except SQLAlchemyError as e:
+            db.session.rollback()
+            current_app.logger.error(f"Database error: {str(e)}")
+            return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating task: {str(e)}")
+        return jsonify({'error': 'An error occurred while updating the task'}), 500        
 
 
 @goals_bp.route("/api/goals/tasks/<task_id>", methods=["PUT"])

@@ -86,6 +86,7 @@ export function CalendarScheduler() {
 
   const [syncing, setSyncing] = useState(false);
   const [goalsByDate, setGoalsByDate] = useState<GoalsByDate>({});
+  const [sortedGoalsByDate, setSortedGoalsByDate] = useState<GoalsByDate>({});
   const [courses, setCourses] = useState<Course[]>([]);
 
   // SYNC BUTTON HANDLER
@@ -193,7 +194,7 @@ export function CalendarScheduler() {
 
   // Add subtask form state
   const [newSubtaskDescr, setNewSubtaskDescr] = useState('');
-  const [newSubtaskType, setNewSubtaskType] = useState('other');
+  const [newSubtaskTypeForAdd, setNewSubtaskTypeForAdd] = useState('other');
   const [newSubtaskTime, setNewSubtaskTime] = useState(15);
 
   // Add these state variables near the top for form fields
@@ -276,6 +277,25 @@ export function CalendarScheduler() {
     targetMinute: number | null;
   } | null>(null);
 
+  /** Drag-to-create subtask state */
+  const [isCreatingSubtask, setIsCreatingSubtask] = useState(false);
+  const [createSubtaskStart, setCreateSubtaskStart] = useState<{ date: Date; hour: number; minute: number } | null>(null);
+  const [createSubtaskEnd, setCreateSubtaskEnd] = useState<{ date: Date; hour: number; minute: number } | null>(null);
+  const [showCreateSubtaskModal, setShowCreateSubtaskModal] = useState(false);
+  const [createSubtaskModalPosition, setCreateSubtaskModalPosition] = useState({ x: 0, y: 0 });
+  const [availableTasks, setAvailableTasks] = useState<Record<string, string>>({});
+  const [selectedTaskId, setSelectedTaskId] = useState<string>('');
+  const [newSubtaskDescription, setNewSubtaskDescription] = useState('');
+  const [newSubtaskTypeForCreate, setNewSubtaskTypeForCreate] = useState('other');
+  const [dragPreview, setDragPreview] = useState<{
+    startDate: Date;
+    startHour: number;
+    startMinute: number;
+    endDate: Date;
+    endHour: number;
+    endMinute: number;
+  } | null>(null);
+
   /** Subtasks modal drag state */
   const [isSubtasksModalDragging, setIsSubtasksModalDragging] = useState(false);
   const [subtasksModalDragOffset, setSubtasksModalDragOffset] = useState({ x: 0, y: 0 });
@@ -341,10 +361,255 @@ export function CalendarScheduler() {
         position: { x: newX, y: newY }
       } : null);
     }
+
+    // Update create subtask modal if it exists
+    if (showCreateSubtaskModal) {
+      setCreateSubtaskModalPosition({ x: newX, y: newY });
+    }
   };
 
   const handleSubtasksModalMouseUp = () => {
     setIsSubtasksModalDragging(false);
+  };
+
+  // Drag-to-create subtask handlers
+  const handleTimeSlotMouseDown = (e: React.MouseEvent, date: Date, hour: number, minute: number = 0) => {
+    // Only start drag-to-create if not already dragging a task
+    if (isDraggingTask) return;
+    
+    // Check if the click target is an event
+    const target = e.target as HTMLElement;
+    const isEvent = target.closest('div.absolute.rounded') || 
+                   target.closest('div[style*="background-color"]') || 
+                   target.closest('div[style*="backgroundColor"]') ||
+                   (target.classList.contains('absolute') && target.style.backgroundColor);
+    
+    // Don't start drag-to-create if clicking on an event
+    if (isEvent) {
+      return;
+    }
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsCreatingSubtask(true);
+    setCreateSubtaskStart({ date, hour, minute });
+    setCreateSubtaskEnd({ date, hour, minute });
+    
+    // Initialize drag preview
+    setDragPreview({
+      startDate: date,
+      startHour: hour,
+      startMinute: minute,
+      endDate: date,
+      endHour: hour,
+      endMinute: minute
+    });
+  };
+
+  const handleTimeSlotMouseMove = (e: React.MouseEvent, date: Date, hour: number, minute: number = 0) => {
+    if (!isCreatingSubtask || !createSubtaskStart) return;
+    
+    // Check if the mouse is over an event
+    const target = e.target as HTMLElement;
+    const isEvent = target.closest('div.absolute.rounded') || 
+                   target.closest('div[style*="background-color"]') || 
+                   target.closest('div[style*="backgroundColor"]') ||
+                   (target.classList.contains('absolute') && target.style.backgroundColor);
+    
+    // Don't continue drag-to-create if over an event
+    if (isEvent) {
+      return;
+    }
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Adjust hour and minute for display - if minute is 0, use the current hour
+    // If minute is 30, use the current hour with 30 minutes
+    let displayHour = hour;
+    let displayMinute = minute;
+    
+    setCreateSubtaskEnd({ date, hour, minute });
+    
+    // Update drag preview
+    setDragPreview({
+      startDate: createSubtaskStart.date,
+      startHour: createSubtaskStart.hour,
+      startMinute: createSubtaskStart.minute,
+      endDate: date,
+      endHour: displayHour,
+      endMinute: displayMinute
+    });
+  };
+
+  const handleTimeSlotMouseUp = (e?: React.MouseEvent, date?: Date, hour?: number, minute?: number) => {
+    if (isCreatingSubtask && createSubtaskStart) {
+      // Check if the mouse is over an event
+      if (e) {
+        const target = e.target as HTMLElement;
+        const isEvent = target.closest('div.absolute.rounded') || 
+                       target.closest('div[style*="background-color"]') || 
+                       target.closest('div[style*="backgroundColor"]') ||
+                       (target.classList.contains('absolute') && target.style.backgroundColor);
+        
+        // Don't complete drag-to-create if over an event
+        if (isEvent) {
+          setIsCreatingSubtask(false);
+          setDragPreview(null); // Clear preview
+          return;
+        }
+      }
+      
+      setIsCreatingSubtask(false);
+      setShowCreateSubtaskModal(true);
+      // Initialize modal position at center of screen
+      setCreateSubtaskModalPosition({
+        x: Math.max(10, window.innerWidth / 2 - 200),
+        y: Math.max(10, window.innerHeight / 2 - 250)
+      });
+      fetchAvailableTasks();
+      // Keep the drag preview visible during modal creation
+      // setDragPreview(null); // Clear preview
+    }
+  };
+
+  // Fetch available tasks for the dropdown
+  const fetchAvailableTasks = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const res = await fetch(`${api}/api/goals/tasks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!res.ok) throw new Error(`Request failed ${res.status}`);
+      const tasks = await res.json();
+      setAvailableTasks(tasks);
+    } catch (error) {
+      console.error("Failed to fetch tasks:", error);
+      toast.error("Failed to load available tasks");
+    }
+  };
+
+  // Handle creating the subtask
+  const handleCreateSubtaskConfirm = async () => {
+    if (!selectedTaskId || !newSubtaskDescription.trim() || !createSubtaskStart || !createSubtaskEnd) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      
+      // Calculate start and end times in local timezone
+      const startDate = new Date(createSubtaskStart.date);
+      const startDateTime = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+        createSubtaskStart.hour,
+        createSubtaskStart.minute,
+        0,
+        0
+      );
+      
+      const endDate = new Date(createSubtaskEnd.date);
+      const endDateTime = new Date(
+        endDate.getFullYear(),
+        endDate.getMonth(),
+        endDate.getDate(),
+        createSubtaskEnd.hour,
+        createSubtaskEnd.minute,
+        0,
+        0
+      );
+      
+      // Ensure end time is after start time
+      if (endDateTime <= startDateTime) {
+        endDateTime.setMinutes(endDateTime.getMinutes() + 30); // Default to 30 minutes
+      }
+
+      const payload = {
+        subtask_descr: newSubtaskDescription.trim(),
+        subtask_type: newSubtaskTypeForCreate,
+        subtask_start_time: startDateTime.toISOString(),
+        subtask_end_time: endDateTime.toISOString(),
+        task_due_date: startDateTime.toISOString().split('T')[0] // Use start date as due date
+      };
+
+      const res = await fetch(`${api}/api/goals/tasks/${selectedTaskId}/subtasks`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to create subtask: ${res.status}`);
+      }
+
+      toast.success("Subtask created successfully!");
+      
+      // Reset form
+      setShowCreateSubtaskModal(false);
+      setSelectedTaskId('');
+      setNewSubtaskDescription('');
+      setNewSubtaskTypeForCreate('other');
+      setCreateSubtaskStart(null);
+      setCreateSubtaskEnd(null);
+      setDragPreview(null); // Clear preview when subtask is created
+      
+      // Refresh goals data
+      const fetchGoals = async () => {
+        try {
+          const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          
+          const grouped = await res.json() as Record<string, Goal[]>;
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) { 
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      await fetchGoals();
+      
+    } catch (error) {
+      console.error('Failed to create subtask:', error);
+      toast.error('Failed to create subtask');
+    }
+  };
+
+  const handleCreateSubtaskCancel = () => {
+    setShowCreateSubtaskModal(false);
+    setSelectedTaskId('');
+    setNewSubtaskDescription('');
+    setNewSubtaskTypeForCreate('other');
+    setCreateSubtaskStart(null);
+    setCreateSubtaskEnd(null);
+    setDragPreview(null); // Clear preview when modal is cancelled
   };
 
   // Drag and drop handlers for subtask events
@@ -393,18 +658,24 @@ export function CalendarScheduler() {
 
   const performSubtaskDrop = async (subtask: Goal, targetDate: Date, targetHour: number, targetMinute: number = 0) => {
     try {
-      // Calculate new start and end times based on drop location
-      const targetDateTime = new Date(targetDate);
-      targetDateTime.setHours(targetHour, targetMinute, 0, 0);
+      // Calculate new start and end times based on drop location in local timezone
+      const newStartTime = new Date(
+        targetDate.getFullYear(),
+        targetDate.getMonth(),
+        targetDate.getDate(),
+        targetHour,
+        targetMinute,
+        0,
+        0
+      );
       
       // Calculate duration from original subtask
       const originalStart = new Date(subtask.start_time!);
       const originalEnd = new Date(subtask.end_time!);
       const durationMs = originalEnd.getTime() - originalStart.getTime();
       
-      // Set new start time to the target hour and minute
-      const newStartTime = new Date(targetDateTime);
-      const newEndTime = new Date(targetDateTime.getTime() + durationMs);
+      // Set new end time based on duration
+      const newEndTime = new Date(newStartTime.getTime() + durationMs);
       
       // Call the update_subtask endpoint
       const token = localStorage.getItem("token");
@@ -672,7 +943,7 @@ export function CalendarScheduler() {
   const handleAddSubtaskCancel = () => {
     setAddSubtaskModal(null);
     setNewSubtaskDescr('');
-    setNewSubtaskType('other');
+    setNewSubtaskTypeForAdd('other');
     setNewSubtaskTime(15);
   }
 
@@ -689,7 +960,7 @@ export function CalendarScheduler() {
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
       const payload = {
         subtask_descr: newSubtaskDescr.trim(),
-        subtask_type: newSubtaskType,
+        subtask_type: newSubtaskTypeForAdd,
         task_due_date: addSubtaskModal.task.task_due_date || addSubtaskModal.task.due_date
       };
 
@@ -714,7 +985,7 @@ export function CalendarScheduler() {
           if (!token) return console.warn("No JWT in localStorage");
 
           const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-          const res = await fetch(`${api}/api/goals/user`, {
+          const res = await fetch(`${api}/api/goals/subtasks`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
@@ -1812,7 +2083,7 @@ export function CalendarScheduler() {
     }
   };
 
-  const [sortedGoalsByDate, setSortedGoalsByDate] = useState<GoalsByDate>({});
+
 
   // Helper function to get course color from courses array
   const getCourseColor = (courseId: string): string => {
@@ -1873,7 +2144,7 @@ export function CalendarScheduler() {
         if (!token) return console.warn("No JWT in localStorage");
 
         const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-        const res = await fetch(`${api}/api/goals/user`, {
+        const res = await fetch(`${api}/api/goals/subtasks`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error(`Request failed ${res.status}`);
@@ -2488,6 +2759,10 @@ export function CalendarScheduler() {
               onDayClick={handleDayClick}
               onTaskHover={handleTaskHover}
               onTaskMouseLeave={handleTaskMouseLeave}
+              handleTimeSlotMouseDown={handleTimeSlotMouseDown}
+              handleTimeSlotMouseMove={handleTimeSlotMouseMove}
+              handleTimeSlotMouseUp={handleTimeSlotMouseUp}
+              dragPreview={dragPreview}
             />
         ) : currentView === "week" ? (
           <WeekView
@@ -2515,6 +2790,10 @@ export function CalendarScheduler() {
             onDayClick={handleDayClick}
             onTaskHover={handleTaskHover}
             onTaskMouseLeave={handleTaskMouseLeave}
+            handleTimeSlotMouseDown={handleTimeSlotMouseDown}
+            handleTimeSlotMouseMove={handleTimeSlotMouseMove}
+            handleTimeSlotMouseUp={handleTimeSlotMouseUp}
+            dragPreview={dragPreview}
           />
         ) : currentView === "month" ? (
           <MonthView
@@ -3519,8 +3798,8 @@ export function CalendarScheduler() {
                     Type
                   </label>
                   <select
-                    value={newSubtaskType}
-                    onChange={e => setNewSubtaskType(e.target.value)}
+                                          value={newSubtaskTypeForAdd}
+                      onChange={e => setNewSubtaskTypeForAdd(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="reading">Reading</option>
@@ -3792,6 +4071,198 @@ export function CalendarScheduler() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Create Subtask Modal (Drag-to-Create) */}
+      {showCreateSubtaskModal && (
+        <>
+          {/* Backdrop for click-outside-to-close */}
+          <div 
+            className="fixed inset-0 z-[9998]"
+            onClick={handleCreateSubtaskCancel}
+          />
+          <div
+            className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg create-subtask-modal"
+            style={{
+              left: Math.max(10, createSubtaskModalPosition.x),
+              top: Math.max(10, createSubtaskModalPosition.y),
+              width: '400px',
+              maxHeight: '500px',
+              minWidth: '320px',
+              minHeight: '400px',
+            }}
+            onMouseDown={(e) => {
+              // Prevent backdrop click when clicking on modal
+              e.stopPropagation();
+            }}
+          >
+            <Card className="border-0 shadow-none h-full">
+              <CardHeader className="pb-3">
+                <div
+                  className="flex items-center justify-between cursor-move"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setIsSubtasksModalDragging(true);
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setSubtasksModalDragOffset({
+                      x: e.clientX - rect.left,
+                      y: e.clientY - rect.top
+                    });
+                  }}
+                  style={{ cursor: isSubtasksModalDragging ? 'grabbing' : 'grab' }}
+                >
+                  <div className="flex items-center gap-2">
+                    <GripVertical className="w-4 h-4 text-gray-400" />
+                    <CardTitle className="text-lg truncate">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <Plus className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <span>Create Subtask</span>
+                      </div>
+                    </CardTitle>
+                  </div>
+                  <button
+                    onClick={handleCreateSubtaskCancel}
+                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 hover:bg-gray-100 rounded"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-y-auto" style={{ maxHeight: '400px' }}>
+                <div className="space-y-4">
+                  {/* Time Range - Simplified */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-900">Time Range</h3>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                        <input
+                          type="date"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          value={(() => {
+                            if (!createSubtaskStart) return '';
+                            const d = new Date(createSubtaskStart.date);
+                            return d.toISOString().split('T')[0];
+                          })()}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (!val) return;
+                            const d = new Date(val);
+                            setCreateSubtaskStart(prev => prev ? { ...prev, date: d } : { date: d, hour: 9, minute: 0 });
+                            setCreateSubtaskEnd(prev => prev ? { ...prev, date: d } : { date: d, hour: 10, minute: 0 });
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Start Time</label>
+                          <input
+                            type="time"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                            value={(() => {
+                              if (!createSubtaskStart) return '';
+                              return `${createSubtaskStart.hour.toString().padStart(2, '0')}:${createSubtaskStart.minute.toString().padStart(2, '0')}`;
+                            })()}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (!val) return;
+                              const [hours, minutes] = val.split(':').map(Number);
+                              setCreateSubtaskStart(prev => prev ? { ...prev, hour: hours, minute: minutes } : { date: new Date(), hour: hours, minute: minutes });
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">End Time</label>
+                          <input
+                            type="time"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                            value={(() => {
+                              if (!createSubtaskEnd) return '';
+                              return `${createSubtaskEnd.hour.toString().padStart(2, '0')}:${createSubtaskEnd.minute.toString().padStart(2, '0')}`;
+                            })()}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (!val) return;
+                              const [hours, minutes] = val.split(':').map(Number);
+                              setCreateSubtaskEnd(prev => prev ? { ...prev, hour: hours, minute: minutes } : { date: new Date(), hour: hours, minute: minutes });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Task Selection */}
+                  <div className="space-y-3 pt-3 border-t border-gray-200">
+                    <h3 className="text-sm font-medium text-gray-900">Task Details</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Task *</label>
+                        <select
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          value={selectedTaskId}
+                          onChange={e => setSelectedTaskId(e.target.value)}
+                        >
+                          <option value="">Select a task</option>
+                          {Object.entries(availableTasks).map(([title, id]) => (
+                            <option key={id} value={id}>{title}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Subtask Description *</label>
+                        <input
+                          type="text"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          value={newSubtaskDescription}
+                          onChange={e => setNewSubtaskDescription(e.target.value)}
+                          placeholder="Enter subtask description"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                        <select
+                          value={newSubtaskTypeForCreate}
+                          onChange={e => setNewSubtaskTypeForCreate(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        >
+                          <option value="reading">Reading</option>
+                          <option value="flashcard">Flashcard</option>
+                          <option value="quiz">Quiz</option>
+                          <option value="practice">Practice</option>
+                          <option value="review">Review</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex gap-3 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={handleCreateSubtaskCancel}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCreateSubtaskConfirm}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create
+                    </button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
     </div>
   )

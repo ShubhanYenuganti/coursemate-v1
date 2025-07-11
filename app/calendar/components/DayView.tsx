@@ -31,7 +31,11 @@ export const DayView = ({
   dragTargetDate,
   onDayClick,
   onTaskHover,
-  onTaskMouseLeave
+  onTaskMouseLeave,
+  handleTimeSlotMouseDown,
+  handleTimeSlotMouseMove,
+  handleTimeSlotMouseUp,
+  dragPreview // NEW
 }: any) => (
     <div className="flex flex-col h-full">
       <div className="border-b border-gray-200 p-4 flex items-center justify-between">
@@ -111,6 +115,39 @@ export const DayView = ({
                   className={`h-20 border-b border-gray-200 relative p-1 overflow-visible transition-all duration-200 ${
                     isDragTarget ? 'bg-blue-50 border-2 border-blue-300 shadow-lg' : ''
                   }`}
+                  onMouseDown={e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const relativeY = e.clientY - rect.top;
+                    const cellHeight = rect.height;
+                    const minute = Math.floor((relativeY / cellHeight) * 60);
+                    const snappedMinute = Math.round(minute / 30) * 30;
+                    // Ensure minute is never 60 - if it is, use 0 and increment hour
+                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
+                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
+                    handleTimeSlotMouseDown?.(e, currentDate, adjustedHour, adjustedMinute);
+                  }}
+                  onMouseMove={e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const relativeY = e.clientY - rect.top;
+                    const cellHeight = rect.height;
+                    const minute = Math.floor((relativeY / cellHeight) * 60);
+                    const snappedMinute = Math.round(minute / 30) * 30;
+                    // Ensure minute is never 60 - if it is, use 0 and increment hour
+                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
+                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
+                    handleTimeSlotMouseMove?.(e, currentDate, adjustedHour, adjustedMinute);
+                  }}
+                  onMouseUp={e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const relativeY = e.clientY - rect.top;
+                    const cellHeight = rect.height;
+                    const minute = Math.floor((relativeY / cellHeight) * 60);
+                    const snappedMinute = Math.round(minute / 30) * 30;
+                    // Ensure minute is never 60 - if it is, use 0 and increment hour
+                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
+                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
+                    handleTimeSlotMouseUp?.(e, currentDate, adjustedHour, adjustedMinute);
+                  }}
                   onDragOver={(e) => {
                     // Calculate minute based on mouse position within the hour cell
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -119,7 +156,10 @@ export const DayView = ({
                     const minute = Math.floor((relativeY / cellHeight) * 60);
                     // Snap to 30-minute intervals
                     const snappedMinute = Math.round(minute / 30) * 30;
-                    handleTimeSlotDragOver?.(e, currentDate, h, snappedMinute);
+                    // Ensure minute is never 60 - if it is, use 0 and increment hour
+                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
+                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
+                    handleTimeSlotDragOver?.(e, currentDate, adjustedHour, adjustedMinute);
                   }}
                   onDragLeave={(e) => handleTimeSlotDragLeave?.(e)}
                   onDrop={(e) => {
@@ -130,7 +170,10 @@ export const DayView = ({
                     const minute = Math.floor((relativeY / cellHeight) * 60);
                     // Snap to 30-minute intervals
                     const snappedMinute = Math.round(minute / 30) * 30;
-                    handleTimeSlotDrop?.(e, currentDate, h, snappedMinute);
+                    // Ensure minute is never 60 - if it is, use 0 and increment hour
+                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
+                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
+                    handleTimeSlotDrop?.(e, currentDate, adjustedHour, adjustedMinute);
                   }}
                 >
                   {eventPositions.map((pos) => (
@@ -172,6 +215,31 @@ export const DayView = ({
                       )}
                     </div>
                   ))}
+                  
+                  {/* Drag Preview */}
+                  {dragPreview && dragPreview.startDate.toDateString() === currentDate.toDateString() && 
+                   dragPreview.startHour === h && (
+                    <div
+                      className="absolute rounded border-2 border-blue-400 bg-blue-100 bg-opacity-50 pointer-events-none"
+                      style={{
+                        left: '2%',
+                        width: '96%',
+                        top: `${(dragPreview.startMinute / 60) * 100}%`,
+                        height: `${Math.max(5, ((dragPreview.endHour - dragPreview.startHour) * 60 + (dragPreview.endMinute - dragPreview.startMinute)) / 60 * 100)}%`,
+                        zIndex: 1000,
+                      }}
+                    >
+                      <div className="absolute top-1 left-1 text-xs text-blue-700 font-medium bg-blue-200 bg-opacity-80 px-1 rounded">
+                        {(() => {
+                          const startDate = new Date();
+                          startDate.setHours(dragPreview.startHour, dragPreview.startMinute, 0, 0);
+                          const endDate = new Date();
+                          endDate.setHours(dragPreview.endHour, dragPreview.endMinute, 0, 0);
+                          return `${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+                        })()}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

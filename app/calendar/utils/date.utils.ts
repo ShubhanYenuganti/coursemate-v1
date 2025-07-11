@@ -19,7 +19,7 @@ export const formatHourLabel = (h: number, withMinutes = false) => {
     const date = new Date()
     date.setHours(h, 0, 0, 0)
     return date.toLocaleTimeString("en-US",
-        { hour: "2-digit", minute: withMinutes ? "2-digit" : undefined }
+        { hour: "numeric", minute: withMinutes ? "2-digit" : undefined, hour12: true }
     )
 }
 
