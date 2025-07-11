@@ -955,8 +955,8 @@ export function CalendarScheduler() {
     const token = localStorage.getItem("token");
     if (!token) return alert("Please log in first.");
 
-    const api = process.env.BACKEND_URL || "http://localhost:5173";
-    window.location.href = `${api}/api/calendar/auth?token=${token}`;
+    const apiBase = process.env.BACKEND_URL;
+    window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
 
   // one ref for both Day + Week
@@ -983,7 +983,7 @@ export function CalendarScheduler() {
           typeof window !== "undefined" ? localStorage.getItem("token") : null;
         if (!token) return console.warn("No JWT in localStorage");
 
-        const api = process.env.BACKEND_URL || "http://localhost:5173";
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
         const res = await fetch(`${api}/api/goals/user`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -1140,8 +1140,36 @@ export function CalendarScheduler() {
                     </div>
                   ))}
                 </div>
+
+                {/* days */}
+                {weekDates.map((d, dayIdx) => (
+                  <div key={d.toISOString()} className="flex-1 border-r border-gray-200">
+                    {hours.map((h) => (
+                      <div key={h} className="h-16 border-b border-gray-200 relative p-1">
+                        {getGoalsForDate(d)
+                          .filter((g) => {
+                            if (!g.start_time) return false;
+                            const startHour = new Date(g.start_time).getHours();
+                            return startHour === h;
+                          })
+                          .map((g) => (
+                            <div
+                              key={g.goal_id}
+                              className="absolute inset-1 rounded p-2 text-xs text-white font-medium cursor-pointer"
+                              style={{ backgroundColor: colorForCourse(g.course_id, g.google_calendar_color) }}
+                              onClick={() => handleTaskClick(g)}
+                            >
+                              <div className="font-semibold">{g.task_title || g.goal_descr || "Untitled"}</div>
+                              <div className="text-xs opacity-90">{g.task_descr || ""}</div>
+                            </div>
+                          ))}
+                      </div>
+                    ))}
+                  </div>
+                ))}
               </div>
-            </>
+            </div>
+          </>
         ) : /* ───────── WEEK VIEW ───────── */ currentView === "week" ? (
           <WeekView currentDate={currentDate} setCurrentDate={setCurrentDate} weekDates={weekDates} hours={hours} getGoalsForDate={getGoalsForDate} handleTaskClick={handleTaskClick} setTimelineRef={setTimelineRef} formatHourLabel={formatHourLabel} />
         ) : /* ───────── MONTH VIEW ───────── */ currentView === "month" ? (

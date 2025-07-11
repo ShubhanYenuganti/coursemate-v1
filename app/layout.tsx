@@ -6,7 +6,6 @@ import { CourseProvider } from "@/contexts/course-context"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { Providers } from "@/app/context/Providers"
-import StreakTracker from "@/components/StreakTracker"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -26,13 +25,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+      <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           <Providers>
-            <CourseProvider>
-              <StreakTracker />
-              {children}
-            </CourseProvider>
+          <CourseProvider>{children}</CourseProvider>
           </Providers>
           <Toaster />
         </ThemeProvider>
