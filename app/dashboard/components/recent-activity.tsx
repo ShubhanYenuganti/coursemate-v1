@@ -214,9 +214,9 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
                 </div>
                 <div className="text-xs text-gray-500">
                   {formatTime(selectedMessage.timestamp)}
-                  {modalActivity.user}
+                  {selectedMessage.senderName}
                 </div>
-                <div className="text-xs text-gray-500">{modalActivity.time}</div>
+                {/* Removed modalActivity.time as modalActivity is not defined */}
               </div>
             </div>
             
