@@ -88,7 +88,7 @@ const TodaysChecklist: React.FC = () => {
         setIsLoading(false);
       }
     };
-    fetchChecklistTasks();
+    fetchTasks();
   }, []);
 
   const filteredCourses = userCourses.filter(course =>

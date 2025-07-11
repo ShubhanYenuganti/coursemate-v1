@@ -1,8 +1,8 @@
 "use client";
-import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Target, TrendingUp, Brain, X, ChevronDown, ChevronRight, Calendar, Clock, Edit, Trash2, FileText, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Target, TrendingUp, Brain, X } from 'lucide-react';
 import { getGoalsWithProgress } from './mockData';
-import { GoalWithProgress, Goal, Task, Subtask, StudyPlanStats } from './types';
+import { GoalWithProgress, Goal, Task, Subtask } from './types';
 import GoalCard from './GoalCard';
 import AddGoalModal from './AddGoalModal';
 import TaskScaffoldingScreen from './TaskScaffoldingScreen';
@@ -13,11 +13,6 @@ import { toast } from 'react-hot-toast';
 import { Toaster } from 'react-hot-toast';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Portal } from '../../../../components/Portal';
-import { PomodoroProvider } from '../PomodoroContext';
-import { PomodoroTimer } from '../PomodoroTimer';
-import AddTaskModal from './AddTaskModal';
-import AddSubtaskModal from './AddSubtaskModal';
-import AIGenerateScreen from './AIGenerateScreen';
 
 interface StudyPlanTabProps {
   courseId: string;
@@ -28,94 +23,6 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const [isScaffoldingOpen, setIsScaffoldingOpen] = useState(false);
   const [newGoal, setNewGoal] = useState<GoalWithProgress | null>(null);
   const [goals, setGoals] = useState<GoalWithProgress[]>([]);
-  const [tasksData, setTasksData] = useState<Record<string, TaskWithSubtasks[]>>({});
-  const [courseStats, setCourseStats] = useState<StudyPlanStats>({
-    totalGoals: 0,
-    completedGoals: 0,
-    totalTasks: 0,
-    completedTasks: 0,
-    totalSubtasks: 0,
-    completedSubtasks: 0,
-    averageCompletionRate: 0,
-    tasksOverdue: 0,
-    estimatedMinutesRemaining: 0
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [feedbackModal, setFeedbackModal] = useState<{ task: any, goal: any, feedback: string } | null>(null);
-  const [pomodoroModal, setPomodoroModal] = useState<{ subtask: any, task: any, goal: any } | null>(null);
-  const [showAddGoalModal, setShowAddGoalModal] = useState(false);
-  const [showAddTaskModal, setShowAddTaskModal] = useState<{ goalId: string } | null>(null);
-  const [showAddSubtaskModal, setShowAddSubtaskModal] = useState<{ goalId: string; taskId: string } | null>(null);
-  const [goalCreationStep, setGoalCreationStep] = useState<'goal' | 'tasks' | 'subtasks'>('goal');
-  const [currentGoalId, setCurrentGoalId] = useState<string | null>(null);
-  const [pomodoroTimerModal, setPomodoroTimerModal] = useState<{ subtask: any, task: any, goal: any } | null>(null);
-  const [editGoalModal, setEditGoalModal] = useState<{ goal: any } | null>(null);
-  const [editTaskModal, setEditTaskModal] = useState<{ task: any, goal: any } | null>(null);
-  const [editSubtaskModal, setEditSubtaskModal] = useState<{ subtask: any, task: any, goal: any } | null>(null);
-  const [newGoalData, setNewGoalData] = useState({
-    title: '',
-    targetDate: '',
-    tasks: [] as Array<{
-      id: string;
-      name: string;
-      type: 'reading' | 'studying' | 'problems' | 'writing' | 'research' | 'practice';
-      scheduledDate: string;
-      estimatedTimeMinutes: number;
-      subtasks: Array<{
-        id: string;
-        name: string;
-        type: string;
-        estimatedTimeMinutes: number;
-        completed?: boolean;
-      }>;
-    }>
-  });
-  const [editingSubtask, setEditingSubtask] = useState<{ goalId: string; taskId: string; subtaskId: string } | null>(null);
-  const [editingSubtaskName, setEditingSubtaskName] = useState('');
-  const [currentTaskTimes, setCurrentTaskTimes] = useState<Record<string, number>>({});
-  const [activeGoalForTaskSetup, setActiveGoalForTaskSetup] = useState<GoalWithProgress | null>(null);
-  const [startedSubtasks, setStartedSubtasks] = useState<Set<string>>(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('startedSubtasks') : null;
-    return saved ? new Set(JSON.parse(saved)) : new Set();
-  });
-  const [showAIGenerateScreen, setShowAIGenerateScreen] = useState(false);
-  const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
-  const [isScaffoldingOpen, setIsScaffoldingOpen] = useState(false);
-
-  // Persist startedSubtasks to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('startedSubtasks', JSON.stringify(Array.from(startedSubtasks)));
-  }, [startedSubtasks]);
-
-  // Move these functions outside AddGoalModal so they can be used in main component
-  const handleSubtaskChange = useCallback((taskId: string, subtaskId: string, field: string, value: any) => {
-    setNewGoalData(prev => ({
-      ...prev,
-      tasks: prev.tasks.map(task => 
-        task.id === taskId 
-          ? {
-              ...task,
-              subtasks: task.subtasks.map(subtask => 
-                subtask.id === subtaskId ? { ...subtask, [field]: value } : subtask
-              )
-            }
-          : task
-      )
-    }));
-  }, []);
-
-  const handleRemoveSubtask = useCallback((taskId: string, subtaskId: string) => {
-    setNewGoalData(prev => ({
-      ...prev,
-      tasks: prev.tasks.map(task => 
-        task.id === taskId 
-          ? { ...task, subtasks: task.subtasks.filter(subtask => subtask.id !== subtaskId) }
-          : task
-      )
-    }));
-  }, []);
-
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAIGenerator, setShowAIGenerator] = useState(false);
@@ -444,33 +351,13 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     }
   };
 
-  const getCurrentTaskTime = async (taskId: string) => {
-    try {
-      const api = process.env.BACKEND_URL || "http://localhost:5173";
-      const response = await fetch(`${api}/api/goals/tasks/${taskId}/current-time`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data;
-      }
-    } catch (error) {
-      console.error('Error getting current task time:', error);
-    }
-    return null;
-  };
-  
   const handleStudyPlanGenerated = async (studyPlan: any) => {
     setIsAIGenerating(false);
     setShowAIGenerator(false);
     // Trigger a refresh of the goals list
     setLoading(true);
     try {
-      const api = process.env.BACKEND_URL || "http://localhost:5173";
-      const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
+      const response = await fetch(`/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -499,32 +386,61 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     }
   };
 
-  const handleSubtaskStartTracking = async (goalId: string, taskId: string, subtaskId: string) => {
-    try {
-      // Start time tracking for the task
-      await startTaskTracking(taskId, subtaskId);
-      // Mark this subtask as started in the UI
-      setStartedSubtasks(prev => new Set(prev).add(subtaskId));
-      // Open Pomodoro timer modal for this subtask
-      const goal = goals.find(g => g.id === goalId);
-      const task = (tasksData[goalId] || []).find(t => t.id === taskId);
-      const subtask = task?.subtasks.find(s => s.id === subtaskId);
-      if (goal && task && subtask) {
-        setPomodoroTimerModal({ subtask, task, goal });
-      }
-      toast.success('Time tracking started for this task');
-    } catch (error) {
-      console.error('Error starting time tracking:', error);
-      toast.error('Failed to start time tracking');
-    }
-  };
-
   // Pass this to the AI modal
   const handleAIGenerateStart = () => {
     setIsAIGenerating(true);
   };
 
-  if (isLoading) {
+  const handleUseStudyPlan = (studyPlan: any) => {
+    // Convert the AI-generated study plan to the format expected by the scaffolding screen
+    const tasks: Task[] = studyPlan.tasks.map((task: any, index: number) => ({
+      id: `task-${index}`,
+      name: task.name,
+      description: task.description,
+      scheduledDate: new Date().toISOString(),
+      completed: false,
+      estimatedHours: task.estimated_hours,
+      priority: task.priority
+    }));
+
+    const subtasks: Subtask[] = studyPlan.tasks.flatMap((task: any, taskIndex: number) =>
+      task.subtasks.map((subtask: any, subtaskIndex: number) => ({
+        id: `subtask-${taskIndex}-${subtaskIndex}`,
+        taskId: `task-${taskIndex}`,
+        name: subtask.name,
+        description: subtask.description,
+        type: subtask.type,
+        completed: false,
+        estimatedMinutes: subtask.estimated_minutes
+      }))
+    );
+
+    // Create a new goal from the study plan
+    const newGoalFromPlan: GoalWithProgress = {
+      id: `temp-${Date.now()}`,
+      courseId: courseId,
+      title: studyPlan.goal_title,
+      targetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+      workMinutesPerDay: 60,
+      frequency: 'daily',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      progress: 0,
+      totalTasks: tasks.length,
+      completedTasks: 0
+    };
+
+    setNewGoal(newGoalFromPlan);
+    setIsScaffoldingOpen(true);
+    setGeneratedStudyPlan(null);
+  };
+
+  const handleRegenerateStudyPlan = () => {
+    setGeneratedStudyPlan(null);
+    setShowAIGenerator(true);
+  };
+
+  if (isScaffoldingOpen && newGoal) {
     return (
       <>
         <Toaster position="top-right" />
