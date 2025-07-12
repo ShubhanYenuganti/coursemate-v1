@@ -99,6 +99,11 @@ def create_app(config_class=Config):
     app.register_blueprint(calendar_bp)
     register_calendar_oauth(app)
     
+    # Initialize background workers for Google Calendar sync
+    with app.app_context():
+        from .routes.goals import init_background_workers
+        init_background_workers(app)
+    
     # Global error handler to return JSON errors with CORS headers
     @app.errorhandler(Exception)
     def handle_exception(e):

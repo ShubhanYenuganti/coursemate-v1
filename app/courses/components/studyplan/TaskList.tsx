@@ -19,13 +19,14 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
       setLoading(true);
       console.log(`Fetching tasks for goal: ${goalId}`);
       
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
       const token = localStorage.getItem('token');
       if (!token) {
         console.error('No authentication token found');
         throw new Error('Authentication token missing');
       }
       
-      const response = await fetch(`/api/goals/${goalId}/tasks`, {
+      const response = await fetch(`${api}/api/goals/${goalId}/tasks`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -55,6 +56,11 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
       
       // First pass: create task objects
       data.forEach((item: any) => {
+        // Filter out placeholder tasks
+        if (item.task_id === 'placeholder') {
+          return;
+        }
+        
         if (!taskMap.has(item.task_id)) {
           taskMap.set(item.task_id, {
             id: item.task_id,
@@ -81,7 +87,9 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
           estimatedTimeMinutes: 15, // Default value
           completed: item.subtask_completed,
           createdAt: item.created_at,
-          updatedAt: item.updated_at
+          updatedAt: item.updated_at,
+          task_due_date: item.task_due_date,
+          subtask_order: item.subtask_order
         });
       });
       
@@ -119,6 +127,7 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
 
   const saveNewTask = async (newTask: TaskWithProgress) => {
     try {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
       const token = localStorage.getItem('token');
       if (!token) {
         console.error('No authentication token found');
@@ -126,7 +135,7 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
       }
       
       // Use the new create-empty-task endpoint
-      const response = await fetch(`/api/goals/${goalId}/create-empty-task`, {
+      const response = await fetch(`${api}/api/goals/${goalId}/create-empty-task`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -153,7 +162,8 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
 
   const handleTaskDeleted = async (taskId: string) => {
     try {
-      const response = await fetch(`/api/goals/${goalId}/tasks/${taskId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}/tasks/${taskId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -175,6 +185,7 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
           id: 'deleted',
           goalId: goalId,
           name: 'deleted',
+          description: "",
           scheduledDate: new Date().toISOString(),
           completed: false,
           createdAt: new Date().toISOString(),
@@ -214,6 +225,7 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
               id: `new-${Date.now()}`,
               goalId: goalId,
               name: "New Task",
+              description: "",
               scheduledDate: new Date().toISOString(),
               completed: false,
               createdAt: new Date().toISOString(),

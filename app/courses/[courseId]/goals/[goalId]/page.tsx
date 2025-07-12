@@ -18,6 +18,7 @@ import { GoalWithProgress, Task, TaskWithProgress, Subtask } from '../../../comp
 import TaskCard from '../../../components/studyplan/TaskCard';
 import SubtaskList from '../../../components/studyplan/SubtaskList';
 import TaskEditorModal from '../../../components/studyplan/TaskEditorModal';
+import { format, parseISO } from 'date-fns';
 
 const GoalDetailPage = () => {
   // Use the useParams hook to get the route parameters
@@ -41,12 +42,10 @@ const GoalDetailPage = () => {
 
   useEffect(() => {
     const fetchGoalDetails = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        console.log('Fetching goal details for courseId:', courseId, 'goalId:', goalId);
-        
-        // Fetch goal details
-        const goalResponse = await fetch(`/api/courses/${courseId}/goals`, {
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const goalResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -90,7 +89,8 @@ const GoalDetailPage = () => {
           updatedAt: currentGoal.updated_at,
           progress: currentGoal.progress || 0,
           totalTasks: currentGoal.total_tasks || 0,
-          completedTasks: currentGoal.completed_tasks || 0
+          completedTasks: currentGoal.completed_tasks || 0,
+          completed: currentGoal.goal_completed || false
         };
         
         setGoal(transformedGoal);
@@ -99,7 +99,7 @@ const GoalDetailPage = () => {
         
         // Fetch tasks for this goal
         console.log('Fetching tasks for goalId:', goalId);
-        const tasksResponse = await fetch(`/api/goals/${goalId}/tasks`, {
+        const tasksResponse = await fetch(`${api}/api/goals/${goalId}/tasks`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -127,6 +127,11 @@ const GoalDetailPage = () => {
         tasksData.forEach((item: any) => {
           console.log('Processing task item:', item);
           
+          // Filter out placeholder tasks
+          if (item.task_id === 'placeholder') {
+            return;
+          }
+          
           // Each row in the response contains goal, task, and subtask data
           // We need to extract and group by task_id
           if (!taskMap.has(item.task_id)) {
@@ -134,7 +139,7 @@ const GoalDetailPage = () => {
               id: item.task_id,
               goalId: goalId,
               name: item.task_title,
-              scheduledDate: item.due_date || new Date().toISOString(),
+              scheduledDate: item.task_due_date || new Date().toISOString(),
               completed: item.task_completed,
               createdAt: item.created_at,
               updatedAt: item.updated_at,
@@ -185,7 +190,24 @@ const GoalDetailPage = () => {
           // Combine existing and new tasks
           const combinedTasks = [...currentTasks, ...newTasks];
           
-          // Update goal progress is handled in the second instance
+          // Update goal progress
+          if (goal) {
+            const totalSubtasks = combinedTasks.reduce((sum, task) => sum + task.totalSubtasks, 0);
+            const completedSubtasks = combinedTasks.reduce((sum, task) => sum + task.completedSubtasks, 0);
+            const newProgress = totalSubtasks > 0 
+              ? Math.round((completedSubtasks / totalSubtasks) * 100)
+              : 0;
+            
+            const allTasksCompleted = combinedTasks.length > 0 && combinedTasks.every(t => t.completed);
+            
+            setGoal({
+              ...goal,
+              progress: newProgress,
+              totalTasks: combinedTasks.length,
+              completedTasks: combinedTasks.filter(t => t.progress === 100).length,
+              completed: allTasksCompleted
+            });
+          }
           
           return combinedTasks;
         });
@@ -208,7 +230,8 @@ const GoalDetailPage = () => {
     if (!goal) return;
     
     try {
-      const response = await fetch(`/api/goals/${goalId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +240,7 @@ const GoalDetailPage = () => {
         body: JSON.stringify({
           goal_descr: editedGoalTitle,
           due_date: editedGoalDate,
-          goal_completed: goal.progress === 100
+          goal_completed: goal.completed
         })
       });
 
@@ -251,7 +274,7 @@ const GoalDetailPage = () => {
       const tasksData = [{
         task_title: newTaskName,
         task_descr: '',
-        due_date: newTaskDate,
+        scheduledDate: newTaskDate,
         completed: false,
         subtasks: [{
           subtask_descr: 'Initial step',
@@ -262,7 +285,8 @@ const GoalDetailPage = () => {
       
       console.log('Creating new task:', tasksData);
       
-      const response = await fetch(`/api/goals/${goalId}/save-tasks`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}/save-tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -277,7 +301,7 @@ const GoalDetailPage = () => {
       }
       
       // Refresh tasks
-      const tasksResponse = await fetch(`/api/goals/${goalId}/tasks`, {
+      const tasksResponse = await fetch(`${api}/api/goals/${goalId}/tasks`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -295,6 +319,11 @@ const GoalDetailPage = () => {
       
       // First pass: create task objects
       tasksData2.forEach((item: any) => {
+        // Filter out placeholder tasks
+        if (item.task_id === 'placeholder') {
+          return;
+        }
+        
         // Each row in the response contains goal, task, and subtask data
         // We need to extract and group by task_id
         if (!taskMap.has(item.task_id)) {
@@ -302,7 +331,7 @@ const GoalDetailPage = () => {
             id: item.task_id,
             goalId: goalId,
             name: item.task_title,
-            scheduledDate: item.due_date || new Date().toISOString(),
+            scheduledDate: item.task_due_date || new Date().toISOString(),
             completed: item.task_completed,
             createdAt: item.created_at,
             updatedAt: item.updated_at,
@@ -361,11 +390,14 @@ const GoalDetailPage = () => {
             ? Math.round((completedSubtasks / totalSubtasks) * 100)
             : 0;
           
+          const allTasksCompleted = combinedTasks.length > 0 && combinedTasks.every(t => t.completed);
+          
           setGoal({
             ...goal,
             progress: newProgress,
             totalTasks: combinedTasks.length,
-            completedTasks: combinedTasks.filter(t => t.progress === 100).length
+            completedTasks: combinedTasks.filter(t => t.progress === 100).length,
+            completed: allTasksCompleted
           });
         }
         
@@ -394,17 +426,21 @@ const GoalDetailPage = () => {
           task_id: updatedTask.id,
           task_title: updatedTask.name,
           task_completed: updatedTask.completed,
-          subtasks: updatedTask.subtasks.map(subtask => ({
+          task_due_date: updatedTask.scheduledDate,
+          task_descr: updatedTask.description,
+          subtasks: updatedTask.subtasks.map((subtask, index) => ({
             subtask_id: subtask.id,
             subtask_descr: subtask.name,
             subtask_type: subtask.type,
-            subtask_completed: subtask.completed
+            subtask_completed: subtask.completed,
+            subtask_order: subtask.subtask_order !== undefined ? subtask.subtask_order : index
           }))
         }]
       };
       
       // Update task in backend
-      const response = await fetch(`/api/goals/${goalId}/tasks`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}/tasks`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -425,11 +461,30 @@ const GoalDetailPage = () => {
         )
       );
       
+      // Recalculate goal progress and completedTasks
+      if (goal) {
+        // Use the updated tasks array
+        const updatedTasks = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
+        const totalTasks = updatedTasks.length;
+        const completedTasks = updatedTasks.filter(t => t.completed).length;
+        const totalSubtasks = updatedTasks.reduce((sum, t) => sum + t.totalSubtasks, 0);
+        const completedSubtasks = updatedTasks.reduce((sum, t) => sum + t.completedSubtasks, 0);
+        const progress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+        const allTasksCompleted = totalTasks > 0 && completedTasks === totalTasks;
+        setGoal({
+          ...goal,
+          completed: allTasksCompleted,
+          completedTasks,
+          totalTasks,
+          progress
+        });
+      }
+      
       // Close the editor
       setEditingTask(null);
       
       // Refresh goal data to get updated progress
-      const goalResponse = await fetch(`/api/courses/${courseId}/goals`, {
+      const goalResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -456,7 +511,8 @@ const GoalDetailPage = () => {
             updatedAt: currentGoal.updated_at,
             progress: currentGoal.progress || 0,
             totalTasks: currentGoal.total_tasks || 0,
-            completedTasks: currentGoal.completed_tasks || 0
+            completedTasks: currentGoal.completed_tasks || 0,
+            completed: currentGoal.goal_completed || false
           };
           
           setGoal(updatedGoal);
@@ -472,7 +528,8 @@ const GoalDetailPage = () => {
 
   const handleTaskDeleted = async (taskId: string) => {
     try {
-      const response = await fetch(`/api/goals/${goalId}/tasks/${taskId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}/tasks/${taskId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -487,7 +544,7 @@ const GoalDetailPage = () => {
       const updatedTasks = tasks.filter(task => task.id !== taskId);
       setTasks(updatedTasks);
       
-      // Update goal progress
+      // Update goal progress and completion status
       if (goal) {
         const totalSubtasks = updatedTasks.reduce((sum, task) => sum + task.totalSubtasks, 0);
         const completedSubtasks = updatedTasks.reduce((sum, task) => sum + task.completedSubtasks, 0);
@@ -495,11 +552,14 @@ const GoalDetailPage = () => {
           ? Math.round((completedSubtasks / totalSubtasks) * 100)
           : 0;
         
+        const allTasksCompleted = updatedTasks.length > 0 && updatedTasks.every(t => t.completed);
+        
         setGoal({
           ...goal,
           progress: newProgress,
           totalTasks: updatedTasks.length,
-          completedTasks: updatedTasks.filter(t => t.progress === 100).length
+          completedTasks: updatedTasks.filter(t => t.progress === 100).length,
+          completed: allTasksCompleted
         });
       }
       
@@ -516,7 +576,8 @@ const GoalDetailPage = () => {
 
   const handleConfirmDeleteGoal = async () => {
     try {
-      const response = await fetch(`/api/goals/${goalId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -544,7 +605,106 @@ const GoalDetailPage = () => {
     }
   };
 
+  const handleToggleTaskCompletion = async (task: TaskWithProgress) => {
+    try {
+      // Store the original state for potential rollback
+      const originalGoal = goal;
+      const originalTasks = tasks;
+      
+      // Determine new completion status
+      const togglingToComplete = !task.completed;
+      
+      // Prepare updated subtasks
+      let updatedSubtasks;
+      if (togglingToComplete) {
+        // Mark all subtasks as complete
+        updatedSubtasks = task.subtasks.map(subtask => ({ ...subtask, completed: true }));
+      } else {
+        // Leave subtasks as-is
+        updatedSubtasks = [...task.subtasks];
+      }
+      
+      // Count completed subtasks
+      const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+      const totalSubtasksCount = updatedSubtasks.length;
+      const newProgress = totalSubtasksCount > 0 
+        ? Math.round((completedSubtasksCount / totalSubtasksCount) * 100)
+        : 0;
+      
+      const updatedTask = {
+        ...task,
+        completed: togglingToComplete,
+        subtasks: updatedSubtasks,
+        completedSubtasks: completedSubtasksCount,
+        totalSubtasks: totalSubtasksCount,
+        progress: newProgress
+      };
+      
+      // Optimistic update - immediately update the UI
+      setTasks(prevTasks =>
+        prevTasks.map(t => t.id === updatedTask.id ? updatedTask : t)
+      );
+      
+      // Recalculate goal progress and completedTasks
+      if (goal) {
+        // Use the updated tasks array
+        const updatedTasks = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
+        const totalTasks = updatedTasks.length;
+        const completedTasks = updatedTasks.filter(t => t.completed).length;
+        const totalSubtasks = updatedTasks.reduce((sum, t) => sum + t.totalSubtasks, 0);
+        const completedSubtasks = updatedTasks.reduce((sum, t) => sum + t.completedSubtasks, 0);
+        const progress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+        const allTasksCompleted = totalTasks > 0 && completedTasks === totalTasks;
+        setGoal({
+          ...goal,
+          completed: allTasksCompleted,
+          completedTasks,
+          totalTasks,
+          progress
+        });
+      }
+      
+      // Prepare the data for the API
+      const taskData = {
+        tasks: [{
+          task_id: updatedTask.id,
+          task_title: updatedTask.name,
+          task_completed: updatedTask.completed,
+          subtasks: updatedSubtasks.map((subtask, index) => ({
+            subtask_id: subtask.id,
+            subtask_descr: subtask.name,
+            subtask_type: subtask.type,
+            subtask_completed: subtask.completed,
+            subtask_order: subtask.subtask_order !== undefined ? subtask.subtask_order : index
+          }))
+        }]
+      };
+      
+      // Update task in backend
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}/tasks`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(taskData)
+      });
 
+      if (!response.ok) {
+        // If API call fails, revert the optimistic updates
+        console.error('Task toggle failed, reverting changes');
+        setGoal(originalGoal);
+        setTasks(originalTasks);
+        throw new Error('Failed to update task');
+      }
+
+      toast.success('Task completion toggled');
+    } catch (error) {
+      console.error('Error toggling task completion:', error);
+      toast.error('Failed to toggle task completion');
+    }
+  };
 
   if (loading || !goal) {
     return (
@@ -566,7 +726,10 @@ const GoalDetailPage = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    // Extract the date part (YYYY-MM-DD) and display as local calendar day
+    const [year, month, day] = dateString.split('T')[0].split('-');
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    return date.toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
@@ -634,7 +797,7 @@ const GoalDetailPage = () => {
                     <Target className="w-5 h-5 text-white" />
                   </div>
                   <h2 className="text-2xl font-bold text-gray-900">{goal.title}</h2>
-                  {goal.progress === 100 && (
+                  {goal.completed && (
                     <span className="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full font-medium">
                       Completed
                     </span>
@@ -763,7 +926,10 @@ const GoalDetailPage = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {tasks.map(task => (
+            {tasks
+              .slice() // create a shallow copy to avoid mutating state
+              .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
+              .map(task => (
               <div key={task.id} className="bg-white rounded-lg border border-gray-200 shadow-sm">
                 {/* Task Header */}
                 <div className="p-4 cursor-pointer" onClick={() => toggleTaskExpansion(task.id)}>
@@ -771,9 +937,30 @@ const GoalDetailPage = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         {task.completed ? (
-                          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleTaskCompletion(task);
+                            }}
+                            className="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors bg-green-500 border-green-500 hover:bg-green-600"
+                            title="Mark as incomplete"
+                          >
+                            <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
                         ) : (
-                          <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                          // Only show checkbox if all subtasks are completed
+                          task.totalSubtasks > 0 && task.completedSubtasks === task.totalSubtasks && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleTaskCompletion(task);
+                            }}
+                            className="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors bg-white border-gray-300 hover:border-green-400"
+                            title="Mark as complete"
+                          />
+                          )
                         )}
                         <h4 className={`font-medium ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{task.name}</h4>
                       </div>
@@ -825,16 +1012,19 @@ const GoalDetailPage = () => {
                   <div className="border-t border-gray-200 p-4">
                     <SubtaskList 
                       taskId={task.id} 
-                      subtasks={task.subtasks}
+                        subtasks={task.subtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0))}
+                        taskDueDate={task.scheduledDate}
                       onSubtaskDeleted={(subtaskId) => {
                         // Update the local task state to reflect the deleted subtask
                         const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
+                          // Keep the order after deletion
+                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
                         const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
                         const totalSubtasksCount = updatedSubtasks.length;
                         
                         const updatedTask = {
                           ...task,
-                          subtasks: updatedSubtasks,
+                            subtasks: sortedSubtasks,
                           totalSubtasks: totalSubtasksCount,
                           completedSubtasks: completedSubtasksCount,
                           // Automatically complete task if all subtasks are done
@@ -852,12 +1042,14 @@ const GoalDetailPage = () => {
                       onSubtaskAdded={(newSubtask) => {
                         // Update the local task state to reflect the added subtask
                         const updatedSubtasks = [...task.subtasks, newSubtask];
+                          // Keep the order after addition
+                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
                         const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
                         const totalSubtasksCount = updatedSubtasks.length;
                         
                         const updatedTask = {
                           ...task,
-                          subtasks: updatedSubtasks,
+                            subtasks: sortedSubtasks,
                           totalSubtasks: totalSubtasksCount,
                           completedSubtasks: completedSubtasksCount,
                           // Automatically complete task if all subtasks are done
@@ -877,13 +1069,15 @@ const GoalDetailPage = () => {
                         const updatedSubtasks = task.subtasks.map(subtask => 
                           subtask.id === subtaskId ? { ...subtask, completed } : subtask
                         );
+                          // Keep the order after toggle
+                          const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
                         
                         const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
                         const totalSubtasksCount = updatedSubtasks.length;
                         
                         const updatedTask = {
                           ...task,
-                          subtasks: updatedSubtasks,
+                            subtasks: sortedSubtasks,
                           completedSubtasks: completedSubtasksCount,
                           // Automatically complete task if all subtasks are done
                           completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0

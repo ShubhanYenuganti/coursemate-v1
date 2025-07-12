@@ -18,6 +18,16 @@ interface StudyPlanTabProps {
   courseId: string;
 }
 
+function formatDate(dateString: string) {
+  const [year, month, day] = dateString.split('T')[0].split('-');
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
   const [isScaffoldingOpen, setIsScaffoldingOpen] = useState(false);
@@ -32,9 +42,10 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   // Fetch goals from the backend
   useEffect(() => {
     const fetchGoals = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        const response = await fetch(`/api/courses/${courseId}/goals`, {
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -45,25 +56,26 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         }
 
         const data = await response.json();
-        
+
         // Transform backend data to match frontend types
         const transformedGoals: GoalWithProgress[] = data.map((goal: any) => {
           console.log('Processing goal from API:', goal);
           return {
             id: goal.goal_id || goal.id, // Handle both ID formats
-          courseId: courseId,
-          title: goal.goal_descr,
-          targetDate: goal.due_date || new Date().toISOString(),
-          workMinutesPerDay: 60, // Default value
-          frequency: 'daily', // Default value
-          createdAt: goal.created_at,
-          updatedAt: goal.updated_at,
+            courseId: courseId,
+            title: goal.goal_descr,
+            targetDate: formatDate(goal.due_date || new Date().toISOString()),
+            workMinutesPerDay: 60, // Default value
+            frequency: 'daily', // Default value
+            createdAt: goal.created_at,
+            updatedAt: goal.updated_at,
             progress: goal.progress || 0,
             totalTasks: goal.total_tasks || 0,
-            completedTasks: goal.completed_tasks || 0
+            completedTasks: goal.completed_tasks || 0,
+            completed: goal.goal_completed || false
           };
         });
-        
+
         setGoals(transformedGoals);
       } catch (error) {
         console.error('Error fetching goals:', error);
@@ -88,12 +100,12 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         totalTasks: 0,
         completedTasks: 0
       };
-      
+
       // Store the goal locally instead of sending to backend immediately
       setNewGoal(tempGoal);
       setIsAddGoalModalOpen(false);
       setIsScaffoldingOpen(true);
-      
+
       console.log('Created temporary goal:', tempGoal);
     } catch (error) {
       console.error('Error creating temporary goal:', error);
@@ -105,15 +117,16 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     try {
       console.log('Tasks saved from scaffolding:', tasks);
       console.log('Subtasks saved from scaffolding:', subtasks);
-      
+
       setIsSubmitting(true);
-      
+
       if (!newGoal) {
         throw new Error('No goal data available');
       }
-      
+
       // Now save the goal to the backend along with tasks and subtasks
-      const response = await fetch(`/api/courses/${courseId}/goals`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -133,14 +146,14 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
 
       const savedGoal = await response.json();
       console.log('Saved goal response:', savedGoal);
-      
+
       const goalId = savedGoal[0].goal_id;
-      
+
       // Now save tasks and subtasks
       const tasksData = tasks.map(task => {
         const taskSubtasks = subtasks.filter(subtask => subtask.taskId === task.id);
         console.log(`Task ${task.id} (${task.name}) has ${taskSubtasks.length} subtasks:`, taskSubtasks);
-        
+
         return {
           task_title: task.name,
           task_descr: '',
@@ -149,16 +162,17 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           subtasks: taskSubtasks.map(subtask => ({
             subtask_descr: subtask.name,
             subtask_type: subtask.type,
-            subtask_completed: subtask.completed
+            subtask_completed: subtask.completed,
+            subtask_order: subtask.subtask_order ?? 0
           }))
         };
       });
-      
+
       console.log('Sending tasks to backend:', { tasks: tasksData });
       console.log('Original tasks:', tasks);
       console.log('Original subtasks:', subtasks);
-      
-      const tasksResponse = await fetch(`/api/goals/${goalId}/save-tasks`, {
+
+      const tasksResponse = await fetch(`${api}/api/goals/${goalId}/save-tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,19 +180,19 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         },
         body: JSON.stringify({ tasks: tasksData })
       });
-      
+
       if (!tasksResponse.ok) {
         const errorData = await tasksResponse.json();
         console.error('Error saving tasks:', errorData);
         throw new Error(errorData.error || 'Failed to save tasks');
       }
-      
+
       setIsScaffoldingOpen(false);
       setNewGoal(null);
-      
+
       // Refetch goals from the backend to ensure data consistency
       setLoading(true);
-      const fetchResponse = await fetch(`/api/courses/${courseId}/goals`, {
+      const fetchResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -190,25 +204,26 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
 
       const data = await fetchResponse.json();
       console.log('Goals data after save:', data);
-      
+
       // Transform backend data to match frontend types
       const transformedGoals: GoalWithProgress[] = data.map((goal: any) => {
         console.log('Processing goal from API:', goal);
         return {
           id: goal.goal_id || goal.id, // Handle both ID formats
-        courseId: courseId,
-        title: goal.goal_descr,
-        targetDate: goal.due_date || new Date().toISOString(),
-        workMinutesPerDay: 60, // Default value
-        frequency: 'daily', // Default value
-        createdAt: goal.created_at,
-        updatedAt: goal.updated_at,
+          courseId: courseId,
+          title: goal.goal_descr,
+          targetDate: goal.due_date || new Date().toISOString(),
+          workMinutesPerDay: 60, // Default value
+          frequency: 'daily', // Default value
+          createdAt: goal.created_at,
+          updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
-          completedTasks: goal.completed_tasks || 0
+          completedTasks: goal.completed_tasks || 0,
+          completed: goal.goal_completed || false
         };
       });
-      
+
       setGoals(transformedGoals);
       toast.success('Study plan created successfully!');
     } catch (error) {
@@ -229,7 +244,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const handleGoalUpdated = async (updatedGoal: GoalWithProgress) => {
     try {
       // Update goal in backend
-      const response = await fetch(`/api/goals/${updatedGoal.id}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${updatedGoal.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -246,10 +262,10 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update goal');
       }
-      
+
       // Refetch goals from the backend to ensure data consistency
       setLoading(true);
-      const fetchResponse = await fetch(`/api/courses/${courseId}/goals`, {
+      const fetchResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -260,25 +276,26 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       }
 
       const data = await fetchResponse.json();
-      
+
       // Transform backend data to match frontend types
       const transformedGoals: GoalWithProgress[] = data.map((goal: any) => {
         console.log('Processing goal from API:', goal);
         return {
           id: goal.goal_id || goal.id, // Handle both ID formats
-        courseId: courseId,
-        title: goal.goal_descr,
-        targetDate: goal.due_date || new Date().toISOString(),
-        workMinutesPerDay: 60, // Default value
-        frequency: 'daily', // Default value
-        createdAt: goal.created_at,
-        updatedAt: goal.updated_at,
+          courseId: courseId,
+          title: goal.goal_descr,
+          targetDate: goal.due_date || new Date().toISOString(),
+          workMinutesPerDay: 60, // Default value
+          frequency: 'daily', // Default value
+          createdAt: goal.created_at,
+          updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
-          completedTasks: goal.completed_tasks || 0
+          completedTasks: goal.completed_tasks || 0,
+          completed: goal.goal_completed || false
         };
       });
-      
+
       setGoals(transformedGoals);
     } catch (error) {
       console.error('Error updating goal:', error);
@@ -293,7 +310,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const handleGoalDeleted = async (goalId: string) => {
     try {
       // Delete goal from backend
-      const response = await fetch(`/api/goals/${goalId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/goals/${goalId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -307,10 +325,10 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       }
 
       toast.success('Goal deleted successfully');
-      
+
       // Refetch goals from the backend to ensure data consistency
       setLoading(true);
-      const fetchResponse = await fetch(`/api/courses/${courseId}/goals`, {
+      const fetchResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -321,25 +339,26 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       }
 
       const data = await fetchResponse.json();
-      
+
       // Transform backend data to match frontend types
       const transformedGoals: GoalWithProgress[] = data.map((goal: any) => {
         console.log('Processing goal from API:', goal);
         return {
           id: goal.goal_id || goal.id, // Handle both ID formats
-        courseId: courseId,
-        title: goal.goal_descr,
-        targetDate: goal.due_date || new Date().toISOString(),
-        workMinutesPerDay: 60, // Default value
-        frequency: 'daily', // Default value
-        createdAt: goal.created_at,
-        updatedAt: goal.updated_at,
+          courseId: courseId,
+          title: goal.goal_descr,
+          targetDate: goal.due_date || new Date().toISOString(),
+          workMinutesPerDay: 60, // Default value
+          frequency: 'daily', // Default value
+          createdAt: goal.created_at,
+          updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
-          completedTasks: goal.completed_tasks || 0
+          completedTasks: goal.completed_tasks || 0,
+          completed: goal.goal_completed || false
         };
       });
-      
+
       setGoals(transformedGoals);
     } catch (error) {
       console.error('Error deleting goal:', error);

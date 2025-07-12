@@ -32,8 +32,10 @@ export interface Subtask {
   estimatedMinutes?: number;
   estimatedTimeMinutes?: number;
   completed: boolean;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  task_due_date?: string;
+  subtask_order?: number;
 }
 
 export interface StudyPlanStats {
@@ -52,6 +54,7 @@ export interface GoalWithProgress extends Goal {
   progress: number; // 0-100
   totalTasks: number;
   completedTasks: number;
+  completed: boolean;
 }
 
 export interface TaskWithProgress extends Task {
@@ -59,4 +62,6 @@ export interface TaskWithProgress extends Task {
   totalSubtasks: number;
   completedSubtasks: number;
   subtasks: Subtask[];
+  description: string;
+  scheduledDate: string;
 } 

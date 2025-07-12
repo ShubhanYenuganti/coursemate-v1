@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle, Circle, Clock, BookOpen, Brain, Target, FileText, Zap, Trash2, Edit, Plus, AlertTriangle } from 'lucide-react';
 import { Subtask } from './types';
 import { toast } from 'react-hot-toast';
@@ -10,26 +10,57 @@ interface SubtaskListProps {
   onSubtaskDeleted: (subtaskId: string) => void;
   onSubtaskAdded?: (subtask: Subtask) => void;
   onSubtaskToggled?: (subtaskId: string, completed: boolean) => void;
+  taskDueDate: string;
 }
 
-const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDeleted, onSubtaskAdded, onSubtaskToggled }) => {
+const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDeleted, onSubtaskAdded, onSubtaskToggled, taskDueDate }) => {
   const [localSubtasks, setLocalSubtasks] = useState<Subtask[]>(subtasks);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Update local subtasks when props change and maintain order
+  useEffect(() => {
+    // Only update if the subtasks prop has actually changed (not just a re-render)
+    const hasChanged =
+      subtasks.length !== localSubtasks.length ||
+      subtasks.some((propSubtask, index) => {
+        const currentSubtask = localSubtasks[index];
+        return !currentSubtask || 
+               propSubtask.id !== currentSubtask.id ||
+               propSubtask.name !== currentSubtask.name ||
+               propSubtask.type !== currentSubtask.type ||
+               propSubtask.completed !== currentSubtask.completed ||
+               propSubtask.subtask_order !== currentSubtask.subtask_order;
+      });
+    if (hasChanged) {
+      setLocalSubtasks(subtasks);
+    }
+  }, [subtasks, localSubtasks]);
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [newSubtaskName, setNewSubtaskName] = useState('');
+  const [newSubtaskType, setNewSubtaskType] = useState<'other' | 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review'>('other');
+  const [newSubtaskTime, setNewSubtaskTime] = useState(15);
   const [editingSubtask, setEditingSubtask] = useState<string | null>(null);
   const [editedSubtaskName, setEditedSubtaskName] = useState('');
+  const [editedSubtaskType, setEditedSubtaskType] = useState<'other' | 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review'>('other');
+  const [editedSubtaskTime, setEditedSubtaskTime] = useState(15);
 
   const handleToggleSubtask = async (subtaskId: string) => {
     const subtask = localSubtasks.find(s => s.id === subtaskId);
     if (!subtask) return;
 
     try {
-      const response = await fetch(`/api/goals/tasks/subtasks/${subtaskId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/subtasks/${subtaskId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           subtask_descr: subtask.name,
@@ -66,10 +97,17 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
 
   const handleDeleteConfirm = async (subtaskId: string) => {
     try {
-      const response = await fetch(`/api/goals/tasks/subtasks/${subtaskId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/subtasks/${subtaskId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -94,6 +132,8 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
   const handleEditClick = (subtask: Subtask) => {
     setEditingSubtask(subtask.id);
     setEditedSubtaskName(subtask.name);
+    setEditedSubtaskType(subtask.type);
+    setEditedSubtaskTime(subtask.estimatedTimeMinutes);
   };
 
   const handleSaveEdit = async (subtaskId: string) => {
@@ -102,14 +142,23 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
     }
 
     try {
-      const response = await fetch(`/api/goals/tasks/subtasks/${subtaskId}`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/subtasks/${subtaskId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           subtask_descr: editedSubtaskName,
+          subtask_type: editedSubtaskType,
+          subtask_order: localSubtasks.find(s => s.id === subtaskId)?.subtask_order ?? 0,
           subtask_completed: localSubtasks.find(s => s.id === subtaskId)?.completed || false
         })
       });
@@ -120,13 +169,20 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
 
       // Update local state
       const updatedSubtasks = localSubtasks.map(s => 
-        s.id === subtaskId ? { ...s, name: editedSubtaskName } : s
+        s.id === subtaskId ? { 
+          ...s, 
+          name: editedSubtaskName,
+          type: editedSubtaskType,
+          estimatedTimeMinutes: editedSubtaskTime
+        } : s
       );
       setLocalSubtasks(updatedSubtasks);
       
       // Reset edit state
       setEditingSubtask(null);
       setEditedSubtaskName('');
+      setEditedSubtaskType('other');
+      setEditedSubtaskTime(15);
       
       toast.success('Subtask updated');
     } catch (error) {
@@ -141,16 +197,25 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
     }
 
     try {
-      const response = await fetch(`/api/goals/tasks/${taskId}/subtasks`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/${taskId}/subtasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           subtask_descr: newSubtaskName,
-          subtask_type: 'other',
-          subtask_completed: false
+          subtask_type: newSubtaskType,
+          subtask_completed: false,
+          subtask_order: localSubtasks.length > 0 ? Math.max(...localSubtasks.map(s => s.subtask_order ?? 0)) + 1 : 0,
+          task_due_date: taskDueDate
         })
       });
 
@@ -160,22 +225,30 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
 
       const data = await response.json();
       
+      // Get the actual subtask_order from the backend response
+      const actualSubtaskOrder = data.subtask.subtask_order !== undefined ? data.subtask.subtask_order : 
+        (localSubtasks.length > 0 ? Math.max(...localSubtasks.map(s => s.subtask_order ?? 0)) + 1 : 0);
+      
       // Add new subtask to local state
       const newSubtask: Subtask = {
         id: data.subtask_id,
         taskId: taskId,
         name: newSubtaskName,
-        type: 'other',
-        estimatedTimeMinutes: 15,
+        type: newSubtaskType,
+        estimatedTimeMinutes: newSubtaskTime, // This might not be stored in backend but we keep it in frontend
         completed: false,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        task_due_date: taskDueDate,
+        subtask_order: actualSubtaskOrder
       };
       
-      setLocalSubtasks([...localSubtasks, newSubtask]);
+      setLocalSubtasks(updatedSubtasks => [...updatedSubtasks, newSubtask]);
       
       // Reset form
       setNewSubtaskName('');
+      setNewSubtaskType('other');
+      setNewSubtaskTime(15);
       setIsAddingSubtask(false);
       
       toast.success('Subtask added');
@@ -243,25 +316,70 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
             <div key={subtask.id} className="flex items-start gap-2 py-2 border-b border-gray-100">
               {editingSubtask === subtask.id ? (
                 <div className="flex-1">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Subtask Name *
+                      </label>
                   <input
                     type="text"
                     value={editedSubtaskName}
                     onChange={(e) => setEditedSubtaskName(e.target.value)}
-                    className="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     autoFocus
                   />
-                  <div className="flex justify-end gap-2 mt-2">
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Type
+                      </label>
+                      <select
+                        value={editedSubtaskType}
+                        onChange={(e) => setEditedSubtaskType(e.target.value as 'other' | 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="reading">Reading</option>
+                        <option value="flashcard">Flashcard</option>
+                        <option value="quiz">Quiz</option>
+                        <option value="practice">Practice</option>
+                        <option value="review">Review</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Time (min)
+                      </label>
+                      <input
+                        type="number"
+                        value={editedSubtaskTime}
+                        onChange={(e) => setEditedSubtaskTime(parseInt(e.target.value) || 0)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        min="5"
+                        max="120"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end gap-2 mt-3">
                     <button
-                      onClick={() => setEditingSubtask(null)}
-                      className="px-2 py-1 text-xs bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                      onClick={() => {
+                        setEditingSubtask(null);
+                        setEditedSubtaskName('');
+                        setEditedSubtaskType('other');
+                        setEditedSubtaskTime(15);
+                      }}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => handleSaveEdit(subtask.id)}
-                      className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                      Save
+                      Edit Subtask
                     </button>
                   </div>
                 </div>
@@ -305,27 +423,72 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
       
       {/* Add Subtask Form */}
       {isAddingSubtask ? (
-        <div className="mt-3 p-3 bg-gray-50 rounded-md">
+        <div className="mt-3 bg-gray-50 rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Subtask Name *
+              </label>
           <input
             type="text"
             value={newSubtaskName}
             onChange={(e) => setNewSubtaskName(e.target.value)}
-            placeholder="Enter subtask description"
-            className="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter subtask name"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             autoFocus
           />
-          <div className="flex justify-end gap-2 mt-2">
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Type
+              </label>
+              <select
+                value={newSubtaskType}
+                onChange={(e) => setNewSubtaskType(e.target.value as 'other' | 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="reading">Reading</option>
+                <option value="flashcard">Flashcard</option>
+                <option value="quiz">Quiz</option>
+                <option value="practice">Practice</option>
+                <option value="review">Review</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Time (min)
+              </label>
+              <input
+                type="number"
+                value={newSubtaskTime}
+                onChange={(e) => setNewSubtaskTime(parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                min="5"
+                max="120"
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-2 mt-3">
             <button
-              onClick={() => setIsAddingSubtask(false)}
-              className="px-2 py-1 text-xs bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+              onClick={() => {
+                setIsAddingSubtask(false);
+                setNewSubtaskName('');
+                setNewSubtaskType('other');
+                setNewSubtaskTime(15);
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleAddSubtask}
-              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Add
+              Add Subtask
             </button>
           </div>
         </div>

@@ -37,10 +37,10 @@ const MaterialsList: React.FC<MaterialsListProps> = ({ courseId, refreshTrigger,
 
   const fetchMaterials = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/courses/${courseId}/materials`, {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const res = await fetch(`${api}/api/courses/${courseId}/materials`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       const files = await res.json();
@@ -77,8 +77,9 @@ const MaterialsList: React.FC<MaterialsListProps> = ({ courseId, refreshTrigger,
   const paginatedMaterials = filteredMaterials.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleDelete = async (id: string) => {
+    const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
     const token = localStorage.getItem('token');
-    await fetch(`/api/courses/${courseId}/materials/${encodeURIComponent(id)}`, {
+    await fetch(`${api}/api/courses/${courseId}/materials/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`

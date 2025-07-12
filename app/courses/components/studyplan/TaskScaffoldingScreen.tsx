@@ -10,6 +10,14 @@ interface TaskScaffoldingScreenProps {
   onSave: (tasks: Task[], subtasks: Subtask[]) => void;
 }
 
+// Helper to get local date string in YYYY-MM-DD format
+function getLocalDateString(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onBack, onSave }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
@@ -33,7 +41,7 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
         id: `temp-task-${i}`,
         goalId: goal.id,
         name: '',
-        scheduledDate: taskDate.toISOString().split('T')[0],
+        scheduledDate: getLocalDateString(taskDate),
         completed: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -60,7 +68,7 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
       id: `temp-task-${Date.now()}`,
       goalId: goal.id,
       name: '',
-      scheduledDate: new Date().toISOString().split('T')[0],
+      scheduledDate: getLocalDateString(new Date()),
       completed: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -154,12 +162,14 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
       
       const finalSubtasks = validSubtasks.map((subtask, index) => {
         const newTaskId = taskIdMapping.get(subtask.taskId);
-        console.log(`Subtask ${subtask.id}: old taskId=${subtask.taskId}, new taskId=${newTaskId}`);
-        
+        // Find the order of this subtask among its siblings
+        const siblings = validSubtasks.filter(s => s.taskId === subtask.taskId);
+        const subtaskOrder = siblings.findIndex(s => s.id === subtask.id);
         return {
           ...subtask,
           id: `subtask-${Date.now()}-${index}`,
-          taskId: newTaskId || subtask.taskId
+          taskId: newTaskId || subtask.taskId,
+          subtask_order: subtaskOrder
         };
       });
       
@@ -302,7 +312,7 @@ const TaskScaffoldingScreen: React.FC<TaskScaffoldingScreenProps> = ({ goal, onB
                   <div className="flex items-center gap-2 mb-4">
                     <h3 className="font-medium text-gray-900">{task.name}</h3>
                     <span className="text-sm text-gray-500">
-                      {new Date(task.scheduledDate).toLocaleDateString()}
+                      {new Date(task.scheduledDate + 'T00:00:00').toLocaleDateString()}
                     </span>
                   </div>
 
