@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { messageService, Conversation } from '../../../lib/api/messageService';
+import { Button } from '../../../components/ui/button';
+import { Textarea } from '../../../components/ui/textarea';
 
 export interface Activity {
-  id: number;
+  id: string;
   user?: string;
   avatar: string;
   action: string;
   target?: string;
   content?: string;
   time: string;
-  type: 'post' | 'resource' | 'video';
-  title?: string;
-  resources?: Array<{ type: 'link' | 'image' | 'file'; url: string; name?: string }>;
+  type: 'message';
+  conversationId: string;
 }
 
 interface CommunityActivityProps {
@@ -19,47 +21,7 @@ interface CommunityActivityProps {
   onActivityClick?: (activity: Activity) => void;
 }
 
-const defaultActivities: Activity[] = [
-    {
-      id: 1,
-    user: 'Priya Patel',
-    avatar: 'PP',
-    action: 'posted in',
-    target: 'Calculus Study Group',
-    content: '"Anyone else stuck on problem 5 of the latest assignment? Would love some hints!"',
-    time: '25 min ago',
-    type: 'post',
-    resources: [
-      { type: 'link', url: 'https://example.com/resource1', name: 'Assignment PDF' },
-      { type: 'image', url: 'https://placekitten.com/300/200', name: 'Screenshot' },
-      { type: 'file', url: '/files/notes.pdf', name: 'Notes.pdf' },
-    ],
-    },
-    {
-      id: 2,
-    user: 'David Lee',
-    avatar: 'DL',
-    action: 'shared a resource in',
-    target: 'Physics Help Forum',
-    time: '1 hour ago',
-    type: 'resource',
-    resources: [
-      { type: 'link', url: 'https://example.com/physics', name: 'Physics Resource' },
-    ],
-    },
-    {
-      id: 3,
-    user: 'Video Resource',
-    avatar: '📺',
-    title: 'Useful Video on Thermodynamics',
-    action: 'Watch Video',
-    time: '2 hours ago',
-    type: 'video',
-    resources: [
-      { type: 'link', url: 'https://youtube.com', name: 'Watch on YouTube' },
-    ],
-  },
-];
+const defaultActivities: Activity[] = [];
 
 const CommunityActivity: React.FC<CommunityActivityProps> = ({
   activities = [],
@@ -67,15 +29,106 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   onActivityClick,
 }) => {
   const [modalActivity, setModalActivity] = useState<Activity | null>(null);
+  const [messageActivities, setMessageActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
 
-  const activitiesToDisplay = activities.length > 0 ? activities : defaultActivities;
+  // Fetch recent messages and convert them to activities
+  useEffect(() => {
+    const fetchRecentMessages = async () => {
+      try {
+        const conversations = await messageService.getConversations();
+        
+        // Filter out conversations with no unread messages
+        const unreadConversations = conversations.filter(conv => conv.unread_count > 0);
+        
+        // Convert conversations to activities
+        const activities: Activity[] = unreadConversations.slice(0, 5).map((conv: Conversation) => ({
+          id: conv.id,
+          user: conv.participant_name,
+          avatar: conv.participant_name.charAt(0).toUpperCase(),
+          action: 'sent you a message',
+          content: conv.last_message,
+          time: formatTimeAgo(conv.last_message_time),
+          type: 'message',
+          conversationId: conv.id,
+        }));
+        
+        setMessageActivities(activities);
+      } catch (error) {
+        console.error('Error fetching recent messages:', error);
+        setMessageActivities([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handleActivityClick = (activity: Activity) => {
-    setModalActivity(activity);
-    onActivityClick && onActivityClick(activity);
+    fetchRecentMessages();
+  }, []);
+
+  // Helper function to format time ago
+  const formatTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const messageTime = new Date(timestamp);
+    const diffInMinutes = Math.floor((now.getTime() - messageTime.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hour${Math.floor(diffInMinutes / 60) > 1 ? 's' : ''} ago`;
+    return `${Math.floor(diffInMinutes / 1440)} day${Math.floor(diffInMinutes / 1440) > 1 ? 's' : ''} ago`;
   };
 
-  const handleCloseModal = () => setModalActivity(null);
+  const activitiesToDisplay = activities.length > 0 ? activities : messageActivities;
+
+  const handleActivityClick = async (activity: Activity) => {
+    setModalActivity(activity);
+    setReplyText('');
+    onActivityClick && onActivityClick(activity);
+    
+    // Mark the conversation as read by removing it from the notifications
+    setMessageActivities(prev => prev.filter(msg => msg.id !== activity.id));
+  };
+
+  const handleCloseModal = () => {
+    setModalActivity(null);
+    setReplyText('');
+  };
+
+  const handleSendReply = async () => {
+    if (!modalActivity || !replyText.trim()) return;
+
+    setSendingReply(true);
+    try {
+      await messageService.sendMessage({
+        receiver_id: modalActivity.conversationId,
+        message_content: replyText.trim(),
+      });
+      
+      // Clear the reply text and close modal
+      setReplyText('');
+      setModalActivity(null);
+      
+      // Refresh the message activities to show only unread messages
+      const conversations = await messageService.getConversations();
+      const unreadConversations = conversations.filter(conv => conv.unread_count > 0);
+      const activities: Activity[] = unreadConversations.slice(0, 5).map((conv: Conversation) => ({
+        id: conv.id,
+        user: conv.participant_name,
+        avatar: conv.participant_name.charAt(0).toUpperCase(),
+        action: 'sent you a message',
+        content: conv.last_message,
+        time: formatTimeAgo(conv.last_message_time),
+        type: 'message',
+        conversationId: conv.id,
+      }));
+      setMessageActivities(activities);
+    } catch (error) {
+      console.error('Error sending reply:', error);
+    } finally {
+      setSendingReply(false);
+    }
+  };
 
   const getAvatarColor = (avatar: string) => {
     if (avatar === '📺') return 'bg-indigo-500';
@@ -102,46 +155,35 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
           </div>
           {/* Content */}
           <div className="flex-1">
-            {activity.type === 'video' ? (
-              // Video/Resource Format
-              <>
-                <div className="text-sm text-indigo-500 mb-1 hover:text-indigo-600">
-                  "{activity.title}"
-                </div>
-                <div className="text-xs text-gray-500">{activity.action}</div>
-              </>
-            ) : (
-              // Regular Activity Format
-              <>
-                <div className="text-sm text-gray-700 mb-1">
-                  <strong>{activity.user}</strong> {activity.action}{' '}
-                  <span className="text-indigo-500 hover:text-indigo-600">
-                    {activity.target}
-                  </span>
-                </div>
-                {activity.content && (
-                  <div className="text-xs text-gray-600 mb-1 italic">
-                    {activity.content}
-                  </div>
-                )}
-                <div className="text-xs text-gray-500">{activity.time}</div>
-              </>
+            <div className="text-sm text-gray-700 mb-1">
+              <strong>{activity.user}</strong> {activity.action}
+            </div>
+            {activity.content && (
+              <div className="text-xs text-gray-600 mb-1 italic">
+                {activity.content}
+              </div>
             )}
+            <div className="text-xs text-gray-500">{activity.time}</div>
           </div>
         </div>
       ))}
       {/* Empty State */}
-      {activitiesToDisplay.length === 0 && (
+      {activitiesToDisplay.length === 0 && !loading && (
         <div className="text-center py-8 text-gray-500">
-          <div className="text-4xl mb-2">💬</div>
-          <p className="mb-2">No community activity yet</p>
-          <p className="text-xs">Join a study group to see activity here</p>
+          <div className="text-4xl mb-2">📭</div>
+          <p className="mb-2">No new notifications</p>
         </div>
       )}
-      {/* Modal for Activity Details */}
+      {loading && (
+        <div className="text-center py-8 text-gray-500">
+          <div className="text-4xl mb-2">⏳</div>
+          <p className="mb-2">Loading messages...</p>
+        </div>
+      )}
+            {/* Modal for Activity Details */}
       {modalActivity && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg relative">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg relative">
             <button
               className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-2xl"
               onClick={handleCloseModal}
@@ -149,58 +191,62 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
             >
               &times;
             </button>
+            
+            {/* Message Header */}
             <div className="flex items-center mb-4">
               <div className={`w-10 h-10 ${getAvatarColor(modalActivity.avatar)} rounded-full flex items-center justify-center text-white text-lg font-bold mr-4`}>
                 {modalActivity.avatar}
               </div>
               <div>
                 <div className="font-semibold text-gray-800 text-lg">
-                  {modalActivity.user || modalActivity.title}
+                  {modalActivity.user}
                 </div>
                 <div className="text-xs text-gray-500">{modalActivity.time}</div>
               </div>
             </div>
-            <div className="mb-4">
+            
+            {/* Original Message */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               {modalActivity.content && (
-                <div className="text-gray-700 text-base mb-2 whitespace-pre-line">
+                <div className="text-gray-700 text-base whitespace-pre-line">
                   {modalActivity.content}
                 </div>
               )}
-              {modalActivity.type === 'video' && (
-                <div className="text-indigo-500 text-base mb-2">{modalActivity.title}</div>
-              )}
-              <div className="text-xs text-gray-500 mb-2">{modalActivity.action} {modalActivity.target && <span className="text-indigo-500">{modalActivity.target}</span>}</div>
             </div>
-            {/* Resources */}
-            {modalActivity.resources && modalActivity.resources.length > 0 && (
-              <div className="mb-4">
-                <div className="font-semibold text-gray-700 mb-2">Resources:</div>
-                <ul className="space-y-2">
-                  {modalActivity.resources.map((res, idx) => (
-                    <li key={idx}>
-                      {res.type === 'link' && (
-                        <a href={res.url} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">
-                          🔗 {res.name || res.url}
-                        </a>
-                      )}
-                      {res.type === 'image' && (
-                        <div>
-                          <img src={res.url} alt={res.name || 'Resource Image'} className="rounded-lg max-h-48 mb-1" />
-                          <div className="text-xs text-gray-500">{res.name}</div>
-                        </div>
-                      )}
-                      {res.type === 'file' && (
-                        <a href={res.url} download className="text-green-600 hover:underline">
-                          📄 {res.name || 'Download file'}
-                        </a>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+            
+            {/* Reply Section */}
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-gray-700">Reply to {modalActivity.user}</div>
+              <Textarea
+                placeholder="Type your reply..."
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                className="min-h-[100px] resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendReply();
+                  }
+                }}
+              />
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={handleCloseModal}
+                  disabled={sendingReply}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSendReply}
+                  disabled={!replyText.trim() || sendingReply}
+                >
+                  {sendingReply ? 'Sending...' : 'Send Reply'}
+                </Button>
               </div>
-            )}
+            </div>
           </div>
-      </div>
+        </div>
       )}
     </div>
   );

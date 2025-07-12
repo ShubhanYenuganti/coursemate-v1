@@ -18,7 +18,8 @@ def get_me():
         'created_at': user.created_at,
         'college': user.college,
         'year': user.year,
-        'major': user.major
+        'major': user.major,
+        'onboarded': user.onboarded,
     })
 
 @users_bp.route('/', methods=['GET'])
@@ -49,7 +50,6 @@ def delete_user(user_id):
     db.session.commit()
     return jsonify({'message': 'User deleted'})
 
-
 @users_bp.route('/profile', methods=['POST'])
 @jwt_required()
 def update_profile():
@@ -74,3 +74,34 @@ def update_profile():
 
     db.session.commit()
     return jsonify({'message': 'Profile updated successfully'}), 200
+
+@users_bp.route('/me', methods=['DELETE'])
+@jwt_required()
+def delete_me():
+    current_user = get_jwt_identity()
+    user = User.query.get(current_user)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'message': 'Account deleted'}), 200
+
+@users_bp.route('/onboarding', methods=['POST'])
+@jwt_required()
+def onboarding():
+    current_user = get_jwt_identity()
+    user = User.query.get(current_user)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    if user.onboarded:
+        return jsonify({'error': 'User already onboarded'}), 400
+    data = request.get_json()
+    user.name = data.get('name', user.name)
+    user.email = data.get('email', user.email)
+    user.college = data.get('school', user.college)
+    user.year = data.get('year', user.year)
+    user.major = data.get('major', user.major)
+    # Optionally save profilePic and academicInterests if you have columns for them
+    user.onboarded = True
+    db.session.commit()
+    return jsonify({'message': 'Onboarding complete'}), 200

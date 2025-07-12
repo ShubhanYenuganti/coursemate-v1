@@ -28,7 +28,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           <Providers>
-            <CourseProvider>{children}</CourseProvider>
+          <CourseProvider>{children}</CourseProvider>
           </Providers>
           <Toaster />
         </ThemeProvider>

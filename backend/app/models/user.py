@@ -20,6 +20,7 @@ class User(db.Model):
     college = db.Column(db.String(200), nullable=True)
     year = db.Column(db.String(20), nullable=True)  # Using string to allow values like "freshman", "sophomore", etc.
     major = db.Column(db.String(100), nullable=True)
+    onboarded = db.Column(db.Boolean, default=False)
     
     # Email verification fields
     email_verified = db.Column(db.Boolean, default=False)
@@ -37,6 +38,7 @@ class User(db.Model):
     google_sync_tokens = db.Column(db.JSON, default=dict)
     # Relationships
     goals = db.relationship("Goal", back_populates="user", lazy=True)
+    document_embeddings = db.relationship("DocumentEmbedding", back_populates="user")
     
     # Friend relationships
     sent_friend_requests = relationship('Friend', foreign_keys='Friend.requester_id', back_populates='requester', lazy='dynamic')
