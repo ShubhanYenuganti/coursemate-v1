@@ -132,8 +132,8 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
   const handleEditClick = (subtask: Subtask) => {
     setEditingSubtask(subtask.id);
     setEditedSubtaskName(subtask.name);
-    setEditedSubtaskType(subtask.type);
-    setEditedSubtaskTime(subtask.estimatedTimeMinutes);
+    setEditedSubtaskType(subtask.type as 'other' | 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review');
+    setEditedSubtaskTime(subtask.estimatedTimeMinutes || 15);
   };
 
   const handleSaveEdit = async (subtaskId: string) => {
@@ -470,8 +470,8 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
                 max="120"
               />
             </div>
-          </div>
-          
+      </div>
+
           <div className="flex justify-end gap-2 mt-3">
             <button
               onClick={() => {
@@ -528,7 +528,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
               </button>
             </div>
           </div>
-        </div>
+      </div>
       )}
     </div>
   );

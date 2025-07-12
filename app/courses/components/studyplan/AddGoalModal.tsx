@@ -100,7 +100,8 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
       ...newGoal,
       progress: 0,
       totalTasks: 0,
-      completedTasks: 0
+      completedTasks: 0,
+      completed: false
     };
 
     onGoalAdded(goalWithProgress);

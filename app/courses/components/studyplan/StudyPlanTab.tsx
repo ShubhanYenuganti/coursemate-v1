@@ -446,7 +446,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       updatedAt: new Date().toISOString(),
       progress: 0,
       totalTasks: tasks.length,
-      completedTasks: 0
+      completedTasks: 0,
+      completed: false
     };
 
     setNewGoal(newGoalFromPlan);
@@ -477,7 +478,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       <Toaster position="top-right" />
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
+          <div>
           <h2 className="text-2xl font-bold text-gray-900">Study Plan</h2>
           <p className="text-gray-600 mt-1">
             Track your learning goals and progress for this course
@@ -491,20 +492,20 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
             <Brain className="w-4 h-4" />
             AI Generate Plan
           </button>
-          <button
-            onClick={() => setIsAddGoalModalOpen(true)}
+        <button
+          onClick={() => setIsAddGoalModalOpen(true)}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
+        >
+          <Plus className="w-4 h-4" />
             Add Goal
-          </button>
+        </button>
         </div>
       </div>
 
       {isAIGenerating && (
         <div className="flex items-center justify-center py-8">
           <span className="text-lg text-blue-600 font-semibold animate-pulse">AI is generating your study plan...</span>
-        </div>
+            </div>
       )}
 
       {showAIGenerator && (
@@ -520,16 +521,16 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                     <Brain className="w-4 h-4 text-green-600" />
-                  </div>
+            </div>
                   <h2 className="text-xl font-semibold text-gray-800">AI Study Plan Generator</h2>
-                </div>
+          </div>
                 <button
                   onClick={() => setShowAIGenerator(false)}
                   className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
-              </div>
+            </div>
               <div className="p-6">
                 <AIGenerateStudyPlan
                   courseId={courseId}

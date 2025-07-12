@@ -468,7 +468,8 @@ export const getGoalsWithProgress = (courseId: string): GoalWithProgress[] => {
       ...goal,
       progress: Math.round(progress),
       totalTasks: goalTasks.length,
-      completedTasks
+      completedTasks,
+      completed: completedTasks === goalTasks.length && goalTasks.length > 0
     };
   });
 };
@@ -486,7 +487,8 @@ export const getTasksWithProgress = (goalId: string): TaskWithProgress[] => {
       progress: Math.round(progress),
       totalSubtasks: taskSubtasks.length,
       completedSubtasks,
-      subtasks: taskSubtasks
+      subtasks: taskSubtasks,
+      description: task.description || ''
     };
   });
 };

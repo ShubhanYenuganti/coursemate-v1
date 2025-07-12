@@ -87,8 +87,13 @@ const Dashboard = () => {
   }, []);
 
   // Convert CourseData to the format expected by MyCourses component
-  const convertToMyCoursesFormat = (courseData: CourseData) => ({
-    id: parseInt(courseData.id || '0'),
+  const convertToMyCoursesFormat = (courseData: CourseData, index: number) => ({
+    id: (() => {
+      // Try to parse the courseData.id as an integer
+      const parsedId = parseInt(courseData.id || '');
+      // If parsing fails or results in NaN, use the index as fallback
+      return isNaN(parsedId) ? index + 1 : parsedId;
+    })(),
     name: courseData.title,
     professor: courseData.professor || 'Unknown Professor',
     schedule: courseData.semester || 'No Schedule',
@@ -170,7 +175,7 @@ const Dashboard = () => {
           {/* My Courses */}
           <div className="mb-6">
             <MyCourses
-              courses={userCourses.map(convertToMyCoursesFormat)}
+              courses={userCourses.map((course, index) => convertToMyCoursesFormat(course, index))}
               onViewAllCourses={handleViewAllCourses}
               onViewCourse={handleViewCourse}
               onContinueCourse={handleContinueCourse}

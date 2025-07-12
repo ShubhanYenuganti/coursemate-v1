@@ -262,7 +262,7 @@ const TaskEditorModal: React.FC<TaskEditorModalProps> = ({ isOpen, onClose, task
                 <div className="flex items-center justify-between">
                   <span className="text-gray-700">Total Time:</span>
                   <span className="font-medium">
-                    {editedSubtasks.reduce((sum, s) => sum + s.estimatedTimeMinutes, 0)} minutes
+                    {editedSubtasks.reduce((sum, s) => sum + (s.estimatedTimeMinutes || 0), 0)} minutes
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
