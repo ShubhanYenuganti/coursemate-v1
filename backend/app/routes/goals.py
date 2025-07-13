@@ -146,8 +146,8 @@ def get_course_goals(course_id):
         if not course:
             return jsonify({'error': 'Course not found or you do not have access'}), 404
 
-        # Get all rows for this course
-        goals = Goal.query.filter_by(course_id=course_id, user_id=user_id).all()
+        # Get all rows for this course using combo_id
+        goals = Goal.query.filter_by(course_id=course.combo_id, user_id=user_id).all()
         
         # Group by goal_id to get only unique goals
         unique_goals = {}
@@ -232,6 +232,9 @@ def create_goal(course_id):
         if not course:
             return jsonify({'error': 'Course not found or you do not have access'}), 404
         
+        # Use the combo_id for the Goal model (which references courses.combo_id)
+        course_combo_id = course.combo_id
+        
         data = request.get_json()
         
         if not data or 'goal_descr' not in data:
@@ -260,7 +263,7 @@ def create_goal(course_id):
                     for subtask_data in task_data['subtasks']:
                         subtask = Goal(
                             user_id=user_id,
-                            course_id=course_id,
+                            course_id=course_combo_id,
                             goal_id=goal_id,
                             goal_descr=goal_descr,
                             due_date=due_date,
@@ -277,7 +280,7 @@ def create_goal(course_id):
                     # Create a default subtask if none provided
                     subtask = Goal(
                         user_id=user_id,
-                        course_id=course_id,
+                        course_id=course_combo_id,
                         goal_id=goal_id,
                         goal_descr=goal_descr,
                         due_date=due_date,
@@ -294,7 +297,7 @@ def create_goal(course_id):
             # Create default task and subtask if none provided and not skipping default task
             new_goal, _, _ = Goal.create_for_goal(
                 user_id=user_id,
-                course_id=course_id,
+                course_id=course_combo_id,
                 goal_descr=goal_descr,
                 due_date=due_date
             )
@@ -303,7 +306,7 @@ def create_goal(course_id):
             # Create a placeholder row with just the goal information
             placeholder_goal = Goal(
                 user_id=user_id,
-                course_id=course_id,
+                course_id=course_combo_id,
                 goal_id=goal_id,
                 goal_descr=goal_descr,
                 due_date=due_date,

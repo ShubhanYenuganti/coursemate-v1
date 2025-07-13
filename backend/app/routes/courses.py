@@ -847,6 +847,11 @@ Return only the JSON response, no additional text.
                     print(f"      [Subtask {j+1} description]:", subtask.get('description'))
                     print(f"      [Subtask {j+1} estimated_minutes]:", subtask.get('estimated_minutes'))
                     print(f"      [Subtask {j+1} type]:", subtask.get('type'))
+            # Get the course to get the combo_id
+            course = Course.query.filter_by(id=course_id, user_id=user_id).first()
+            if not course:
+                return jsonify({'error': 'Course not found or you do not have access'}), 404
+            
             # Generate a new goal_id for this plan
             new_goal_id = str(uuid.uuid4())
             user_id = current_user_id
@@ -864,7 +869,7 @@ Return only the JSON response, no additional text.
                     # Create Goal row (one per subtask)
                     goal_row = Goal(
                         user_id=user_id,
-                        course_id=course_id,
+                        course_id=course.combo_id,
                         goal_id=new_goal_id,
                         goal_descr=goal_title,
                         due_date=None,  # You can set due_date from AI if available
