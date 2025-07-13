@@ -12,6 +12,8 @@ import UploadMaterials from "../components/UploadMaterials";
 import RecommendedResources from "../components/RecommendedResources";
 import AIChatInterface from "../components/AIChatInterface";
 import { StudyPlanTab } from "../components/studyplan";
+import EnrolledUsersList from '../components/EnrolledUsersList';
+import LeaveCourseButton from '../components/LeaveCourseButton';
 
 // helper to map subject to icon
 const getSubjectIcon = (subject: string) => {
@@ -28,22 +30,26 @@ const getSubjectIcon = (subject: string) => {
   return iconMap[subject] || Code;
 };
 
-const mapCourse = (data: CourseData): Course => ({
-  id: 0, // not used here
-  dbId: data.id!,
-  title: data.title,
-  subject: data.subject,
-  semester: data.semester,
-  dailyProgress: data.daily_progress ?? 0,
-  lastAccessed: data.last_accessed ?? new Date().toISOString().split('T')[0],
-  badge: data.badge ?? 'Creator',
-  isPinned: data.is_pinned ?? false,
-  isArchived: data.is_archived ?? false,
-  description: data.description,
-  icon: getSubjectIcon(data.subject),
-  tags: data.tags,
-  course_image: data.course_image
-});
+const mapCourse = (data: CourseData): Course => {
+  const comboId = data.combo_id || (data.id && data.user_id ? `${data.id}-${data.user_id}` : '');
+  return {
+    id: 0, // not used here
+    dbId: data.id!,
+    comboId,
+    title: data.title,
+    subject: data.subject,
+    semester: data.semester,
+    dailyProgress: data.daily_progress ?? 0,
+    lastAccessed: data.last_accessed ?? new Date().toISOString().split('T')[0],
+    badge: data.badge ?? 'Creator',
+    isPinned: data.is_pinned ?? false,
+    isArchived: data.is_archived ?? false,
+    description: data.description,
+    icon: getSubjectIcon(data.subject),
+    tags: data.tags,
+    course_image: data.course_image
+  };
+};
 
 interface Props {
   params: Promise<{ courseId: string }>;
@@ -131,7 +137,9 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
         />
         <PinnedResources course={course} />
         <div className="mt-8" />
-        <ShareInviteFeature course={course} />
+        {course.badge === 'Creator' && (() => { console.log('ShareInviteFeature comboId:', course.comboId); return <ShareInviteFeature course={course} /> })()}
+        {course.badge === 'Creator' && <EnrolledUsersList courseId={course.dbId} isCreator />}
+        {course.badge === 'Enrolled' && <LeaveCourseButton courseId={course.dbId} />}
       </div>
     ),
     materials: (

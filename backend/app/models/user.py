@@ -80,3 +80,13 @@ class User(db.Model):
             self.password_reset_token = None
             
         return True
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'name': self.name,
+            'role': self.role,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            # Add any other fields you want to expose
+        }

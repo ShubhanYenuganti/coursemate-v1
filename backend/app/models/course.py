@@ -9,9 +9,8 @@ import os
 class Course(db.Model):
     __tablename__ = 'courses'
 
-    id = db.Column(db.String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    
-    # User relationship - Each course belongs to a specific user
+    combo_id = db.Column(db.String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = db.Column(db.String, nullable=False, index=True)  # shared course UUID
     user_id = db.Column(db.String, db.ForeignKey('users.id'), nullable=False, index=True)
     
     # Basic course information
@@ -60,6 +59,7 @@ class Course(db.Model):
             course_image_url = get_presigned_url(self.course_image)
 
         return {
+            'combo_id': self.combo_id,
             'id': self.id,
             'user_id': self.user_id,
             'title': self.title,

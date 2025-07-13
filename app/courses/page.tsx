@@ -41,7 +41,8 @@ const convertToDisplayFormat = (courseData: CourseData): Course => {
     isPinned: courseData.is_pinned || false,
     isArchived: courseData.is_archived || false,
     description: courseData.description,
-    icon: getSubjectIcon(courseData.subject)
+    icon: getSubjectIcon(courseData.subject),
+    comboId: courseData.combo_id || ''
   };
 };
 

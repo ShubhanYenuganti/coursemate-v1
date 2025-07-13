@@ -15,7 +15,7 @@ class Goal(db.Model):
 
     id = Column(String, primary_key=True)  # Primary key for the row
     user_id = Column(String, ForeignKey('users.id'), nullable=False)
-    course_id = Column(String, ForeignKey('courses.id'), nullable=False)
+    course_id = Column(String, ForeignKey('courses.combo_id'), nullable=False)
     
     # Goal fields
     goal_id = Column(String, nullable=False)  # ID of the goal this row belongs to

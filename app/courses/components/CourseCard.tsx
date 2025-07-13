@@ -13,6 +13,7 @@ import Link from "next/link";
 export interface Course {
   id: number;          // numeric id only for UI component keys
   dbId: string;        // real UUID from database
+  comboId: string; // unique combo_id from backend
   title: string;
   subject: string;
   semester: string;
@@ -25,6 +26,7 @@ export interface Course {
   icon: React.ComponentType<any>;
   tags?: string[];
   course_image?: string | null;
+  visibility?: 'Private' | 'Friends Only' | 'Public' | 'Only Me';
 }
 
 interface CourseCardProps {

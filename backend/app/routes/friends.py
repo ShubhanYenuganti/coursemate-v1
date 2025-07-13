@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.user import User
 from app.models.friend import Friend
 from app.models.message import Message
+from app.models.notification import Notification
 from app.init import db
 from app.extensions import socketio
 from sqlalchemy.exc import IntegrityError
@@ -42,6 +43,8 @@ def send_friend_request():
         else: # 'rejected' or 'blocked'
              return jsonify({'success': False, 'error': 'Cannot send friend request'}), 409
 
+    # Get the requester's user object
+    requester = User.query.get(current_user_id)
 
     new_request = Friend(requester_id=current_user_id, receiver_id=receiver_id)
     db.session.add(new_request)
@@ -52,6 +55,24 @@ def send_friend_request():
         db.session.rollback()
         return jsonify({'success': False, 'error': 'Friend request already sent'}), 409
 
+    # Create notification for the receiver
+    notification = Notification(
+        user_id=receiver_id,
+        sender_id=current_user_id,
+        type='friend_request',
+        title=f'Friend Request from {requester.name}',
+        message=f'{requester.name} has sent you a friend request.',
+        data={
+            'request_id': new_request.id,
+            'requester_id': current_user_id,
+            'requester_name': requester.name,
+            'requester_email': requester.email
+        }
+    )
+    
+    db.session.add(notification)
+    db.session.commit()
+
     # Emit WebSocket event to the receiver
     socketio.emit('new_friend_request', {
         'request_id': new_request.id,
@@ -59,6 +80,11 @@ def send_friend_request():
         'requester_name': new_request.requester.name,
         'requester_email': new_request.requester.email,
         'sent_at': new_request.created_at.isoformat()
+    }, room=receiver_id)
+
+    # Emit notification event
+    socketio.emit('new_notification', {
+        'notification': notification.to_dict()
     }, room=receiver_id)
 
     return jsonify({
@@ -93,14 +119,40 @@ def respond_to_friend_request():
     if friend_request.status != 'pending':
         return jsonify({'success': False, 'error': f'This request has already been {friend_request.status}'}), 409
 
+    # Get user objects
+    requester = User.query.get(friend_request.requester_id)
+    receiver = User.query.get(friend_request.receiver_id)
+
     if action == 'accept':
         friend_request.status = 'accepted'
         message = 'Friend request accepted'
+        
+        # Create notification for the original requester
+        notification = Notification(
+            user_id=friend_request.requester_id,
+            sender_id=current_user_id,
+            type='friend_request_accepted',
+            title=f'Friend Request Accepted by {receiver.name}',
+            message=f'{receiver.name} has accepted your friend request!',
+            data={
+                'accepted_by_id': current_user_id,
+                'accepted_by_name': receiver.name,
+                'accepted_by_email': receiver.email
+            }
+        )
+        
+        db.session.add(notification)
+        
         # Emit event to the original requester
         socketio.emit('friend_request_accepted', {
             'friend_id': friend_request.receiver_id,
             'friend_name': friend_request.receiver.name,
             'message': f'{friend_request.receiver.name} accepted your friend request!'
+        }, room=friend_request.requester_id)
+        
+        # Emit notification event
+        socketio.emit('new_notification', {
+            'notification': notification.to_dict()
         }, room=friend_request.requester_id)
     else: # action == 'reject'
         friend_request.status = 'rejected'

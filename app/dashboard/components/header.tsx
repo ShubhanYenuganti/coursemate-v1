@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import NotificationsDropdown from './NotificationsDropdown';
 
 interface HeaderProps {
   userName?: string;
@@ -66,6 +67,9 @@ export function Header({
               />
             </div>
           </form>
+          
+          {/* Notifications Dropdown */}
+          <NotificationsDropdown />
         </div>
       </div>
     </div>

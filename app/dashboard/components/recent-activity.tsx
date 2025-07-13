@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { messageService, Conversation } from '../../../lib/api/messageService';
+import { notificationService, Notification } from '../../../lib/api/notificationService';
+import { friendService } from '../../../lib/api/friendService';
 import { Button } from '../../../components/ui/button';
 import { Textarea } from '../../../components/ui/textarea';
+import { BookOpen, User, Bell, Check, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export interface Activity {
   id: string;
@@ -11,8 +15,9 @@ export interface Activity {
   target?: string;
   content?: string;
   time: string;
-  type: 'message';
-  conversationId: string;
+  type: 'message' | 'notification';
+  conversationId?: string;
+  notificationData?: Notification;
 }
 
 interface CommunityActivityProps {
@@ -30,9 +35,11 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
 }) => {
   const [modalActivity, setModalActivity] = useState<Activity | null>(null);
   const [messageActivities, setMessageActivities] = useState<Activity[]>([]);
+  const [notificationActivities, setNotificationActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+  const router = useRouter();
 
   // Fetch recent messages and convert them to activities
   useEffect(() => {
@@ -59,12 +66,40 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
       } catch (error) {
         console.error('Error fetching recent messages:', error);
         setMessageActivities([]);
+      }
+    };
+
+    fetchRecentMessages();
+  }, []);
+
+  // Fetch recent notifications and convert them to activities
+  useEffect(() => {
+    const fetchRecentNotifications = async () => {
+      try {
+        const notifications = await notificationService.getNotifications(false, 10);
+        
+        // Convert notifications to activities
+        const activities: Activity[] = notifications.map((notification: Notification) => ({
+          id: notification.id,
+          user: notification.sender_name || 'System',
+          avatar: getNotificationAvatar(notification.type),
+          action: getNotificationAction(notification.type),
+          content: notification.message,
+          time: formatTimeAgo(notification.created_at),
+          type: 'notification',
+          notificationData: notification,
+        }));
+        
+        setNotificationActivities(activities);
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+        setNotificationActivities([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRecentMessages();
+    fetchRecentNotifications();
   }, []);
 
   // Helper function to format time ago
@@ -79,15 +114,125 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
     return `${Math.floor(diffInMinutes / 1440)} day${Math.floor(diffInMinutes / 1440) > 1 ? 's' : ''} ago`;
   };
 
-  const activitiesToDisplay = activities.length > 0 ? activities : messageActivities;
+  const getNotificationAvatar = (type: string) => {
+    switch (type) {
+      case 'course_invite':
+        return '📚';
+      case 'friend_request':
+        return '👥';
+      case 'course_invite_accepted':
+        return '✅';
+      default:
+        return '🔔';
+    }
+  };
+
+  const getNotificationAction = (type: string) => {
+    switch (type) {
+      case 'course_invite':
+        return 'invited you to a course';
+      case 'friend_request':
+        return 'sent you a friend request';
+      case 'course_invite_accepted':
+        return 'accepted your course invitation';
+      default:
+        return 'sent you a notification';
+    }
+  };
+
+  // Combine messages and notifications, sort by time
+  const allActivities = [...messageActivities, ...notificationActivities].sort((a, b) => {
+    const timeA = new Date(a.time.includes('ago') ? Date.now() - getTimeDiff(a.time) : a.time).getTime();
+    const timeB = new Date(b.time.includes('ago') ? Date.now() - getTimeDiff(b.time) : b.time).getTime();
+    return timeB - timeA;
+  });
+
+  const activitiesToDisplay = activities.length > 0 ? activities : allActivities.slice(0, 8);
+
+  const getTimeDiff = (timeString: string) => {
+    const match = timeString.match(/(\d+)\s*(min|hour|day)/);
+    if (!match) return 0;
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    switch (unit) {
+      case 'min': return value * 60 * 1000;
+      case 'hour': return value * 60 * 60 * 1000;
+      case 'day': return value * 24 * 60 * 60 * 1000;
+      default: return 0;
+    }
+  };
 
   const handleActivityClick = async (activity: Activity) => {
-    setModalActivity(activity);
-    setReplyText('');
-    onActivityClick && onActivityClick(activity);
-    
-    // Mark the conversation as read by removing it from the notifications
-    setMessageActivities(prev => prev.filter(msg => msg.id !== activity.id));
+    if (activity.type === 'message') {
+      setModalActivity(activity);
+      setReplyText('');
+      onActivityClick && onActivityClick(activity);
+      
+      // Mark the conversation as read by removing it from the notifications
+      setMessageActivities(prev => prev.filter(msg => msg.id !== activity.id));
+    } else if (activity.type === 'notification') {
+      // Handle notification click based on type
+      if (activity.notificationData) {
+        await handleNotificationAction(activity.notificationData);
+      }
+    }
+  };
+
+  const handleNotificationAction = async (notification: Notification) => {
+    try {
+      // Mark notification as read
+      await notificationService.markNotificationRead(notification.id);
+      
+      // Remove from local state
+      setNotificationActivities(prev => prev.filter(n => n.id !== notification.id));
+      
+      // Handle specific notification types
+      if (notification.type === 'course_invite') {
+        // Navigate to courses page or show course invite modal
+        router.push('/courses');
+      } else if (notification.type === 'friend_request') {
+        // Navigate to messages page to handle friend request
+        router.push('/chat');
+      } else if (notification.type === 'friend_request_accepted') {
+        // Navigate to messages page to see the new friend
+        router.push('/chat');
+      }
+    } catch (error) {
+      console.error('Error handling notification action:', error);
+    }
+  };
+
+  const handleFriendRequestResponse = async (notificationId: string, action: 'accept' | 'reject') => {
+    try {
+      const notification = notificationActivities.find(n => n.id === notificationId);
+      if (!notification || !notification.notificationData) return;
+
+      const requestId = notification.notificationData.data.request_id;
+      await friendService.respondToFriendRequest(requestId, action);
+      
+      // Remove the notification from the list
+      setNotificationActivities(prev => prev.filter(n => n.id !== notificationId));
+      
+      if (action === 'accept') {
+        router.push('/chat');
+      }
+    } catch (error) {
+      console.error('Failed to respond to friend request:', error);
+    }
+  };
+
+  const handleCourseInviteResponse = async (notificationId: string, action: 'accept' | 'decline') => {
+    try {
+      await notificationService.respondToCourseInvite(notificationId, action);
+      // Remove the notification from the list
+      setNotificationActivities(prev => prev.filter(n => n.id !== notificationId));
+      
+      if (action === 'accept') {
+        router.push('/courses');
+      }
+    } catch (error) {
+      console.error('Failed to respond to course invite:', error);
+    }
   };
 
   const handleCloseModal = () => {
@@ -101,7 +246,7 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
     setSendingReply(true);
     try {
       await messageService.sendMessage({
-        receiver_id: modalActivity.conversationId,
+        receiver_id: modalActivity.conversationId!,
         message_content: replyText.trim(),
       });
       
@@ -132,6 +277,10 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
 
   const getAvatarColor = (avatar: string) => {
     if (avatar === '📺') return 'bg-indigo-500';
+    if (avatar === '📚') return 'bg-blue-500';
+    if (avatar === '👥') return 'bg-green-500';
+    if (avatar === '✅') return 'bg-emerald-500';
+    if (avatar === '🔔') return 'bg-yellow-500';
     // You can add more logic here for different avatar colors
     return 'bg-indigo-500';
   };
@@ -164,6 +313,58 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
               </div>
             )}
             <div className="text-xs text-gray-500">{activity.time}</div>
+            
+            {/* Course Invite Actions */}
+            {activity.type === 'notification' && 
+             activity.notificationData?.type === 'course_invite' && 
+             !activity.notificationData.is_read && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCourseInviteResponse(activity.notificationData!.id, 'accept');
+                  }}
+                  className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCourseInviteResponse(activity.notificationData!.id, 'decline');
+                  }}
+                  className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700 transition-colors"
+                >
+                  Decline
+                </button>
+              </div>
+            )}
+
+            {/* Friend Request Actions */}
+            {activity.type === 'notification' && 
+             activity.notificationData?.type === 'friend_request' && 
+             !activity.notificationData.is_read && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFriendRequestResponse(activity.notificationData!.id, 'accept');
+                  }}
+                  className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFriendRequestResponse(activity.notificationData!.id, 'reject');
+                  }}
+                  className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700 transition-colors"
+                >
+                  Decline
+                </button>
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -177,7 +378,7 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
       {loading && (
         <div className="text-center py-8 text-gray-500">
           <div className="text-4xl mb-2">⏳</div>
-          <p className="mb-2">Loading messages...</p>
+          <p className="mb-2">Loading notifications...</p>
         </div>
       )}
             {/* Modal for Activity Details */}

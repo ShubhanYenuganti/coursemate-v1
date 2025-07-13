@@ -1,5 +1,7 @@
 interface CourseData {
   id?: string;
+  combo_id?: string;
+  user_id?: string; // user_id from courses table
   title: string;
   subject: string;
   course_code?: string;

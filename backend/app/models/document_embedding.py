@@ -13,7 +13,7 @@ class DocumentEmbedding(db.Model):
     
     # Foreign keys
     user_id = Column(String, ForeignKey('users.id'), nullable=False, index=True)
-    course_id = Column(String, ForeignKey('courses.id'), nullable=False, index=True)
+    course_id = Column(String, ForeignKey('courses.combo_id'), nullable=False, index=True)
     
     # Document information
     document_name = Column(String(255), nullable=False, index=True)
