@@ -4,6 +4,7 @@ import { notificationService, Notification } from '../../../lib/api/notification
 import { messageService, Conversation } from '../../../lib/api/messageService';
 import { friendService } from '../../../lib/api/friendService';
 import { useRouter } from 'next/navigation';
+import { useSocket } from '@/app/context/SocketContext';
 
 export interface Activity {
   id: string;
@@ -26,10 +27,24 @@ const NotificationsDropdown: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const router = useRouter();
+  const { socket } = useSocket();
 
   useEffect(() => {
     loadNotifications();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNewNotification = (data: { notification: any }) => {
+      // Prepend the new notification to the list and reload notifications
+      setNotifications(prev => [data.notification, ...prev]);
+      loadNotifications();
+    };
+    socket.on('new_notification', handleNewNotification);
+    return () => {
+      socket.off('new_notification', handleNewNotification);
+    };
+  }, [socket]);
 
   const loadNotifications = async () => {
     setIsLoading(true);

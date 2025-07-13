@@ -74,6 +74,7 @@ const ShareInviteFeature: React.FC<{ course: Course }> = ({ course }) => {
 
       // Use combo_id if available, otherwise fallback to dbId
       const courseIdToSend = (course as any).combo_id || course.dbId;
+      console.log("Sending invite for comboId:", course.comboId);
       await notificationService.sendCourseInvite(course.comboId, selectedFriendId, role);
       
       setInvited([...invited, { 

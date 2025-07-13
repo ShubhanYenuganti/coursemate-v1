@@ -6,6 +6,7 @@ import { Button } from '../../../components/ui/button';
 import { Textarea } from '../../../components/ui/textarea';
 import { BookOpen, User, Bell, Check, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useSocket } from '@/app/context/SocketContext';
 
 export interface Activity {
   id: string;
@@ -40,6 +41,7 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
   const router = useRouter();
+  const { socket } = useSocket();
 
   // Fetch recent messages and convert them to activities
   useEffect(() => {
@@ -101,6 +103,33 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
 
     fetchRecentNotifications();
   }, []);
+
+  // Real-time notification updates
+  useEffect(() => {
+    if (!socket) return;
+    const handleNewNotification = (data: { notification: any }) => {
+      // Prepend the new notification to the list and reload activities
+      setNotificationActivities(prev => [
+        {
+          id: data.notification.id,
+          user: data.notification.sender_name || 'System',
+          avatar: getNotificationAvatar(data.notification.type),
+          action: getNotificationAction(data.notification.type),
+          content: data.notification.message,
+          time: formatTimeAgo(data.notification.created_at),
+          type: 'notification',
+          notificationData: data.notification,
+        },
+        ...prev,
+      ]);
+      // Optionally, reload messages as well
+      reloadMessageActivities();
+    };
+    socket.on('new_notification', handleNewNotification);
+    return () => {
+      socket.off('new_notification', handleNewNotification);
+    };
+  }, [socket]);
 
   // Helper function to format time ago
   const formatTimeAgo = (timestamp: string) => {
@@ -283,6 +312,28 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
     if (avatar === '🔔') return 'bg-yellow-500';
     // You can add more logic here for different avatar colors
     return 'bg-indigo-500';
+  };
+
+  // Helper to reload message activities
+  const reloadMessageActivities = async () => {
+    try {
+      const conversations = await messageService.getConversations();
+      const unreadConversations = conversations.filter(conv => conv.unread_count > 0);
+      const activities: Activity[] = unreadConversations.slice(0, 5).map((conv: Conversation) => ({
+        id: conv.id,
+        user: conv.participant_name,
+        avatar: conv.participant_name.charAt(0).toUpperCase(),
+        action: 'sent you a message',
+        content: conv.last_message,
+        time: formatTimeAgo(conv.last_message_time),
+        type: 'message',
+        conversationId: conv.id,
+      }));
+      setMessageActivities(activities);
+    } catch (error) {
+      console.error('Error fetching recent messages:', error);
+      setMessageActivities([]);
+    }
   };
 
   return (
