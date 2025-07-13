@@ -149,6 +149,9 @@ const CoursesPage = () => {
 
   const filteredCourses = useMemo(() => {
     let filtered = courses.filter(course => {
+      // Exclude Google Calendar courses
+      if (course.id && course.id.startsWith('google-calendar')) return false;
+      
       if (!showArchived && course.is_archived) return false;
       
       const matchesSearch = course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

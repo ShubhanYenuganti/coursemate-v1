@@ -75,19 +75,14 @@ export function Sidebar() {
       icon: '💬',
     },
     {
-      name: 'Notes',
-      href: '/notes',
-      icon: '📝',
+      name: 'Career Prep',
+      href: '/career-prep',
+      icon: '💼',
     },
     {
       name: 'Resources',
       href: '/resources',
       icon: '📖',
-    },
-    {
-      name: 'Study Plan',
-      href: '/study-plan',
-      icon: '📋',
     },
   ];
 

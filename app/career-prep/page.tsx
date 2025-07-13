@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
 import { Sidebar } from '../dashboard/components/sidebar';
 import useAuthRedirect from "@/hooks/useAuthRedirect"
 
-export default function NotesPage() {
+export default function CareerPrepPage() {
   const loading = useAuthRedirect()
 
   if (loading) {
@@ -14,8 +14,8 @@ export default function NotesPage() {
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <h1 className="text-3xl font-bold mb-4">Notes</h1>
-        <p className="text-gray-600">This is the Notes page. More features coming soon!</p>
+        <h1 className="text-3xl font-bold mb-4">Career Prep</h1>
+        <p className="text-gray-600">This is the Career Prep page. More features coming soon!</p>
       </div>
     </div>
   );

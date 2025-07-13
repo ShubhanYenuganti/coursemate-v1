@@ -71,6 +71,9 @@ const Dashboard = () => {
         twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
         
         const recentlyAccessedCourses = courses.filter(course => {
+          // Exclude Google Calendar courses
+          if (course.id && course.id.startsWith('google-calendar')) return false;
+          
           if (!course.last_accessed) return false;
           const lastAccessed = new Date(course.last_accessed);
           return lastAccessed >= twentyFourHoursAgo;
@@ -176,6 +179,7 @@ const Dashboard = () => {
           <div className="mb-6">
             <MyCourses
               courses={userCourses.map((course, index) => convertToMyCoursesFormat(course, index))}
+              isLoading={isLoadingCourses}
               onViewAllCourses={handleViewAllCourses}
               onViewCourse={handleViewCourse}
               onContinueCourse={handleContinueCourse}
