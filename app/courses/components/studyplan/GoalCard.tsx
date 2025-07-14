@@ -11,6 +11,8 @@ interface GoalCardProps {
   courseId: string;
 }
 
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 const GoalCard: React.FC<GoalCardProps> = ({ goal, onGoalUpdated, onGoalDeleted, courseId }) => {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const router = useRouter();
@@ -92,7 +94,11 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onGoalUpdated, onGoalDeleted,
                   <Clock className="w-4 h-4" />
                   <span>{goal.workMinutesPerDay} min/day</span>
                 </div>
-                <span className="capitalize">{goal.frequency}</span>
+                <span className="capitalize">{
+  Array.isArray(goal.frequency)
+    ? goal.frequency.map((n: number) => dayNames[n]).join(', ')
+    : goal.frequency
+}</span>
               </div>
 
               {/* Progress Bar */}

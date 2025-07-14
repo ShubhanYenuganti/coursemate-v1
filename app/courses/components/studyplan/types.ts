@@ -55,6 +55,7 @@ export interface GoalWithProgress extends Goal {
   totalTasks: number;
   completedTasks: number;
   completed: boolean;
+  customScheduledDays?: string[];
 }
 
 export interface TaskWithProgress extends Task {

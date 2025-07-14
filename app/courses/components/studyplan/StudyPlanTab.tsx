@@ -62,14 +62,15 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
             courseId: courseId,
             title: goal.goal_descr,
             targetDate: formatDate(goal.due_date || new Date().toISOString()),
-            workMinutesPerDay: 60, // Default value
-            frequency: 'daily', // Default value
+            workMinutesPerDay: goal.workMinutesPerDay, 
+            frequency: goal.frequency,
             createdAt: goal.created_at,
             updatedAt: goal.updated_at,
             progress: goal.progress || 0,
             totalTasks: goal.total_tasks || 0,
             completedTasks: goal.completed_tasks || 0,
-            completed: goal.goal_completed || false
+            completed: goal.goal_completed || false,
+            customScheduledDays: goal.customScheduleDays // Assuming backend sends this
           };
         });
 
@@ -101,6 +102,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         body: JSON.stringify({
           goal_descr: goal.title,
           due_date: goal.targetDate,
+          workMinutesPerDay: goal.workMinutesPerDay,
+          frequency: goal.frequency === 'custom' ? goal.customScheduleDays ?? [] : goal.frequency,
           skip_default_task: true
         })
       });
@@ -127,14 +130,15 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           courseId: courseId,
           title: goal.goal_descr,
           targetDate: formatDate(goal.due_date || new Date().toISOString()),
-          workMinutesPerDay: 60,
-          frequency: 'daily',
+          workMinutesPerDay: goal.workMinutesPerDay,
+          frequency: goal.frequency,
           createdAt: goal.created_at,
           updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0,
-          completed: goal.goal_completed || false
+          completed: goal.goal_completed || false,
+          customScheduledDays: goal.customScheduleDays // Assuming backend sends this
         };
       });
       setGoals(transformedGoals);
@@ -192,14 +196,15 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           courseId: courseId,
           title: goal.goal_descr,
           targetDate: goal.due_date || new Date().toISOString(),
-          workMinutesPerDay: 60, // Default value
-          frequency: 'daily', // Default value
+          workMinutesPerDay: goal.workMinutesPerDay, // Default value
+          frequency: goal.frequency, // Default value
           createdAt: goal.created_at,
           updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0,
-          completed: goal.goal_completed || false
+          completed: goal.goal_completed || false,
+          customScheduledDays: goal.customScheduleDays // Assuming backend sends this
         };
       });
 
@@ -255,14 +260,15 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           courseId: courseId,
           title: goal.goal_descr,
           targetDate: goal.due_date || new Date().toISOString(),
-          workMinutesPerDay: 60, // Default value
-          frequency: 'daily', // Default value
+          workMinutesPerDay: goal.workMinutesPerDay, // Default value
+          frequency: goal.frequency, // Default value
           createdAt: goal.created_at,
           updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0,
-          completed: goal.goal_completed || false
+          completed: goal.goal_completed || false,
+          customScheduledDays: goal.customScheduleDays // Assuming backend sends this
         };
       });
 
@@ -296,8 +302,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         courseId: courseId,
         title: goal.goal_descr,
         targetDate: goal.due_date || new Date().toISOString(),
-        workMinutesPerDay: 60,
-        frequency: 'daily',
+        workMinutesPerDay: goal.workMinutesPerDay,
+        frequency: goal.frequency,
         createdAt: goal.created_at,
         updatedAt: goal.updated_at,
         progress: goal.progress || 0,
