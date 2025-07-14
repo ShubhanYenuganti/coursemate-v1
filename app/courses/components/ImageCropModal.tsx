@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, RotateCcw, Check } from 'lucide-react';
+import { Portal } from '../../../components/Portal';
 
 interface ImageCropModalProps {
   isOpen: boolean;
@@ -135,77 +136,79 @@ const ImageCropModal: React.FC<ImageCropModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Crop Banner Image</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="mb-4">
-          <p className="text-gray-600 text-sm">
-            Drag the crop area to select the portion of the image you want as your banner.
-            The banner will maintain a 896:192 aspect ratio (4.67:1) to match the exact display dimensions.
-          </p>
-        </div>
-        
-        <div 
-          ref={containerRef}
-          className="relative border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-100"
-          style={{ width: '600px', height: '400px' }}
-          onMouseDown={handleMouseDown}
-        >
-          <img
-            ref={imageRef}
-            src={imageUrl}
-            alt="Uploaded image"
-            className="w-full h-full object-contain"
-            onLoad={handleImageLoad}
-          />
-          
-          {imageLoaded && (
-            <div
-              className="absolute border-2 border-white cursor-move"
-              style={{
-                left: `${crop.x}px`,
-                top: `${crop.y}px`,
-                width: `${crop.width}px`,
-                height: `${crop.height}px`,
-                boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)'
-              }}
+    <Portal>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Crop Banner Image</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              {/* Corner indicators */}
-              <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-white"></div>
-              <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-white"></div>
-              <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-white"></div>
-              <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-white"></div>
-            </div>
-          )}
-        </div>
-        
-        <div className="flex justify-end gap-3 mt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="mb-4">
+            <p className="text-gray-600 text-sm">
+              Drag the crop area to select the portion of the image you want as your banner.
+              The banner will maintain a 896:192 aspect ratio (4.67:1) to match the exact display dimensions.
+            </p>
+          </div>
+          
+          <div 
+            ref={containerRef}
+            className="relative border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-100"
+            style={{ width: '600px', height: '400px' }}
+            onMouseDown={handleMouseDown}
           >
-            Cancel
-          </button>
-          <button
-            onClick={handleCropConfirm}
-            disabled={!imageLoaded}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <Check className="w-4 h-4" />
-            Use This Crop
-          </button>
+            <img
+              ref={imageRef}
+              src={imageUrl}
+              alt="Uploaded image"
+              className="w-full h-full object-contain"
+              onLoad={handleImageLoad}
+            />
+            
+            {imageLoaded && (
+              <div
+                className="absolute border-2 border-white cursor-move"
+                style={{
+                  left: `${crop.x}px`,
+                  top: `${crop.y}px`,
+                  width: `${crop.width}px`,
+                  height: `${crop.height}px`,
+                  boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)'
+                }}
+              >
+                {/* Corner indicators */}
+                <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-white"></div>
+                <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-white"></div>
+                <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-white"></div>
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-white"></div>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end gap-3 mt-4">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCropConfirm}
+              disabled={!imageLoaded}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <Check className="w-4 h-4" />
+              Use This Crop
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Portal>
   );
 };
 

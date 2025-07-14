@@ -85,8 +85,13 @@ def create_course():
         course_title = data.get('title')
     
     try:
+        # Generate shared course UUID
+        shared_course_id = str(uuid.uuid4())
+        combo_id = f"{shared_course_id}+{current_user_id}"
         # Create new course
         course = Course(
+            combo_id=combo_id,
+            id=shared_course_id,
             user_id=current_user_id,
             title=course_title,
             subject=data.get('subject'),
@@ -848,7 +853,7 @@ Return only the JSON response, no additional text.
                     print(f"      [Subtask {j+1} estimated_minutes]:", subtask.get('estimated_minutes'))
                     print(f"      [Subtask {j+1} type]:", subtask.get('type'))
             # Get the course to get the combo_id
-            course = Course.query.filter_by(id=course_id, user_id=user_id).first()
+            course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
             if not course:
                 return jsonify({'error': 'Course not found or you do not have access'}), 404
             
