@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle, Circle, Clock, BookOpen, Brain, Target, FileText, Zap, Trash2, Edit, Plus, AlertTriangle } from 'lucide-react';
 import { Subtask } from './types';
 import { toast } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 interface SubtaskListProps {
   taskId: string;
@@ -16,6 +17,7 @@ interface SubtaskListProps {
 const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDeleted, onSubtaskAdded, onSubtaskToggled, taskDueDate }) => {
   const [localSubtasks, setLocalSubtasks] = useState<Subtask[]>(subtasks);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const router = useRouter();
 
   // Update local subtasks when props change and maintain order
   useEffect(() => {
@@ -494,7 +496,14 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
         </div>
       ) : (
         <button
-          onClick={() => setIsAddingSubtask(true)}
+          onClick={() => {
+            const params = new URLSearchParams({
+              addSubtaskForTask: taskId,
+              taskDueDate: taskDueDate,
+              taskName: encodeURIComponent('Task') // Replace 'Task' with the actual task name if available
+            });
+            router.push(`/calendar?${params.toString()}`);
+          }}
           className="mt-2 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
         >
           <Plus className="w-3 h-3" />

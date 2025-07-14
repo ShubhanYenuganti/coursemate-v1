@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import useAuthRedirect from "@/hooks/useAuthRedirect"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "react-hot-toast"
+import { useSearchParams } from 'next/navigation';
 
 import { DayView } from "./components/DayView"
 import { WeekView } from "./components/WeekView"
@@ -285,6 +286,10 @@ export function CalendarScheduler() {
   const [createSubtaskModalPosition, setCreateSubtaskModalPosition] = useState({ x: 0, y: 0 });
   const [availableTasks, setAvailableTasks] = useState<Record<string, string>>({});
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
+  const [preselectedTaskId, setPreselectedTaskId] = useState<string | null>(null);
+  const [showBanner, setShowBanner] = useState(false);
+  const [bannerTaskName, setBannerTaskName] = useState<string | null>(null);
+  const [bannerTaskDueDate, setBannerTaskDueDate] = useState<string | null>(null);
   const [newSubtaskDescription, setNewSubtaskDescription] = useState('');
   const [newSubtaskTypeForCreate, setNewSubtaskTypeForCreate] = useState('other');
   const [dragPreview, setDragPreview] = useState<{
@@ -609,6 +614,7 @@ export function CalendarScheduler() {
 
       await fetchGoals();
       
+      setShowBanner(false);
     } catch (error) {
       console.error('Failed to create subtask:', error);
       toast.error('Failed to create subtask');
@@ -1060,6 +1066,7 @@ export function CalendarScheduler() {
       
       handleAddSubtaskCancel();
       toast.success("Subtask created successfully");
+      setShowBanner(false);
     } catch (err) {
       console.error("handleAddSubtaskConfirm error", err);
       toast.error("Failed to create subtask");
@@ -1335,6 +1342,51 @@ export function CalendarScheduler() {
       toast.error("Failed to restore subtask");
     }
   }
+
+  const searchParams = useSearchParams();
+
+  // On mount or when searchParams changes, check for addSubtaskForTask param
+  useEffect(() => {
+    const taskParam = searchParams.get('addSubtaskForTask');
+    const dueDateParam = searchParams.get('taskDueDate');
+    const nameParam = searchParams.get('taskName');
+    if (taskParam) {
+      setPreselectedTaskId(taskParam);
+      if (dueDateParam) {
+        setNewTaskDueDate(dueDateParam);
+        setBannerTaskDueDate(dueDateParam);
+      }
+      if (nameParam) {
+        setNewTaskName(decodeURIComponent(nameParam));
+        setBannerTaskName(decodeURIComponent(nameParam));
+      }
+      setShowBanner(true);
+      // Remove the params from the URL for clean UX
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('addSubtaskForTask');
+        url.searchParams.delete('taskDueDate');
+        url.searchParams.delete('taskName');
+        window.history.replaceState({}, document.title, url.pathname + url.search);
+      }
+    }
+  }, [searchParams]);
+
+  // When the create subtask modal opens, preselect the task if needed
+  useEffect(() => {
+    if (showCreateSubtaskModal && preselectedTaskId) {
+      setSelectedTaskId(preselectedTaskId);
+      setPreselectedTaskId(null);
+    }
+  }, [showCreateSubtaskModal, preselectedTaskId]);
+
+  // When the add subtask modal (from subtasks modal) opens, preselect the task if needed
+  useEffect(() => {
+    if (addSubtaskModal?.isOpen && preselectedTaskId) {
+      setSelectedTaskId(preselectedTaskId);
+      setPreselectedTaskId(null);
+    }
+  }, [addSubtaskModal, preselectedTaskId]);
 
   // Global keyboard event listener for delete confirmation
   useEffect(() => {
@@ -4299,6 +4351,25 @@ export function CalendarScheduler() {
             </Card>
           </div>
         </>
+      )}
+      {showBanner && bannerTaskName && bannerTaskDueDate && (
+        <div
+          className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-4 animate-fade-in"
+          style={{ minWidth: 320, maxWidth: 480 }}
+        >
+          <span>
+            Schedule a subtask for "<span className='font-semibold'>{bannerTaskName}</span>" (due <span className='font-semibold'>{bannerTaskDueDate}</span>)
+          </span>
+          <button
+            onClick={() => setShowBanner(false)}
+            className="ml-2 text-white hover:text-blue-200 focus:outline-none"
+            aria-label="Close notification"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       )}
     </div>
   )
