@@ -152,22 +152,26 @@ const GoalDetailPage = () => {
           
           // Always add the subtask from this row to its task
           const task = taskMap.get(item.task_id);
-          task.subtasks.push({
-            id: item.subtask_id,
-            taskId: item.task_id,
-            name: item.subtask_descr,
-            type: item.subtask_type || 'other',
-            estimatedTimeMinutes: 15, // Default value
-            completed: item.subtask_completed,
-            createdAt: item.created_at,
-            updatedAt: item.updated_at
-          });
+          if (item.subtask_id !== 'placeholder') {
+            task.subtasks.push({
+              id: item.subtask_id,
+              taskId: item.task_id,
+              name: item.subtask_descr,
+              type: item.subtask_type || 'other',
+              estimatedTimeMinutes: 15, // Default value
+              completed: item.subtask_completed,
+              createdAt: item.created_at,
+              updatedAt: item.updated_at
+            });
+          }
         });
         
         // Second pass: calculate progress for each task
         taskMap.forEach(task => {
-          task.totalSubtasks = task.subtasks.length;
-          task.completedSubtasks = task.subtasks.filter((s: any) => s.completed).length;
+          // Only count real subtasks (not placeholder)
+          const realSubtasks = task.subtasks;
+          task.totalSubtasks = realSubtasks.length;
+          task.completedSubtasks = realSubtasks.filter((s: any) => s.completed).length;
           task.progress = task.totalSubtasks > 0 
             ? Math.round((task.completedSubtasks / task.totalSubtasks) * 100) 
             : 0;
@@ -270,17 +274,12 @@ const GoalDetailPage = () => {
     }
     
     try {
-      // Create a new task with a default subtask
+      // Create a new task WITHOUT any subtasks
       const tasksData = [{
         task_title: newTaskName,
         task_descr: '',
         scheduledDate: newTaskDate,
-        completed: false,
-        subtasks: [{
-          subtask_descr: 'Initial step',
-          subtask_type: 'other',
-          subtask_completed: false
-        }]
+        completed: false
       }];
       
       console.log('Creating new task:', tasksData);
@@ -344,16 +343,18 @@ const GoalDetailPage = () => {
         
         // Always add the subtask from this row to its task
         const task = taskMap.get(item.task_id);
-        task.subtasks.push({
-          id: item.subtask_id,
-          taskId: item.task_id,
-          name: item.subtask_descr,
-          type: item.subtask_type || 'other',
-          estimatedTimeMinutes: 15, // Default value
-          completed: item.subtask_completed,
-          createdAt: item.created_at,
-          updatedAt: item.updated_at
-        });
+        if (item.subtask_id !== 'placeholder') {
+          task.subtasks.push({
+            id: item.subtask_id,
+            taskId: item.task_id,
+            name: item.subtask_descr,
+            type: item.subtask_type || 'other',
+            estimatedTimeMinutes: 15, // Default value
+            completed: item.subtask_completed,
+            createdAt: item.created_at,
+            updatedAt: item.updated_at
+          });
+        }
       });
       
       // Second pass: calculate progress for each task
@@ -1010,88 +1011,99 @@ const GoalDetailPage = () => {
                 {/* Expanded Subtasks */}
                 {expandedTaskId === task.id && (
                   <div className="border-t border-gray-200 p-4">
-                    <SubtaskList 
-                      taskId={task.id} 
+                    {task.subtasks.length === 0 ? (
+                      <div className="text-center py-4">
+                        <button
+                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                          onClick={() => setEditingTask({ ...task, subtasks: [] })}
+                        >
+                          Add Subtask
+                        </button>
+                      </div>
+                    ) : (
+                      <SubtaskList 
+                        taskId={task.id} 
                         subtasks={task.subtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0))}
                         taskDueDate={task.scheduledDate}
-                      onSubtaskDeleted={(subtaskId) => {
-                        // Update the local task state to reflect the deleted subtask
-                        const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
+                        onSubtaskDeleted={(subtaskId) => {
+                          // Update the local task state to reflect the deleted subtask
+                          const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
                           // Keep the order after deletion
                           const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
-                        const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
-                        const totalSubtasksCount = updatedSubtasks.length;
-                        
-                        const updatedTask = {
-                          ...task,
+                          const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+                          const totalSubtasksCount = updatedSubtasks.length;
+                          
+                          const updatedTask = {
+                            ...task,
                             subtasks: sortedSubtasks,
-                          totalSubtasks: totalSubtasksCount,
-                          completedSubtasks: completedSubtasksCount,
-                          // Automatically complete task if all subtasks are done
-                          completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
-                        };
-                        
-                        // Recalculate progress
-                        updatedTask.progress = updatedTask.totalSubtasks > 0
-                          ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
-                          : 0;
-                        
-                        // Update tasks list
-                        handleTaskUpdated(updatedTask);
-                      }}
-                      onSubtaskAdded={(newSubtask) => {
-                        // Update the local task state to reflect the added subtask
-                        const updatedSubtasks = [...task.subtasks, newSubtask];
+                            totalSubtasks: totalSubtasksCount,
+                            completedSubtasks: completedSubtasksCount,
+                            // Automatically complete task if all subtasks are done
+                            completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
+                          };
+                          
+                          // Recalculate progress
+                          updatedTask.progress = updatedTask.totalSubtasks > 0
+                            ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
+                            : 0;
+                          
+                          // Update tasks list
+                          handleTaskUpdated(updatedTask);
+                        }}
+                        onSubtaskAdded={(newSubtask) => {
+                          // Update the local task state to reflect the added subtask
+                          const updatedSubtasks = [...task.subtasks, newSubtask];
                           // Keep the order after addition
                           const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
-                        const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
-                        const totalSubtasksCount = updatedSubtasks.length;
-                        
-                        const updatedTask = {
-                          ...task,
+                          const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+                          const totalSubtasksCount = updatedSubtasks.length;
+                          
+                          const updatedTask = {
+                            ...task,
                             subtasks: sortedSubtasks,
-                          totalSubtasks: totalSubtasksCount,
-                          completedSubtasks: completedSubtasksCount,
-                          // Automatically complete task if all subtasks are done
-                          completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
-                        };
-                        
-                        // Recalculate progress
-                        updatedTask.progress = updatedTask.totalSubtasks > 0
-                          ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
-                          : 0;
-                        
-                        // Update tasks list
-                        handleTaskUpdated(updatedTask);
-                      }}
-                      onSubtaskToggled={(subtaskId, completed) => {
-                        // Update the local task state to reflect the subtask completion change
-                        const updatedSubtasks = task.subtasks.map(subtask => 
-                          subtask.id === subtaskId ? { ...subtask, completed } : subtask
-                        );
+                            totalSubtasks: totalSubtasksCount,
+                            completedSubtasks: completedSubtasksCount,
+                            // Automatically complete task if all subtasks are done
+                            completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
+                          };
+                          
+                          // Recalculate progress
+                          updatedTask.progress = updatedTask.totalSubtasks > 0
+                            ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
+                            : 0;
+                          
+                          // Update tasks list
+                          handleTaskUpdated(updatedTask);
+                        }}
+                        onSubtaskToggled={(subtaskId, completed) => {
+                          // Update the local task state to reflect the subtask completion change
+                          const updatedSubtasks = task.subtasks.map(subtask => 
+                            subtask.id === subtaskId ? { ...subtask, completed } : subtask
+                          );
                           // Keep the order after toggle
                           const sortedSubtasks = updatedSubtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0));
-                        
-                        const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
-                        const totalSubtasksCount = updatedSubtasks.length;
-                        
-                        const updatedTask = {
-                          ...task,
+                          
+                          const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+                          const totalSubtasksCount = updatedSubtasks.length;
+                          
+                          const updatedTask = {
+                            ...task,
                             subtasks: sortedSubtasks,
-                          completedSubtasks: completedSubtasksCount,
-                          // Automatically complete task if all subtasks are done
-                          completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
-                        };
-                        
-                        // Recalculate progress
-                        updatedTask.progress = updatedTask.totalSubtasks > 0
-                          ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
-                          : 0;
-                        
-                        // Update tasks list
-                        handleTaskUpdated(updatedTask);
-                      }}
-                    />
+                            completedSubtasks: completedSubtasksCount,
+                            // Automatically complete task if all subtasks are done
+                            completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0
+                          };
+                          
+                          // Recalculate progress
+                          updatedTask.progress = updatedTask.totalSubtasks > 0
+                            ? Math.round((updatedTask.completedSubtasks / updatedTask.totalSubtasks) * 100)
+                            : 0;
+                          
+                          // Update tasks list
+                          handleTaskUpdated(updatedTask);
+                        }}
+                      />
+                    )}
                   </div>
                 )}
               </div>

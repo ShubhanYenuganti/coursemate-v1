@@ -876,10 +876,9 @@ def save_tasks_and_subtasks(goal_id):
                     db.session.add(subtask)
                     new_rows.append(subtask)
             else:
-                # Create a default subtask if none provided
-                current_app.logger.info(f"No subtasks provided for task: {task_title}, creating default")
-                
-                subtask = Goal(
+                # Create a placeholder row for a task with no subtasks
+                current_app.logger.info(f"No subtasks provided for task: {task_title}, creating placeholder row")
+                placeholder = Goal(
                     user_id=user_id,
                     course_id=reference_goal.course_id,
                     goal_id=goal_id,
@@ -890,15 +889,15 @@ def save_tasks_and_subtasks(goal_id):
                     task_title=task_title,
                     task_descr=task_descr,
                     task_completed=task_completed,
-                    subtask_id=str(uuid.uuid4()),
-                    subtask_descr='Default Subtask',
+                    subtask_id='placeholder',
+                    subtask_descr='',
                     subtask_type='other',
                     subtask_completed=False,
                     task_due_date=task_due_date,
                     subtask_order=0
                 )
-                db.session.add(subtask)
-                new_rows.append(subtask)
+                db.session.add(placeholder)
+                new_rows.append(placeholder)
         
         db.session.commit()
         
