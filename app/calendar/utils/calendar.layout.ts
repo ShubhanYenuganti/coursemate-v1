@@ -4,8 +4,6 @@ import { Goal } from "./goal.types";
 export const calculateEventPositions = (goals: Goal[], currentHour: number, currentDate: Date) => {
     if (goals.length === 0) return [];
 
-    console.log(`🔍 Processing ${goals.length} events for overlapping detection in hour ${currentHour}`);
-
     // Sort goals by start time
     const sortedGoals = [...goals].sort((a, b) => {
         const aStart = new Date(a.start_time ?? a.due_date!);
@@ -68,10 +66,6 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
         // Show title only if event starts in this hour
         const showTitle = start.getHours() === currentHour;
 
-        console.log(`📅 Event: "${goal.task_title}" (${start.toLocaleTimeString()} - ${end.toLocaleTimeString()})`);
-        console.log(`  📏 In hour ${currentHour}: top=${top.toFixed(1)}%, height=${height.toFixed(1)}%, showTitle=${showTitle}`);
-        console.log(`  🔍 Event spans: ${goalStart < hourStart.getTime() ? 'starts before' : 'starts in'} this hour, ${goalEnd > hourEnd.getTime() ? 'ends after' : 'ends in'} this hour`);
-
         // Find the first column where this goal doesn't overlap
         let columnIndex = 0;
         while (columnIndex < columns.length) {
@@ -84,15 +78,11 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
 
                 const overlaps = !(goalEnd <= existingStartTime || goalStart >= existingEndTime);
 
-                if (overlaps) {
-                    console.log(`  ⚠️  OVERLAPS with "${existingGoal.task_title}" (${existingStart.toLocaleTimeString()} - ${existingEnd.toLocaleTimeString()}) in column ${columnIndex}`);
-                }
 
                 return overlaps;
             });
 
             if (!hasOverlap) {
-                console.log(`  ✅ No overlap in column ${columnIndex}`);
                 break;
             }
             columnIndex++;
@@ -101,7 +91,6 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
         // Add to the appropriate column
         if (columnIndex >= columns.length) {
             columns.push([]);
-            console.log(`  ➕ Created new column ${columnIndex}`);
         }
         columns[columnIndex].push(goal);
 
@@ -120,9 +109,6 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
         const duration = goalEnd - goalStart;
         const zIndex = Math.max(1000 - Math.floor(duration / (1000 * 60)), 1); // Inverse of duration
 
-        console.log(`  📍 Positioned in column ${columnIndex} (left: ${adjustedLeft.toFixed(1)}%, width: ${adjustedWidth.toFixed(1)}%, z-index: ${zIndex})`);
-        console.log(`  📏 Width adjustment: original=${width.toFixed(1)}%, adjusted=${adjustedWidth.toFixed(1)}%, columnWidth=${columnWidth.toFixed(1)}%, maxWidth=${maxWidth.toFixed(1)}%`);
-
         positions.push({
             goal,
             left: adjustedLeft,
@@ -134,6 +120,5 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
         });
     }
 
-    console.log(`🎯 Final layout: ${columns.length} columns, ${positions.length} positioned events`);
     return positions;
 };

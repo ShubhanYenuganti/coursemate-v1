@@ -1159,7 +1159,15 @@ def create_subtask(task_id):
         
         # Handle task_due_date - use the one from request if provided, otherwise use task's due_date
         task_due_date = None
-        if 'task_due_date' in data and data['task_due_date']:
+        
+        # First, try to get the task_due_date from the placeholder row for this task
+        placeholder_row = Goal.query.filter_by(task_id=task_id, user_id=user_id, subtask_id='placeholder').first()
+        if placeholder_row and placeholder_row.task_due_date:
+            task_due_date = placeholder_row.task_due_date
+            print(f"Using task_due_date from placeholder row: {task_due_date}")
+        
+        # If no placeholder row or no task_due_date in placeholder, use the request data
+        if not task_due_date and 'task_due_date' in data and data['task_due_date']:
             try:
                 if isinstance(data['task_due_date'], str):
                     # Handle different date formats
@@ -1173,7 +1181,9 @@ def create_subtask(task_id):
             except Exception as e:
                 current_app.logger.error(f"Error parsing task_due_date: {data['task_due_date']}, error: {e}")
                 task_due_date = task_row.task_due_date if hasattr(task_row, 'task_due_date') and task_row.task_due_date else task_row.due_date
-        else:
+        
+        # If still no task_due_date, use the task's due_date
+        if not task_due_date:
             task_due_date = task_row.task_due_date if hasattr(task_row, 'task_due_date') and task_row.task_due_date else task_row.due_date
         
         # Get all existing subtask orders for this task

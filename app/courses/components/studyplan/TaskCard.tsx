@@ -9,9 +9,11 @@ interface TaskCardProps {
   task: TaskWithProgress;
   onTaskUpdated?: (task: TaskWithProgress) => void;
   onTaskDeleted?: (taskId: string) => void;
+  goalId?: string; // Add goalId prop
+  courseId?: string; // Add courseId prop
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted, goalId, courseId }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -137,6 +139,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted 
               taskId={task.id} 
               subtasks={task.subtasks} 
               taskDueDate={task.scheduledDate}
+              taskName={task.name}
+              goalId={goalId}
+              courseId={courseId}
               onSubtaskDeleted={(subtaskId) => {
                 // Update the local task state to reflect the deleted subtask
                 const updatedTask = {

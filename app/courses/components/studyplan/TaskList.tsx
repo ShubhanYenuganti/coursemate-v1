@@ -8,9 +8,10 @@ import { toast } from 'react-hot-toast';
 interface TaskListProps {
   goalId: string;
   onTaskUpdated?: (task: TaskWithProgress) => void;
+  courseId?: string; // Add courseId prop
 }
 
-const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
+const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated, courseId }) => {
   const [tasks, setTasks] = useState<TaskWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -255,6 +256,8 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated }) => {
           task={task} 
           onTaskUpdated={onTaskUpdated}
           onTaskDeleted={handleTaskDeleted}
+          goalId={goalId}
+          courseId={courseId}
         />
       ))}
     </div>

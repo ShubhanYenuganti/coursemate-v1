@@ -291,7 +291,10 @@ export function CalendarScheduler() {
   const [bannerTaskName, setBannerTaskName] = useState<string | null>(null);
   const [bannerTaskDueDate, setBannerTaskDueDate] = useState<string | null>(null);
   const [newSubtaskDescription, setNewSubtaskDescription] = useState('');
+  const [goalIdForRouting, setGoalIdForRouting] = useState<string | null>(null);
+  const [courseIdForRouting, setCourseIdForRouting] = useState<string | null>(null);
   const [newSubtaskTypeForCreate, setNewSubtaskTypeForCreate] = useState('other');
+  const [storedTaskDueDate, setStoredTaskDueDate] = useState<string | null>(null);
   const [dragPreview, setDragPreview] = useState<{
     startDate: Date;
     startHour: number;
@@ -512,10 +515,122 @@ export function CalendarScheduler() {
   };
 
   // Handle creating the subtask
-  const handleCreateSubtaskConfirm = async () => {
+  const handleCreateSubtaskConfirm = async (bypassDueDateCheck = false) => {
     if (!selectedTaskId || !newSubtaskDescription.trim() || !createSubtaskStart || !createSubtaskEnd) {
       toast.error("Please fill in all required fields");
       return;
+    }
+
+    // Check if the scheduled time is past the task's due date
+    if (!bypassDueDateCheck) {
+      // Get the task details to check due date
+      const allGoals = Object.values(goalsByDate).flat();
+      const task = allGoals.find(goal => goal.task_id === selectedTaskId);
+      
+      // Use stored due date from URL search params if available, otherwise use task's due date
+      let taskDueDateStr = storedTaskDueDate;
+      
+      // Debug stored due date
+      console.log('Due date check:', {
+        taskId: selectedTaskId,
+        taskDueDateStr,
+        storedTaskDueDate,
+        taskFound: !!task,
+        task: task
+      });
+      
+      // If no stored due date, try to get it from the task data
+      if (!taskDueDateStr && task) {
+        taskDueDateStr = task.task_due_date || task.due_date;
+      }
+      
+      console.log('Due date check:', {
+        taskId: selectedTaskId,
+        taskDueDateStr,
+        storedTaskDueDate,
+        taskFound: !!task,
+        task: task
+      });
+      
+      if (taskDueDateStr) {
+        console.log('Raw taskDueDateStr:', taskDueDateStr);
+        
+        // Parse the due date consistently - always convert to local date
+        let dueDateLocal;
+        if (storedTaskDueDate) {
+          // If it's from stored URL params, it's in YYYY-MM-DD format
+          const [year, month, day] = taskDueDateStr.split('-').map(Number);
+          dueDateLocal = new Date(year, month - 1, day); // month is 0-indexed
+          console.log('Parsed from stored URL param:', { year, month, day, dueDateLocal: dueDateLocal.toISOString() });
+        } else {
+          // If it's from task data, it might be in ISO format - convert to local date
+          const dueDateUTC = new Date(taskDueDateStr);
+          dueDateLocal = new Date(
+            dueDateUTC.getUTCFullYear(),
+            dueDateUTC.getUTCMonth(),
+            dueDateUTC.getUTCDate()
+          );
+          console.log('Parsed from task data:', { dueDateUTC: dueDateUTC.toISOString(), dueDateLocal: dueDateLocal.toISOString() });
+        }
+        
+        // Create scheduled date consistently in local timezone
+        const scheduledDate = new Date(createSubtaskStart.date);
+        scheduledDate.setHours(createSubtaskStart.hour, createSubtaskStart.minute, 0, 0);
+        const scheduledDateLocal = new Date(
+          scheduledDate.getFullYear(),
+          scheduledDate.getMonth(),
+          scheduledDate.getDate()
+        );
+        
+        console.log('Date comparison:', {
+          dueDateLocal: dueDateLocal.toISOString(),
+          scheduledDateLocal: scheduledDateLocal.toISOString(),
+          dueDateLocalTime: dueDateLocal.getTime(),
+          scheduledDateLocalTime: scheduledDateLocal.getTime(),
+          isPastDue: scheduledDateLocal > dueDateLocal
+        });
+        
+        // Compare local dates consistently (both are now in local timezone, date-only)
+        if (scheduledDateLocal > dueDateLocal) {
+          console.log('Showing due date warning modal');
+          // Show warning modal instead of proceeding
+          setDueDateWarningModal({
+            isOpen: true,
+            subtask: task || {
+              id: '',
+              user_id: '',
+              course_id: '',
+              goal_id: '',
+              goal_descr: '',
+              task_id: selectedTaskId || '',
+              task_title: availableTasks && selectedTaskId ? Object.keys(availableTasks).find(title => availableTasks[title] === selectedTaskId) || '' : '',
+              task_descr: '',
+              task_due_date: taskDueDateStr,
+              due_date: taskDueDateStr,
+              start_time: '',
+              end_time: '',
+              subtask_id: '',
+              subtask_descr: '',
+              subtask_type: '',
+              subtask_completed: false,
+              task_completed: false,
+              progress: 0,
+              totalSubtasks: 0,
+              completedSubtasks: 0,
+              subtasks: [],
+              google_calendar_color: '',
+              status: null,
+              goal_completed: false,
+              created_at: '',
+              updated_at: ''
+            },
+            targetDate: createSubtaskStart.date,
+            targetHour: createSubtaskStart.hour,
+            targetMinute: createSubtaskStart.minute
+          });
+          return;
+        }
+      }
     }
 
     try {
@@ -556,8 +671,8 @@ export function CalendarScheduler() {
         subtask_descr: newSubtaskDescription.trim(),
         subtask_type: newSubtaskTypeForCreate,
         subtask_start_time: startDateTime.toISOString(),
-        subtask_end_time: endDateTime.toISOString(),
-        task_due_date: startDateTime.toISOString().split('T')[0] // Use start date as due date
+        subtask_end_time: endDateTime.toISOString()
+        // Don't send task_due_date - let backend use placeholder row's task_due_date
       };
 
       const res = await fetch(`${api}/api/goals/tasks/${selectedTaskId}/subtasks`, {
@@ -615,6 +730,11 @@ export function CalendarScheduler() {
       await fetchGoals();
       
       setShowBanner(false);
+      
+      // Route back to goal detail page if goalId and courseId are available
+      if (goalIdForRouting && courseIdForRouting) {
+        window.location.href = `http://localhost:3001/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
+      }
     } catch (error) {
       console.error('Failed to create subtask:', error);
       toast.error('Failed to create subtask');
@@ -623,7 +743,8 @@ export function CalendarScheduler() {
 
   const handleCreateSubtaskCancel = () => {
     setShowCreateSubtaskModal(false);
-    setSelectedTaskId('');
+    // Preserve selectedTaskId for reuse
+    // setSelectedTaskId(''); // Commented out to preserve selection
     setNewSubtaskDescription('');
     setNewSubtaskTypeForCreate('other');
     setCreateSubtaskStart(null);
@@ -814,13 +935,38 @@ export function CalendarScheduler() {
       setDueDateWarningModal(null);
       
       if (subtask && targetDate && targetHour !== null) {
-        await performSubtaskDrop(subtask, targetDate, targetHour, targetMinute || 0);
+        // Check if this is from drag-to-create or add subtask modal
+        if (showCreateSubtaskModal) {
+          // This is from drag-to-create, proceed with creating the subtask
+          await handleCreateSubtaskConfirm(true);
+        } else if (addSubtaskModal?.isOpen) {
+          // This is from add subtask modal, proceed with creating the subtask
+          await handleAddSubtaskConfirm(true);
+        } else {
+          // This is from drag-and-drop, proceed with the drop
+          await performSubtaskDrop(subtask, targetDate, targetHour, targetMinute || 0);
+        }
       }
     }
   };
 
   const handleDueDateWarningCancel = () => {
     setDueDateWarningModal(null);
+    // Close the scheduling modal but preserve the selectedTaskId
+    if (showCreateSubtaskModal) {
+      setShowCreateSubtaskModal(false);
+      // Clear the drag preview and time selection
+      setDragPreview(null);
+      setCreateSubtaskStart(null);
+      setCreateSubtaskEnd(null);
+      setInitialClickPosition(null);
+      // Don't reset selectedTaskId so it can be reused
+    } else if (addSubtaskModal?.isOpen) {
+      setAddSubtaskModal(null);
+      setNewSubtaskDescr('');
+      setNewSubtaskTypeForAdd('other');
+      setNewSubtaskTime(15);
+    }
   };
 
   const handleGoalClick = (event: Goal | any, clickEvent?: React.MouseEvent) => {
@@ -990,10 +1136,104 @@ export function CalendarScheduler() {
     setNewSubtaskTime(15);
   }
 
-  const handleAddSubtaskConfirm = async () => {
+  const handleAddSubtaskConfirm = async (bypassDueDateCheck = false) => {
     if (!addSubtaskModal?.task || !newSubtaskDescr.trim()) {
       toast.error('Please enter a subtask description');
       return;
+    }
+
+    // Check if the task has a due date and if we're scheduling past it
+    if (!bypassDueDateCheck) {
+      const task = addSubtaskModal.task;
+      // Use stored due date from URL search params if available, otherwise use task's due date
+      let taskDueDateStr = storedTaskDueDate || task.task_due_date || task.due_date;
+      
+      console.log('Add subtask due date check:', {
+        taskId: task.task_id,
+        taskDueDateStr,
+        storedTaskDueDate,
+        task: task
+      });
+      
+      if (taskDueDateStr) {
+        console.log('Raw taskDueDateStr (add subtask):', taskDueDateStr);
+        
+        // Parse the due date consistently - always convert to local date
+        let dueDateLocal;
+        if (storedTaskDueDate) {
+          // If it's from stored URL params, it's in YYYY-MM-DD format
+          const [year, month, day] = taskDueDateStr.split('-').map(Number);
+          dueDateLocal = new Date(year, month - 1, day); // month is 0-indexed
+          console.log('Parsed from stored URL param (add subtask):', { year, month, day, dueDateLocal: dueDateLocal.toISOString() });
+        } else {
+          // If it's from task data, it might be in ISO format - convert to local date
+          const dueDateUTC = new Date(taskDueDateStr);
+          dueDateLocal = new Date(
+            dueDateUTC.getUTCFullYear(),
+            dueDateUTC.getUTCMonth(),
+            dueDateUTC.getUTCDate()
+          );
+          console.log('Parsed from task data (add subtask):', { dueDateUTC: dueDateUTC.toISOString(), dueDateLocal: dueDateLocal.toISOString() });
+        }
+        
+        // For add subtask modal, we don't have a specific scheduled time,
+        // so we'll use the current date as a reference
+        const currentDate = new Date();
+        const currentDateLocal = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth(),
+          currentDate.getDate()
+        );
+        
+        console.log('Add subtask date comparison:', {
+          dueDateLocal: dueDateLocal.toISOString(),
+          currentDateLocal: currentDateLocal.toISOString(),
+          dueDateLocalTime: dueDateLocal.getTime(),
+          currentDateLocalTime: currentDateLocal.getTime(),
+          isPastDue: currentDateLocal > dueDateLocal
+        });
+        
+        // Compare local dates consistently (both are now in local timezone, date-only)
+        if (currentDateLocal > dueDateLocal) {
+          console.log('Showing add subtask due date warning modal');
+          // Show warning modal instead of proceeding
+          setDueDateWarningModal({
+            isOpen: true,
+            subtask: task || {
+              id: '',
+              user_id: '',
+              course_id: '',
+              goal_id: '',
+              goal_descr: '',
+              task_id: addSubtaskModal?.task?.task_id || '',
+              task_title: addSubtaskModal?.task?.task_title || 'Unknown Task',
+              task_descr: '',
+              task_due_date: taskDueDateStr,
+              due_date: taskDueDateStr,
+              start_time: '',
+              end_time: '',
+              subtask_id: '',
+              subtask_descr: '',
+              subtask_type: '',
+              subtask_completed: false,
+              task_completed: false,
+              progress: 0,
+              totalSubtasks: 0,
+              completedSubtasks: 0,
+              subtasks: [],
+              google_calendar_color: '',
+              status: null,
+              goal_completed: false,
+              created_at: '',
+              updated_at: ''
+            },
+            targetDate: currentDate,
+            targetHour: currentDate.getHours(),
+            targetMinute: currentDate.getMinutes()
+          });
+          return;
+        }
+      }
     }
 
     try {
@@ -1003,8 +1243,8 @@ export function CalendarScheduler() {
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
       const payload = {
         subtask_descr: newSubtaskDescr.trim(),
-        subtask_type: newSubtaskTypeForAdd,
-        task_due_date: addSubtaskModal.task.task_due_date || addSubtaskModal.task.due_date
+        subtask_type: newSubtaskTypeForAdd
+        // Don't send task_due_date - let backend use placeholder row's task_due_date
       };
 
       const res = await fetch(`${api}/api/goals/tasks/${addSubtaskModal.task.task_id}/subtasks`, {
@@ -1067,6 +1307,11 @@ export function CalendarScheduler() {
       handleAddSubtaskCancel();
       toast.success("Subtask created successfully");
       setShowBanner(false);
+      
+      // Route back to goal detail page if goalId and courseId are available
+      if (goalIdForRouting && courseIdForRouting) {
+        window.location.href = `http://localhost:3001/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
+      }
     } catch (err) {
       console.error("handleAddSubtaskConfirm error", err);
       toast.error("Failed to create subtask");
@@ -1348,17 +1593,27 @@ export function CalendarScheduler() {
   // On mount or when searchParams changes, check for addSubtaskForTask param
   useEffect(() => {
     const taskParam = searchParams.get('addSubtaskForTask');
-    const dueDateParam = searchParams.get('taskDueDate');
     const nameParam = searchParams.get('taskName');
+    const goalIdParam = searchParams.get('goalId');
+    const courseIdParam = searchParams.get('courseId');
     if (taskParam) {
       setPreselectedTaskId(taskParam);
+      const dueDateParam = searchParams.get('taskDueDate');
       if (dueDateParam) {
         setNewTaskDueDate(dueDateParam);
         setBannerTaskDueDate(dueDateParam);
+        setStoredTaskDueDate(dueDateParam); // Store the due date for later use
       }
       if (nameParam) {
         setNewTaskName(decodeURIComponent(nameParam));
         setBannerTaskName(decodeURIComponent(nameParam));
+      }
+      // Store goalId and courseId for routing back
+      if (goalIdParam) {
+        setGoalIdForRouting(goalIdParam);
+      }
+      if (courseIdParam) {
+        setCourseIdForRouting(courseIdParam);
       }
       setShowBanner(true);
       // Remove the params from the URL for clean UX
@@ -1367,6 +1622,8 @@ export function CalendarScheduler() {
         url.searchParams.delete('addSubtaskForTask');
         url.searchParams.delete('taskDueDate');
         url.searchParams.delete('taskName');
+        url.searchParams.delete('goalId');
+        url.searchParams.delete('courseId');
         window.history.replaceState({}, document.title, url.pathname + url.search);
       }
     }
@@ -3923,7 +4180,7 @@ export function CalendarScheduler() {
                     Cancel
                   </button>
                   <button
-                    onClick={handleAddSubtaskConfirm}
+                    onClick={() => handleAddSubtaskConfirm()}
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                   >
                     <Plus className="w-4 h-4" />
@@ -4081,7 +4338,7 @@ export function CalendarScheduler() {
 
       {/* Due Date Warning Modal */}
       {dueDateWarningModal?.isOpen && dueDateWarningModal?.subtask && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style={{ zIndex: 999999 }}>
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="p-6">
               {/* Header */}
@@ -4134,7 +4391,13 @@ export function CalendarScheduler() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">Target date:</span>
                     <span className="text-sm text-gray-900">
-                      {dueDateWarningModal.targetDate?.toLocaleDateString()} at {dueDateWarningModal.targetHour}:{(dueDateWarningModal.targetMinute || 0).toString().padStart(2, '0')}
+                      {dueDateWarningModal.targetDate?.toLocaleDateString()} at {(() => {
+                        const hour = dueDateWarningModal.targetHour || 0;
+                        const minute = dueDateWarningModal.targetMinute || 0;
+                        const period = hour >= 12 ? 'PM' : 'AM';
+                        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                        return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -4339,7 +4602,7 @@ export function CalendarScheduler() {
                       Cancel
                     </button>
                     <button
-                      onClick={handleCreateSubtaskConfirm}
+                      onClick={() => handleCreateSubtaskConfirm()}
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
                     >
                       <Plus className="w-4 h-4" />
@@ -4358,7 +4621,7 @@ export function CalendarScheduler() {
           style={{ minWidth: 320, maxWidth: 480 }}
         >
           <span>
-            Schedule a subtask for "<span className='font-semibold'>{bannerTaskName}</span>" (due <span className='font-semibold'>{bannerTaskDueDate}</span>)
+            Schedule a subtask for "<span className='font-semibold'>{bannerTaskName}</span>" (due <span className='font-semibold'>{formatDate(bannerTaskDueDate)}</span>)
           </span>
           <button
             onClick={() => setShowBanner(false)}

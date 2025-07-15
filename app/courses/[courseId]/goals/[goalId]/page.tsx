@@ -1016,10 +1016,15 @@ const GoalDetailPage = () => {
                         <button
                           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                           onClick={() => {
+                            // Convert ISO date to YYYY-MM-DD format for URL parameter
+                            const dueDateForUrl = task.scheduledDate ? new Date(task.scheduledDate).toISOString().split('T')[0] : '';
+                            
                             const params = new URLSearchParams({
                               addSubtaskForTask: task.id,
-                              taskDueDate: task.scheduledDate,
-                              taskName: encodeURIComponent(task.name || '')
+                              taskDueDate: dueDateForUrl,
+                              taskName: encodeURIComponent(task.name || ''),
+                              goalId: goalId,
+                              courseId: courseId,
                             });
                             router.push(`/calendar?${params.toString()}`);
                           }}
@@ -1032,6 +1037,9 @@ const GoalDetailPage = () => {
                         taskId={task.id} 
                         subtasks={task.subtasks.slice().sort((a, b) => (a.subtask_order ?? 0) - (b.subtask_order ?? 0))}
                         taskDueDate={task.scheduledDate}
+                        taskName={task.name}
+                        goalId={goalId}
+                        courseId={courseId}
                         onSubtaskDeleted={(subtaskId) => {
                           // Update the local task state to reflect the deleted subtask
                           const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
