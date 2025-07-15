@@ -127,8 +127,30 @@ export const calculateDayEventPositions = (goals: Goal[], currentDate: Date) => 
         return aStart.getTime() - bStart.getTime();
     });
 
-    // Overlap logic: assign columns
-    const columns: Goal[][] = [];
+    // Helper: find all overlap groups
+    const overlapGroups: Goal[][] = [];
+    const assigned = new Set<string>();
+    for (let i = 0; i < sortedGoals.length; i++) {
+        const goal = sortedGoals[i];
+        if (assigned.has(goal.subtask_id || goal.goal_id)) continue;
+        // Find all events that overlap with this one
+        const group = [goal];
+        assigned.add(goal.subtask_id || goal.goal_id);
+        const startA = new Date(goal.start_time ?? goal.due_date!).getTime();
+        const endA = new Date(goal.end_time ?? goal.due_date!).getTime();
+        for (let j = i + 1; j < sortedGoals.length; j++) {
+            const other = sortedGoals[j];
+            if (assigned.has(other.subtask_id || other.goal_id)) continue;
+            const startB = new Date(other.start_time ?? other.due_date!).getTime();
+            const endB = new Date(other.end_time ?? other.due_date!).getTime();
+            if (startA < endB && endA > startB) {
+                group.push(other);
+                assigned.add(other.subtask_id || other.goal_id);
+            }
+        }
+        overlapGroups.push(group);
+    }
+
     const positions: Array<{
         goal: Goal;
         left: number;
@@ -139,63 +161,73 @@ export const calculateDayEventPositions = (goals: Goal[], currentDate: Date) => 
         showTitle: boolean;
     }> = [];
 
-    for (const goal of sortedGoals) {
-        const start = new Date(goal.start_time ?? goal.due_date!);
-        const end = new Date(goal.end_time ?? goal.due_date!);
-        const goalStart = start.getTime();
-        const goalEnd = end.getTime();
-
-        // Day boundaries
-        const dayStart = new Date(currentDate);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(currentDate);
-        dayEnd.setHours(24, 0, 0, 0);
-
-        // Clamp event to day
-        const eventStart = Math.max(goalStart, dayStart.getTime());
-        const eventEnd = Math.min(goalEnd, dayEnd.getTime());
-
-        // Calculate top/height as % of day
-        const totalDayMs = 24 * 60 * 60 * 1000;
-        const top = ((eventStart - dayStart.getTime()) / totalDayMs) * 100;
-        const height = Math.max(2, ((eventEnd - eventStart) / totalDayMs) * 100); // min 2%
-
-        // Overlap columns
-        let columnIndex = 0;
-        while (columnIndex < columns.length) {
-            const column = columns[columnIndex];
-            const hasOverlap = column.some(existingGoal => {
-                const existingStart = new Date(existingGoal.start_time ?? existingGoal.due_date!).getTime();
-                const existingEnd = new Date(existingGoal.end_time ?? existingGoal.due_date!).getTime();
-                return !(goalEnd <= existingStart || goalStart >= existingEnd);
-            });
-            if (!hasOverlap) break;
-            columnIndex++;
-        }
-        if (columnIndex >= columns.length) columns.push([]);
-        columns[columnIndex].push(goal);
-
-        const totalColumns = Math.max(columns.length, 1);
-        const minWidth = 20; // percent
-        const evenWidth = 100 / totalColumns;
-        const width = Math.max(evenWidth, minWidth);
-        const left = evenWidth * columnIndex;
-
-        // Show title if event starts today
-        const showTitle = start.getDate() === currentDate.getDate();
-        // Shorter events get higher z-index
-        const duration = goalEnd - goalStart;
-        const zIndex = Math.max(1000 - Math.floor(duration / (1000 * 60)), 1);
-
-        positions.push({
-            goal,
-            left,
-            width: Math.min(width, 100 - left),
-            top,
-            height,
-            zIndex,
-            showTitle
+    // For each group, assign columns only within the group
+    for (const group of overlapGroups) {
+        // Sort by start time within group
+        const groupSorted = [...group].sort((a, b) => {
+            const aStart = new Date(a.start_time ?? a.due_date!).getTime();
+            const bStart = new Date(b.start_time ?? b.due_date!).getTime();
+            return aStart - bStart;
         });
+        // Assign columns within group
+        const columns: Goal[][] = [];
+        for (const goal of groupSorted) {
+            const start = new Date(goal.start_time ?? goal.due_date!).getTime();
+            const end = new Date(goal.end_time ?? goal.due_date!).getTime();
+            // Day boundaries
+            const dayStart = new Date(currentDate);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(currentDate);
+            dayEnd.setHours(24, 0, 0, 0);
+            // Clamp event to day
+            const eventStart = Math.max(start, dayStart.getTime());
+            const eventEnd = Math.min(end, dayEnd.getTime());
+            // Calculate top/height as % of day
+            const totalDayMs = 24 * 60 * 60 * 1000;
+            const top = ((eventStart - dayStart.getTime()) / totalDayMs) * 100;
+            const height = Math.max(2, ((eventEnd - eventStart) / totalDayMs) * 100);
+            // Find column
+            let columnIndex = 0;
+            while (columnIndex < columns.length) {
+                const column = columns[columnIndex];
+                const hasOverlap = column.some(existingGoal => {
+                    const existingStart = new Date(existingGoal.start_time ?? existingGoal.due_date!).getTime();
+                    const existingEnd = new Date(existingGoal.end_time ?? existingGoal.due_date!).getTime();
+                    return !(end <= existingStart || start >= existingEnd);
+                });
+                if (!hasOverlap) break;
+                columnIndex++;
+            }
+            if (columnIndex >= columns.length) columns.push([]);
+            columns[columnIndex].push(goal);
+            const totalColumns = Math.max(columns.length, 1);
+            const minWidth = 20; // percent
+            const evenWidth = 100 / totalColumns;
+            const width = Math.max(evenWidth, minWidth);
+            const left = evenWidth * columnIndex;
+            // Show title if event starts today
+            const showTitle = new Date(goal.start_time ?? goal.due_date!).getDate() === currentDate.getDate();
+            // Calculate zIndex: smaller width = higher zIndex
+            // If widths are equal, use shorter duration, then earlier start time
+            let zIndex = 1000 - Math.round(width * 10); // smaller width = higher zIndex
+            if (width === 100) zIndex = 1; // full-width events always at the bottom
+            // Tie-breaker: shorter duration = higher zIndex
+            if (width === 100 / totalColumns) {
+                const duration = end - start;
+                zIndex += Math.max(0, 500 - Math.floor(duration / (1000 * 60)));
+            }
+            // Final tie-breaker: earlier start time = lower zIndex
+            zIndex += Math.floor(top);
+            positions.push({
+                goal,
+                left,
+                width: Math.min(width, 100 - left),
+                top,
+                height,
+                zIndex,
+                showTitle
+            });
+        }
     }
     return positions;
 };
