@@ -39,39 +39,25 @@ export function Header({
   console.log('Rendering Header component');
 
   return (
-    <div className="sticky top-0 z-10 border-gray-200 mb-6">
-      <div className="flex justify-between items-center px-4 pt-3 pb-0">
-        {/* Welcome Section */}
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Welcome back, {userName}!
-          </h1>
-          <p className="text-gray-600 italic">
-            "{quote}"
-          </p>
-        </div>
-        
-        {/* Search and Notifications */}
-        <div className="flex items-center gap-4">
-          <form onSubmit={handleSearchSubmit} className="relative">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                🔍
-              </span>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-96 pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
-                placeholder="Search courses, tasks..."
-              />
-            </div>
-          </form>
-          
-          {/* Notifications Dropdown */}
-          <NotificationsDropdown />
-        </div>
+    <header className="w-full bg-white border-b border-gray-200 px-6 py-2 flex items-center justify-between" style={{minHeight: '56px'}}>
+      {/* Left: Greeting only */}
+      <div className="flex flex-col justify-center">
+        <span className="text-lg font-semibold text-gray-800 leading-tight">Welcome back, {userName}!</span>
       </div>
-    </div>
+      {/* Right: Search and Notifications */}
+      <div className="flex items-center gap-4">
+        <form onSubmit={handleSearchSubmit} className="relative">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="w-56 pl-9 pr-4 py-1.5 rounded-full bg-gray-100 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 border border-gray-200 text-sm"
+            placeholder="Search courses, tasks..."
+          />
+          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-base">🔍</span>
+        </form>
+        <NotificationsDropdown />
+      </div>
+    </header>
   );
 } 

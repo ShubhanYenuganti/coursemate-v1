@@ -146,56 +146,41 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="bg-gray-50 font-sans">
-      <div className="p-5 flex flex-col lg:flex-row gap-8">
-        {/* Main Content (left) */}
-        <div className="flex-1 min-w-0">
-          {/* Search Results */}
-          {isSearching && searchResults.length > 0 && (
-            <div className="mb-6 bg-white rounded-xl p-4 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Search Results</h3>
-              <div className="space-y-2">
-                {searchResults.map((result) => (
-                  <div
-                    key={`${result.type}-${result.id}`}
-                    className="flex items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
-                  >
-                    <span className="mr-2">
-                      {result.type === 'task' ? '📝' : '📚'}
-                    </span>
-                    <span className="text-gray-700">{result.title}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Motivation analytics */}
-          <div className="mb-6">
-            <AnalyticsCards />
+    <div className="bg-gray-50 font-sans min-h-screen flex flex-col">
+      {/* Main dashboard area */}
+      <div className="flex-1 p-6 flex flex-col gap-6 max-w-7xl mx-auto w-full justify-center">
+        {/* Top row: left (analytics+courses), right (checklist) */}
+        <div className="flex flex-row gap-6 w-full" style={{minHeight: '420px', maxHeight: '480px'}}>
+          {/* Left column: vertical stack */}
+          <div className="flex flex-col gap-6 flex-[2_2_0%] min-w-0">
+            <section className="rounded-2xl shadow-md bg-gradient-to-r from-indigo-50 via-blue-50 to-purple-50 p-4 border-l-4 border-indigo-400 flex-1 min-h-[120px] max-h-[160px]">
+              <AnalyticsCards />
+            </section>
+            <section className="rounded-2xl shadow-md bg-white p-6 border-l-4 border-blue-400 flex-1 min-h-[180px] max-h-[320px]">
+              <MyCourses
+                courses={userCourses.map((course, index) => convertToMyCoursesFormat(course, index))}
+                isLoading={isLoadingCourses}
+                onViewAllCourses={handleViewAllCourses}
+                onViewCourse={handleViewCourse}
+                onContinueCourse={handleContinueCourse}
+              />
+            </section>
           </div>
-
-          {/* My Courses */}
-          <div className="mb-6">
-            <MyCourses
-              courses={userCourses.map((course, index) => convertToMyCoursesFormat(course, index))}
-              isLoading={isLoadingCourses}
-              onViewAllCourses={handleViewAllCourses}
-              onViewCourse={handleViewCourse}
-              onContinueCourse={handleContinueCourse}
-            />
-          </div>
+          {/* Right column: Checklist, matches height of left column */}
+          <aside className="flex flex-col flex-[1.1_1.1_0%] min-w-[320px] max-w-[400px] h-full">
+            <section className="rounded-2xl shadow-md bg-white p-7 border-l-4 border-emerald-400 flex-1 h-full min-h-[320px] flex flex-col justify-between">
+              <ChecklistWidget
+                onTaskToggle={handleTaskToggle}
+                onAddTask={() => {console.log('Add Task')}}
+              />
+            </section>
+          </aside>
         </div>
-        {/* Right sidebar with Checklist and Notifications */}
-        <div className="w-full lg:w-[400px] flex-shrink-0 space-y-6">
-          <ChecklistWidget
-            onTaskToggle={handleTaskToggle}
-            onAddTask={() => {console.log("Add Task")}}
-          />
+        {/* Recent Activity: full width at the bottom */}
+        <section className="rounded-2xl shadow-md bg-white p-5 border-l-4 border-purple-400 w-full min-h-[120px] max-h-[180px]">
           <CommunityActivity />
-        </div>
+        </section>
       </div>
-
       {/* Course Tasks Modal */}
       {selectedCourse && (
         <CourseTasksModal

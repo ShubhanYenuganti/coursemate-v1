@@ -176,7 +176,8 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
     return timeB - timeA;
   });
 
-  const activitiesToDisplay = activities.length > 0 ? activities : allActivities.slice(0, 8);
+  // Only show the most recent 10 activities for the horizontal feed
+  const activitiesToDisplay = activities.length > 0 ? activities : allActivities.slice(0, 10);
 
   const getTimeDiff = (timeString: string) => {
     const match = timeString.match(/(\d+)\s*(min|hour|day)/);
@@ -337,169 +338,42 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm relative">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-5">
-        <h2 className="text-lg font-semibold text-gray-800">Notifications</h2>
-      </div>
-      {/* Activity List */}
-      {activitiesToDisplay.map(activity => (
-        <div
-          key={activity.id}
-          onClick={() => handleActivityClick(activity)}
-          className="flex items-start py-3 border-b border-gray-100 last:border-b-0 cursor-pointer hover:bg-gray-50 transition-colors rounded-lg"
-        >
-          {/* Avatar */}
-          <div className={`w-8 h-8 ${getAvatarColor(activity.avatar)} rounded-full flex items-center justify-center text-white text-xs font-bold mr-3 flex-shrink-0`}>
-            {activity.avatar}
+    <div className="w-full">
+      <h2 className="text-lg font-bold text-gray-800 mb-3 px-2">Recent Activity</h2>
+      <div className="flex gap-4 overflow-x-auto pb-2 px-2 hide-scrollbar">
+        {activitiesToDisplay.length === 0 ? (
+          <div className="flex items-center justify-center text-gray-400 w-full h-24">
+            <span className="text-2xl">🕒</span>
+            <span className="ml-2">No recent activity</span>
           </div>
-          {/* Content */}
-          <div className="flex-1">
-            <div className="text-sm text-gray-700 mb-1">
-              <strong>{activity.user}</strong> {activity.action}
-            </div>
-            {activity.content && (
-              <div className="text-xs text-gray-600 mb-1 italic">
-                {activity.content}
-              </div>
-            )}
-            <div className="text-xs text-gray-500">{activity.time}</div>
-            
-            {/* Course Invite Actions */}
-            {activity.type === 'notification' && 
-             activity.notificationData?.type === 'course_invite' && 
-             !activity.notificationData.is_read && (
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCourseInviteResponse(activity.notificationData!.id, 'accept');
-                  }}
-                  className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCourseInviteResponse(activity.notificationData!.id, 'decline');
-                  }}
-                  className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700 transition-colors"
-                >
-                  Decline
-                </button>
-              </div>
-            )}
-
-            {/* Friend Request Actions */}
-            {activity.type === 'notification' && 
-             activity.notificationData?.type === 'friend_request' && 
-             !activity.notificationData.is_read && (
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleFriendRequestResponse(activity.notificationData!.id, 'accept');
-                  }}
-                  className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleFriendRequestResponse(activity.notificationData!.id, 'reject');
-                  }}
-                  className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700 transition-colors"
-                >
-                  Decline
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      ))}
-      {/* Empty State */}
-      {activitiesToDisplay.length === 0 && !loading && (
-        <div className="text-center py-8 text-gray-500">
-          <div className="text-4xl mb-2">📭</div>
-          <p className="mb-2">No new notifications</p>
-        </div>
-      )}
-      {loading && (
-        <div className="text-center py-8 text-gray-500">
-          <div className="text-4xl mb-2">⏳</div>
-          <p className="mb-2">Loading notifications...</p>
-        </div>
-      )}
-            {/* Modal for Activity Details */}
-      {modalActivity && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg relative">
-            <button
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-2xl"
-              onClick={handleCloseModal}
-              aria-label="Close"
+        ) : (
+          activitiesToDisplay.map((activity) => (
+            <div
+              key={activity.id}
+              className="min-w-[220px] max-w-[260px] bg-white rounded-xl shadow-md border border-gray-100 flex flex-col items-center p-4 hover:shadow-lg transition-all duration-200 cursor-pointer"
+              onClick={() => handleActivityClick(activity)}
             >
-              &times;
-            </button>
-            
-            {/* Message Header */}
-            <div className="flex items-center mb-4">
-              <div className={`w-10 h-10 ${getAvatarColor(modalActivity.avatar)} rounded-full flex items-center justify-center text-white text-lg font-bold mr-4`}>
-                {modalActivity.avatar}
-              </div>
-              <div>
-                <div className="font-semibold text-gray-800 text-lg">
-                  {modalActivity.user}
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-lg font-bold text-indigo-600">
+                  {activity.avatar}
                 </div>
-                <div className="text-xs text-gray-500">{modalActivity.time}</div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-gray-500">{activity.time}</span>
+                </div>
               </div>
-            </div>
-            
-            {/* Original Message */}
-            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-              {modalActivity.content && (
-                <div className="text-gray-700 text-base whitespace-pre-line">
-                  {modalActivity.content}
+              <div className="text-sm text-gray-700 text-center mb-1">
+                <strong>{activity.user}</strong> {activity.action}
+              </div>
+              {activity.content && (
+                <div className="text-xs text-gray-500 text-center italic mb-1">
+                  {activity.content}
                 </div>
               )}
+              {/* Add more details or icons as needed */}
             </div>
-            
-            {/* Reply Section */}
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-gray-700">Reply to {modalActivity.user}</div>
-              <Textarea
-                placeholder="Type your reply..."
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                className="min-h-[100px] resize-none"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendReply();
-                  }
-                }}
-              />
-              <div className="flex justify-end space-x-2">
-                <Button
-                  variant="outline"
-                  onClick={handleCloseModal}
-                  disabled={sendingReply}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSendReply}
-                  disabled={!replyText.trim() || sendingReply}
-                >
-                  {sendingReply ? 'Sending...' : 'Send Reply'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 };

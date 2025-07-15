@@ -40,13 +40,13 @@ const MyCourses: React.FC<MyCoursesProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm">
+    <div className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100">
       {/* Header */}
       <div className="flex justify-between items-center mb-5">
-        <h2 className="text-lg font-semibold text-gray-800">My Courses</h2>
+        <h2 className="text-xl font-bold text-gray-800 tracking-tight">My Courses</h2>
         <button
           onClick={onViewAllCourses}
-          className="text-indigo-500 font-medium flex items-center gap-1 hover:text-indigo-600 transition-colors"
+          className="text-indigo-600 font-semibold flex items-center gap-1 hover:text-indigo-800 transition-colors text-sm"
         >
           View All Courses →
         </button>
@@ -77,11 +77,13 @@ const MyCourses: React.FC<MyCoursesProps> = ({
             coursesToDisplay.map((course) => (
               <div
                 key={course.id}
-                className="border border-gray-200 rounded-lg hover:border-indigo-500 hover:-translate-y-1 transition-all duration-200 hover:shadow-md overflow-hidden flex flex-col min-h-[280px]"
+                className="relative border border-gray-100 rounded-2xl hover:border-indigo-400 hover:-translate-y-1 transition-all duration-200 hover:shadow-md overflow-hidden flex flex-col min-h-[260px] bg-white group"
               >
+                {/* Accent dot */}
+                <div className="absolute top-4 left-4 w-2.5 h-2.5 rounded-full bg-indigo-400 opacity-70 group-hover:scale-110 transition-transform" />
                 {/* Course Banner */}
                 {course.banner && (
-                  <div className="w-full h-32 bg-gradient-to-r from-blue-500 to-purple-600 relative overflow-hidden">
+                  <div className="w-full h-28 bg-gradient-to-r from-blue-500 to-purple-600 relative overflow-hidden">
                     <img
                       src={course.banner}
                       alt={`${course.name} banner`}
@@ -96,15 +98,15 @@ const MyCourses: React.FC<MyCoursesProps> = ({
                 )}
 
                 {/* Course Content */}
-                <div className="p-6 flex flex-col h-full">
+                <div className="p-5 flex flex-col h-full">
                   {/* Course Header */}
-                  <div className="flex items-center mb-4">
-                    <div className={`w-12 h-12 ${course.iconBg} ${course.iconColor} rounded-lg flex items-center justify-center mr-4 text-lg`}>
+                  <div className="flex items-center mb-3">
+                    <div className={`w-10 h-10 ${course.iconBg} ${course.iconColor} rounded-lg flex items-center justify-center mr-3 text-xl`}>
                       {course.icon}
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-800 text-lg">{course.name}</h3>
-                      <div className="text-sm text-gray-600">
+                      <h3 className="font-semibold text-gray-800 text-base leading-tight">{course.name}</h3>
+                      <div className="text-xs text-gray-500">
                         {course.professor} | {course.schedule}
                       </div>
                     </div>
@@ -117,7 +119,7 @@ const MyCourses: React.FC<MyCoursesProps> = ({
                   <div className="flex gap-3 mt-4">
                     <button
                       onClick={() => handleContinue(course)}
-                      className="px-4 py-2 bg-indigo-500 text-white text-sm rounded-md hover:bg-indigo-600 transition-colors flex-1"
+                      className="px-4 py-2 bg-indigo-500 text-white text-xs rounded-md hover:bg-indigo-600 transition-colors flex-1 font-semibold"
                     >
                       Enter Course
                     </button>

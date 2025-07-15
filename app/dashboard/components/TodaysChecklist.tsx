@@ -258,215 +258,63 @@ const TodaysChecklist: React.FC = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-xl p-5 shadow-sm">
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm relative">
+    <div className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 min-h-[340px] flex flex-col justify-between">
       {/* Header */}
       <div className="flex justify-between items-center mb-5">
-        <h2 className="text-lg font-semibold text-gray-800">Checklist</h2>
-      </div>
-      
-      {/* Filter Button Group */}
-      <div className="flex gap-2 mb-4">
-        {FILTERS.map(f => (
+        <h2 className="text-lg font-bold text-gray-800 tracking-tight">Checklist</h2>
+        <div className="flex gap-2">
           <button
-            key={f.key}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors focus:outline-none ${selectedFilter === f.key ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
-            onClick={() => setSelectedFilter(f.key)}
+            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'overdue' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
+            onClick={() => setSelectedFilter('overdue')}
           >
-            {f.label}
+            Overdue
           </button>
-        ))}
+          <button
+            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'today' ? 'bg-indigo-500 text-white' : 'bg-white text-gray-500 border border-gray-200'}`}
+            onClick={() => setSelectedFilter('today')}
+          >
+            Today's
+          </button>
+          <button
+            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'upcoming' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
+            onClick={() => setSelectedFilter('upcoming')}
+          >
+            Upcoming
+          </button>
+        </div>
       </div>
-      
-      {/* Task List */}
-      {filteredTasks.length > 0 ? (
-        filteredTasks.map((task) => {
-          const overdue = isTaskOverdue(task);
-          const subtasks = getSubtasksForTask(task.id);
-          return (
-            <div key={task.id} className={`mb-2 rounded-lg border ${overdue ? 'bg-red-50 border-red-200' : 'border-gray-100'} transition-all`}>
-              <div className="flex items-center py-4 px-3 cursor-pointer" onClick={() => toggleTaskExpand(task.id)}>
-                <span className="mr-2">
-                  {expandedTasks[task.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                </span>
-                <div className="flex-1">
-                  <div className={`font-medium ${overdue ? 'text-red-700' : 'text-gray-800'}`}>{task.title}</div>
-                  {/* Progress Bar for Subtasks */}
-                  {subtasks.length > 0 && (
-                    <div className="w-full h-2 bg-gray-200 rounded-full my-2">
-                      <div
-                        className="h-2 bg-green-500 rounded-full transition-all"
-                        style={{ width: `${(subtasks.filter(st => subtaskState[st.id] || st.completed).length / subtasks.length) * 100}%` }}
-                      />
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: task.color || '#6b7280' }} />
-                    <span className={`text-xs ${overdue ? 'text-red-600' : 'text-gray-600'}`}>{task.course}</span>
-                    {overdue && (
-                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">OVERDUE</span>
-                    )}
-                  </div>
-                </div>
-                <div className={`text-xs ml-auto ${overdue ? 'text-red-600 font-medium' : 'text-gray-600'}`}>{task.time}</div>
-              </div>
-              {/* Subtasks Dropdown */}
-              {expandedTasks[task.id] && subtasks.length > 0 && (
-                <div className="pl-10 pr-4 pb-4">
-                  <div className="space-y-2">
-                    {subtasks.map(subtask => (
-                      <div key={subtask.id} className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleSubtaskToggle(subtask.id)}
-                          className="flex-shrink-0 mt-0.5"
-                        >
-                          {subtaskState[subtask.id] || subtask.completed ? (
-                            <CheckCircle className="w-5 h-5 text-green-500" />
-                          ) : (
-                            <Circle className="w-5 h-5 text-gray-300" />
-                          )}
-                        </button>
-                        <span className={`text-sm ${subtaskState[subtask.id] || subtask.completed ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{subtask.name}</span>
-                        <span className="text-xs text-gray-400">({subtask.estimatedTimeMinutes} min)</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })
-      ) : (
-        /* Empty State / Motivational Message */
-        <div className="text-center mt-5 text-gray-400">
-          <div className="mb-3">📋</div>
-          <div className="mb-1">No {FILTERS.find(f => f.key === selectedFilter)?.label.toLowerCase()} tasks.</div>
-          <div className="mb-3">Time to relax or plan ahead!</div>
-        </div>
-      )}
-      
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md relative">
-            <button
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-2xl"
-              onClick={handleCloseModal}
-              aria-label="Close"
-            >
-              &times;
-            </button>
-            <h2 className="text-xl font-bold mb-4">{isEditMode ? 'Edit Task' : 'Add Task'}</h2>
-            <form onSubmit={handleAddTask} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Title</label>
-                <input
-                  type="text"
-                  name="title"
-                  value={form.title}
-                  onChange={handleFormChange}
-                  className="w-full border rounded-md px-3 py-2 text-sm"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Course</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    name="course"
-                    value={form.course}
-                    onChange={handleFormChange}
-                    onFocus={() => setShowCourseDropdown(form.course.length > 0)}
-                    onBlur={() => setTimeout(() => setShowCourseDropdown(false), 200)}
-                    className="w-full border rounded-md px-3 py-2 text-sm"
-                    placeholder="Start typing to search your courses..."
-                    required
-                  />
-                  {showCourseDropdown && filteredCourses.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                      {filteredCourses.map((course) => (
-                        <button
-                          key={course.id}
-                          type="button"
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
-                          onClick={() => handleCourseSelect(course.title)}
-                        >
-                          <div className="font-medium">{course.title}</div>
-                          <div className="text-xs text-gray-500">{course.subject}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Due Date</label>
-                <input
-                  type="date"
-                  name="dueDate"
-                  value={form.dueDate}
-                  onChange={handleFormChange}
-                  className="w-full border rounded-md px-3 py-2 text-sm"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Color</label>
-                <select
-                  name="color"
-                  value={form.color}
-                  onChange={handleFormChange}
-                  className="w-full border rounded-md px-3 py-2 text-sm"
-                >
-                  {DEFAULT_COLORS.map((c) => (
-                    <option key={c} value={c} style={{ color: c }}>{c}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 mt-6">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                {isEditMode && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (editTaskId !== null) {
-                        handleDeleteTask(editTaskId);
-                        handleCloseModal();
-                      }
-                    }}
-                    className="px-4 py-2 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
-                  >
-                    Delete Task
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-md bg-indigo-500 text-white hover:bg-indigo-600"
-                >
-                  {isEditMode ? 'Update Task' : 'Add Task'}
-                </button>
-              </div>
-            </form>
+      {/* Checklist Content */}
+      <div className="flex-1 flex flex-col justify-center items-center">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-600">Loading tasks...</p>
           </div>
-        </div>
-      )}
+        ) : filteredTasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <span className="text-3xl mb-2">📅</span>
+            <p className="text-gray-500 text-center">No {selectedFilter === 'today' ? "today's" : selectedFilter} tasks.<br />Time to relax or plan ahead!</p>
+          </div>
+        ) : (
+          <ul className="w-full space-y-3">
+            {filteredTasks.map(task => (
+              <li key={task.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={task.completed}
+                  onChange={() => handleTaskToggle(task.id, !task.completed)}
+                  className="accent-indigo-500 w-5 h-5 rounded"
+                />
+                <div className="flex-1">
+                  <div className={`font-medium text-gray-800 ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
+                  <div className="text-xs text-gray-500">{task.course} • {task.time}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 };

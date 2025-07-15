@@ -57,24 +57,25 @@ const AnalyticsCards: React.FC<AnalyticsCardsProps> = ({ analyticsData = [] }) =
   const dataToDisplay = analyticsData.length > 0 ? analyticsData : defaultAnalytics;
 
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {dataToDisplay.map(item => (
         <div
           key={item.id}
-          className="relative overflow-hidden rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
+          className="relative rounded-xl bg-white/70 backdrop-blur-md border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 flex flex-row items-center py-3 px-3 group min-w-[160px]"
         >
-          <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-10`} />
-          <div className="relative bg-white/80 backdrop-blur-sm p-3 flex flex-row items-center gap-3">
-            <div className={`w-10 h-10 ${item.bgColor} ${item.iconColor} rounded-lg flex items-center justify-center text-xl flex-shrink-0`}>
-              {item.icon}
+          {/* Accent dot */}
+          <div className={`absolute top-2 left-2 w-2 h-2 rounded-full ${item.iconColor} opacity-80 group-hover:scale-110 transition-transform`} />
+          {/* Icon */}
+          <div className={`w-8 h-8 ${item.bgColor} ${item.iconColor} rounded-lg flex items-center justify-center text-xl mr-3 shadow-sm`}>
+            {item.icon}
+          </div>
+          {/* Value and Label */}
+          <div className="flex flex-col items-start justify-center">
+            <div className="text-lg font-bold text-gray-800 leading-tight">
+              {item.value}
             </div>
-            <div className="flex flex-col items-start">
-              <div className="text-xl font-bold text-gray-800">
-                {item.value}
-              </div>
-              <div className="text-xs text-gray-600">
-                {item.label}
-              </div>
+            <div className="text-xs text-gray-500 font-medium leading-tight">
+              {item.label}
             </div>
           </div>
         </div>
