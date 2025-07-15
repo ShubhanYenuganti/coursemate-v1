@@ -237,7 +237,30 @@ export const WeekView = ({
                   </div>
                 );
               })()}
-              {/* (Removed solid blue border highlight; only dashed overlay remains) */}
+              {/* Drag-and-drop preview overlay for moving events (dashed blue border) */}
+              {isDraggingTask && draggedTask && dragTargetHour !== null && dragTargetDate?.toDateString() === d.toDateString() && (() => {
+                // Calculate start and end in minutes (preserve event duration)
+                const originalStart = new Date(draggedTask.start_time!);
+                const originalEnd = new Date(draggedTask.end_time!);
+                const durationMinutes = (originalEnd.getTime() - originalStart.getTime()) / 60000;
+                const startMinutes = dragTargetHour * 60 + (dragTargetMinute || 0);
+                const endMinutes = startMinutes + durationMinutes;
+                const top = (startMinutes / 1440) * 100;
+                const height = Math.max(2, (endMinutes - startMinutes) / 1440 * 100);
+                return (
+                  <div
+                    className="absolute left-0 w-full pointer-events-none"
+                    style={{
+                      top: `${top}%`,
+                      height: `${height}%`,
+                      zIndex: 1000,
+                      border: '2px dashed #2563eb',
+                      background: 'rgba(37,99,235,0.08)',
+                      borderRadius: 8,
+                    }}
+                  />
+                );
+              })()}
               {/* Render events */}
               {eventPositions.map((pos) => (
                 <div
