@@ -4,7 +4,7 @@ import { notificationService, Notification } from '../../../lib/api/notification
 import { friendService } from '../../../lib/api/friendService';
 import { Button } from '../../../components/ui/button';
 import { Textarea } from '../../../components/ui/textarea';
-import { BookOpen, User, Bell, Check, X } from 'lucide-react';
+import { BookOpen, User, Bell, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/app/context/SocketContext';
 
@@ -27,10 +27,63 @@ interface CommunityActivityProps {
   onActivityClick?: (activity: Activity) => void;
 }
 
-const defaultActivities: Activity[] = [];
+const defaultActivities: Activity[] = [
+  {
+    id: '1',
+    user: 'Priya Patel',
+    avatar: 'PP',
+    action: 'posted in',
+    target: 'Calculus Study Group',
+    content: 'Anyone else stuck on problem 5 of the latest assignment? Would love some hints!',
+    time: '25 min ago',
+    type: 'message',
+  },
+  {
+    id: '2',
+    user: 'David Lee',
+    avatar: 'DL',
+    action: 'shared a resource in',
+    target: 'Physics Help Forum',
+    content: 'Check out this great summary PDF!',
+    time: '1 hour ago',
+    type: 'message',
+  },
+  {
+    id: '3',
+    user: 'You',
+    avatar: 'Y',
+    action: 'completed subtask',
+    target: 'Biology Chapter 3',
+    content: 'Finished reading section 3.2',
+    time: '2 hours ago',
+    type: 'notification',
+  },
+  {
+    id: '4',
+    user: 'Ava Chen',
+    avatar: 'AC',
+    action: 'joined',
+    target: 'General Biology',
+    content: '',
+    time: '3 hours ago',
+    type: 'notification',
+  },
+  {
+    id: '5',
+    user: 'Ava Chen',
+    avatar: 'AC',
+    action: 'joined',
+    target: 'General Biology',
+    content: '',
+    time: '3 hours ago',
+    type: 'notification',
+  },
+];
+
+const CARDS_PER_PAGE = 4;
 
 const CommunityActivity: React.FC<CommunityActivityProps> = ({
-  activities = [],
+  activities = defaultActivities,
   onFilterChange,
   onActivityClick,
 }) => {
@@ -42,6 +95,7 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   const [sendingReply, setSendingReply] = useState(false);
   const router = useRouter();
   const { socket } = useSocket();
+  const [page, setPage] = useState(0);
 
   // Fetch recent messages and convert them to activities
   useEffect(() => {
@@ -178,6 +232,9 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
 
   // Only show the most recent 10 activities for the horizontal feed
   const activitiesToDisplay = activities.length > 0 ? activities : allActivities.slice(0, 10);
+
+  const totalPages = Math.ceil(activitiesToDisplay.length / CARDS_PER_PAGE);
+  const paginatedActivities = activitiesToDisplay.slice(page * CARDS_PER_PAGE, (page + 1) * CARDS_PER_PAGE);
 
   const getTimeDiff = (timeString: string) => {
     const match = timeString.match(/(\d+)\s*(min|hour|day)/);
@@ -338,38 +395,57 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full group relative">
       <h2 className="text-lg font-bold text-gray-800 mb-3 px-2">Recent Activity</h2>
-      <div className="flex gap-4 overflow-x-auto pb-2 px-2 hide-scrollbar">
-        {activitiesToDisplay.length === 0 ? (
+      {/* Left Arrow */}
+      {page > 0 && (
+        <button
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-100"
+          style={{ pointerEvents: 'auto' }}
+          onClick={() => setPage(page - 1)}
+        >
+          <ChevronLeft className="w-6 h-6 text-gray-500" />
+        </button>
+      )}
+      {/* Right Arrow */}
+      {page < totalPages - 1 && (
+        <button
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-100"
+          style={{ pointerEvents: 'auto' }}
+          onClick={() => setPage(page + 1)}
+        >
+          <ChevronRight className="w-6 h-6 text-gray-500" />
+        </button>
+      )}
+      <div className="flex gap-4 overflow-x-hidden pb-2 px-2 hide-scrollbar min-h-[120px]">
+        {paginatedActivities.length === 0 ? (
           <div className="flex items-center justify-center text-gray-400 w-full h-24">
             <span className="text-2xl">🕒</span>
             <span className="ml-2">No recent activity</span>
           </div>
         ) : (
-          activitiesToDisplay.map((activity) => (
+          paginatedActivities.map((activity) => (
             <div
               key={activity.id}
-              className="min-w-[220px] max-w-[260px] bg-white rounded-xl shadow-md border border-gray-100 flex flex-col items-center p-4 hover:shadow-lg transition-all duration-200 cursor-pointer"
+              className="min-w-[180px] max-w-[210px] h-[110px] bg-white rounded-xl shadow-md border border-gray-100 flex flex-col items-center p-3 hover:shadow-lg transition-all duration-200 cursor-pointer"
               onClick={() => handleActivityClick(activity)}
             >
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-lg font-bold text-indigo-600">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-base font-bold text-indigo-600">
                   {activity.avatar}
                 </div>
                 <div className="flex flex-col">
                   <span className="text-xs text-gray-500">{activity.time}</span>
                 </div>
               </div>
-              <div className="text-sm text-gray-700 text-center mb-1">
-                <strong>{activity.user}</strong> {activity.action}
+              <div className="text-xs text-gray-700 text-center mb-0.5 font-semibold">
+                {activity.user} <span className="font-normal">{activity.action}</span>
               </div>
               {activity.content && (
-                <div className="text-xs text-gray-500 text-center italic mb-1">
+                <div className="text-xs text-gray-500 text-center italic mb-0.5">
                   {activity.content}
                 </div>
               )}
-              {/* Add more details or icons as needed */}
             </div>
           ))
         )}

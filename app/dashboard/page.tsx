@@ -146,7 +146,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="bg-gray-50 font-sans min-h-screen flex flex-col">
+    <div className="bg-gray-50 font-sans flex flex-col">
       {/* Main dashboard area */}
       <div className="flex-1 p-6 flex flex-col gap-6 max-w-7xl mx-auto w-full justify-center">
         {/* Top row: left (analytics+courses), right (checklist) */}
@@ -177,7 +177,7 @@ const Dashboard = () => {
           </aside>
         </div>
         {/* Recent Activity: full width at the bottom */}
-        <section className="rounded-2xl shadow-md bg-white p-5 border-l-4 border-purple-400 w-full min-h-[120px] max-h-[180px]">
+        <section className="rounded-2xl shadow-md bg-white p-5 border-l-4 border-purple-400 w-full min-h-[120px] max-h-[180px]" style={{height: '220px'}}>
           <CommunityActivity />
         </section>
       </div>

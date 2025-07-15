@@ -259,7 +259,7 @@ const TodaysChecklist: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 min-h-[340px] flex flex-col justify-between">
+    <div className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 min-h-[340px] flex flex-col justify-between" style={{height: '376px'}}>
       {/* Header */}
       <div className="flex justify-between items-center mb-5">
         <h2 className="text-lg font-bold text-gray-800 tracking-tight">Checklist</h2>
