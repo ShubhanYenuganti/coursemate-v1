@@ -6,6 +6,7 @@ import { calculateEventPositions } from "../utils/calendar.layout"
 import { groupTasksByTaskId } from "../utils/goal.progress"
 import { calculateStatus } from "../utils/goal.status"
 import { startOfToday } from "../utils/date.utils"
+import { calculateDayEventPositions } from "../utils/calendar.layout";
 
 function formatEventTime(start: string, end: string) {
   const startDate = new Date(start);
@@ -41,7 +42,8 @@ export const WeekView = ({
   handleTimeSlotMouseDown,
   handleTimeSlotMouseMove,
   handleTimeSlotMouseUp,
-  dragPreview // NEW
+  dragPreview, // NEW
+  draggedTask
 }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
@@ -126,152 +128,124 @@ export const WeekView = ({
           ))}
         </div>
 
-        {weekDates.map((d: Date) => (
-          <div key={d.toISOString()} className="flex-1 border-r border-gray-200 relative overflow-visible">
-            {hours.map((h: number) => {
-              const goals = goalsStartingAtHour(d, h, getGoalsForDate);
-              // Render each subtask (row) as its own event
-              const eventPositions = calculateEventPositions(goals, h, d);
-
-              // Check if this hour cell should show drag target shading
-              const isDragTarget = isDraggingTask && dragTargetHour === h && dragTargetDate?.toDateString() === d.toDateString();
-
-              return (
-                <div 
-                  key={h} 
-                  className={`h-16 border-b border-gray-200 p-1 relative overflow-visible transition-all duration-200 ${
-                    isDragTarget ? 'bg-blue-50 border-2 border-blue-300 shadow-lg' : ''
-                  }`}
-                  onMouseDown={e => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const relativeY = e.clientY - rect.top;
-                    const cellHeight = rect.height;
-                    const minute = Math.floor((relativeY / cellHeight) * 60);
-                    const snappedMinute = Math.round(minute / 30) * 30;
-                    // Ensure minute is never 60 - if it is, use 0 and increment hour
-                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
-                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
-                    handleTimeSlotMouseDown?.(e, d, adjustedHour, adjustedMinute);
+        {weekDates.map((d: Date) => {
+          const eventPositions = calculateDayEventPositions(getGoalsForDate(d), d);
+          return (
+            <div
+              key={d.toISOString()}
+              className="flex-1 border-r border-gray-200 relative overflow-visible"
+              style={{ minHeight: `${hours.length * 64}px` }}
+              onDragOver={e => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                const rect = e.currentTarget.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                const totalMinutes = (y / rect.height) * 1440;
+                const hour = Math.floor(totalMinutes / 60);
+                const minute = Math.floor((totalMinutes % 60) / 30) * 30;
+                handleTimeSlotDragOver(e, d, hour, minute);
+              }}
+              onDrop={e => {
+                if (!isDraggingTask || !draggedTask) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                const totalMinutes = (y / rect.height) * 1440;
+                const hour = Math.floor(totalMinutes / 60);
+                const minute = Math.floor((totalMinutes % 60) / 30) * 30;
+                handleTimeSlotDrop(e, d, hour, minute);
+              }}
+            >
+              {/* Hour grid lines (background only) */}
+              {hours.map((h: number) => (
+                <div
+                  key={`grid-${h}`}
+                  className="absolute left-0 w-full border-b border-gray-200"
+                  style={{
+                    top: `${(h / hours.length) * 100}%`,
+                    height: 0,
+                    zIndex: 1,
                   }}
-                  onMouseMove={e => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const relativeY = e.clientY - rect.top;
-                    const cellHeight = rect.height;
-                    const minute = Math.floor((relativeY / cellHeight) * 60);
-                    const snappedMinute = Math.round(minute / 30) * 30;
-                    // Ensure minute is never 60 - if it is, use 0 and increment hour
-                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
-                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
-                    handleTimeSlotMouseMove?.(e, d, adjustedHour, adjustedMinute);
+                />
+              ))}
+              {/* Drag preview overlay for event placement */}
+              {isDraggingTask && draggedTask && dragTargetHour !== null && dragTargetDate?.toDateString() === d.toDateString() && (() => {
+                // Calculate overlay position and size
+                const durationMs = new Date(draggedTask.end_time).getTime() - new Date(draggedTask.start_time).getTime();
+                const durationMinutes = Math.max(30, Math.round(durationMs / 60000));
+                const top = ((dragTargetHour * 60 + (dragTargetMinute || 0)) / 1440) * 100;
+                const height = (durationMinutes / 1440) * 100;
+                return (
+                  <div
+                    className="absolute left-0 w-full pointer-events-none"
+                    style={{
+                      top: `${top}%`,
+                      height: `${height}%`,
+                      zIndex: 1000,
+                      border: '2px dashed #2563eb',
+                      background: 'rgba(37,99,235,0.08)',
+                      borderRadius: '8px',
+                    }}
+                  />
+                );
+              })()}
+              {/* (Removed solid blue border highlight; only dashed overlay remains) */}
+              {/* Render events */}
+              {eventPositions.map((pos) => (
+                <div
+                  key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
+                  className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90 shadow-sm border-2 border-white"
+                  style={{
+                    backgroundColor: getEventColor(pos.goal),
+                    width: `${pos.width}%`,
+                    left: `${pos.left}%`,
+                    top: `${pos.top}%`,
+                    height: `${pos.height}%`,
+                    zIndex: pos.zIndex + 50,
+                    minHeight: '16px',
+                    boxShadow: '0 2px 8px 0 rgba(0,0,0,0.06)',
                   }}
-                  onMouseUp={e => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const relativeY = e.clientY - rect.top;
-                    const cellHeight = rect.height;
-                    const minute = Math.floor((relativeY / cellHeight) * 60);
-                    const snappedMinute = Math.round(minute / 30) * 30;
-                    // Ensure minute is never 60 - if it is, use 0 and increment hour
-                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
-                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
-                    handleTimeSlotMouseUp?.(e, d, adjustedHour, adjustedMinute);
+                  tabIndex={0}
+                  onClick={(e) => handleGoalClick(pos.goal, e)}
+                  onMouseEnter={(e) => onTaskHover(pos.goal, e)}
+                  onMouseLeave={onTaskMouseLeave}
+                  draggable={pos.goal.goal_id !== "Google Calendar"}
+                  onDragStart={e => handleSubtaskDragStart(e, pos.goal)}
+                  onDragEnd={e => handleSubtaskDragEnd(e)}
+                  onDragOver={e => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
                   }}
-                  onDragOver={(e) => {
-                    // Calculate minute based on mouse position within the hour cell
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const relativeY = e.clientY - rect.top;
-                    const cellHeight = rect.height;
-                    const minute = Math.floor((relativeY / cellHeight) * 60);
-                    // Snap to 30-minute intervals
-                    const snappedMinute = Math.round(minute / 30) * 30;
-                    // Ensure minute is never 60 - if it is, use 0 and increment hour
-                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
-                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
-                    handleTimeSlotDragOver?.(e, d, adjustedHour, adjustedMinute);
-                  }}
-                  onDragLeave={(e) => handleTimeSlotDragLeave?.(e)}
-                  onDrop={(e) => {
-                    // Calculate minute based on mouse position within the hour cell
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const relativeY = e.clientY - rect.top;
-                    const cellHeight = rect.height;
-                    const minute = Math.floor((relativeY / cellHeight) * 60);
-                    // Snap to 30-minute intervals
-                    const snappedMinute = Math.round(minute / 30) * 30;
-                    // Ensure minute is never 60 - if it is, use 0 and increment hour
-                    const adjustedMinute = snappedMinute === 60 ? 0 : snappedMinute;
-                    const adjustedHour = snappedMinute === 60 ? h + 1 : h;
-                    handleTimeSlotDrop?.(e, d, adjustedHour, adjustedMinute);
+                  onDrop={e => {
+                    if (!isDraggingTask || !draggedTask) return;
+                    const rect = e.currentTarget.parentElement!.getBoundingClientRect();
+                    const y = e.clientY - rect.top;
+                    const totalMinutes = (y / rect.height) * 1440;
+                    const hour = Math.floor(totalMinutes / 60);
+                    const minute = Math.floor((totalMinutes % 60) / 30) * 30;
+                    handleTimeSlotDrop(e, d, hour, minute);
                   }}
                 >
-                  {eventPositions.map((pos) => (
-                    <div
-                      key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
-                      className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90 shadow-sm"
-                      style={{
-                        backgroundColor: getEventColor(pos.goal),
-                        width: `${pos.width}%`,
-                        left: `${pos.left}%`,
-                        top: `${pos.top}%`,
-                        height: `${pos.height}%`,
-                        zIndex: pos.zIndex + 50, // High z-index to ensure overlay
-                        minHeight: '16px', // Ensure minimum height for visibility
-                      }}
-                      tabIndex={0}
-                      onClick={(e) => handleGoalClick(pos.goal, e)}
-                      onMouseEnter={(e) => onTaskHover?.(pos.goal, e)}
-                      onMouseLeave={() => onTaskMouseLeave?.()}
-                      draggable={pos.goal.goal_id !== "Google Calendar"}
-                      onDragStart={(e) => handleSubtaskDragStart?.(e, pos.goal)}
-                      onDragEnd={(e) => handleSubtaskDragEnd?.(e)}
-                    >
-                      {pos.showTitle && (
-                        <div className="font-semibold leading-tight truncate" style={{ zIndex: pos.zIndex + 20 }}>
-                          {pos.goal.goal_id === 'Google Calendar' ? (pos.goal.task_title ?? "(untitled)") : (pos.goal.subtask_descr ?? "(untitled)")}
-                        </div>
-                      )}
-                      {/* Show status indicator for non-Google Calendar events */}
-                      {pos.showTitle && pos.goal.status && pos.goal.goal_id !== "Google Calendar" && (
-                        <div className="text-[10px] mt-1 flex items-center gap-1" style={{ zIndex: pos.zIndex + 20 }}>
-                          <div className={`w-2 h-2 rounded-full ${
-                            pos.goal.status === "Overdue" ? "bg-red-400" :
-                            pos.goal.status === "In Progress" ? "bg-yellow-400" :
-                            "bg-green-400"
-                          }`} />
-                          <span className="opacity-90">{pos.goal.status}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  
-                  {/* Drag Preview */}
-                  {dragPreview && dragPreview.startDate.toDateString() === d.toDateString() && 
-                   dragPreview.startHour === h && (
-                    <div
-                      className="absolute rounded border-2 border-blue-400 bg-blue-100 bg-opacity-50 pointer-events-none"
-                      style={{
-                        left: '2%',
-                        width: '96%',
-                        top: `${(dragPreview.startMinute / 60) * 100}%`,
-                        height: `${Math.max(5, ((dragPreview.endHour - dragPreview.startHour) * 60 + (dragPreview.endMinute - dragPreview.startMinute)) / 60 * 100)}%`,
-                        zIndex: 1000,
-                      }}
-                    >
-                      <div className="absolute top-1 left-1 text-xs text-blue-700 font-medium bg-blue-200 bg-opacity-80 px-1 rounded">
-                        {(() => {
-                          const startDate = new Date();
-                          startDate.setHours(dragPreview.startHour, dragPreview.startMinute, 0, 0);
-                          const endDate = new Date();
-                          endDate.setHours(dragPreview.endHour, dragPreview.endMinute, 0, 0);
-                          return `${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
-                        })()}
-                      </div>
+                  {/* Event Title */}
+                  <div className="font-semibold leading-tight truncate" style={{ zIndex: pos.zIndex + 20 }}>
+                    {pos.goal.goal_id === 'Google Calendar' ? (pos.goal.task_title ?? "(untitled)") : (pos.goal.subtask_descr ?? "(untitled)")}
+                  </div>
+                  {/* Status indicator for non-Google Calendar events */}
+                  {pos.goal.goal_id !== "Google Calendar" && pos.goal.status && (
+                    <div className="text-[10px] mt-1 flex items-center gap-1" style={{ zIndex: pos.zIndex + 20 }}>
+                      <div className={`w-2 h-2 rounded-full ${
+                        pos.goal.status === "Overdue" ? "bg-red-400" :
+                        pos.goal.status === "In Progress" ? "bg-yellow-400" :
+                        "bg-green-400"
+                      }`} />
+                      <span className="opacity-90">{pos.goal.status}</span>
                     </div>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        ))}
+              ))}
+              {/* Drag Preview and other overlays can go here if needed */}
+            </div>
+          );
+        })}
       </div>
     </div>
   </>

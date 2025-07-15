@@ -3081,35 +3081,36 @@ export function CalendarScheduler() {
         </div>
         {/* ───────── DAY VIEW ───────── */}
         {currentView === "day" ? (
-                      <DayView
-              currentDate={currentDate}
-              setCurrentDate={setCurrentDate}
-              hours={hours}
-              getGoalsForDate={getGoalsForDate}
-              handleGoalClick={handleGoalClick}
-              setTimelineRef={setTimelineRef}
-              formatHourLabel={formatHourLabel}
-              handleOverflowClick={handleOverflowClick}
-              getCourseColor={getCourseColor}
-              getEventColor={getEventColor}
-              handleSubtaskDragStart={handleSubtaskDragStart}
-              handleSubtaskDragEnd={handleSubtaskDragEnd}
-              handleTimeSlotDragOver={handleTimeSlotDragOver}
-              handleTimeSlotDragLeave={handleTimeSlotDragLeave}
-              handleTimeSlotDrop={handleTimeSlotDrop}
-              isDraggingTask={isDraggingTask}
-              dragOverDate={dragOverDate}
-              dragTargetHour={dragTargetHour}
-              dragTargetMinute={dragTargetMinute}
-              dragTargetDate={dragTargetDate}
-              onDayClick={handleDayClick}
-              onTaskHover={handleTaskHover}
-              onTaskMouseLeave={handleTaskMouseLeave}
-              handleTimeSlotMouseDown={handleTimeSlotMouseDown}
-              handleTimeSlotMouseMove={handleTimeSlotMouseMove}
-              handleTimeSlotMouseUp={handleTimeSlotMouseUp}
-              dragPreview={dragPreview}
-            />
+          <DayView
+            currentDate={currentDate}
+            setCurrentDate={setCurrentDate}
+            hours={hours}
+            getGoalsForDate={getGoalsForDate}
+            handleGoalClick={handleGoalClick}
+            setTimelineRef={setTimelineRef}
+            formatHourLabel={formatHourLabel}
+            handleOverflowClick={handleOverflowClick}
+            getCourseColor={getCourseColor}
+            getEventColor={getEventColor}
+            handleSubtaskDragStart={handleSubtaskDragStart}
+            handleSubtaskDragEnd={handleSubtaskDragEnd}
+            handleTimeSlotDragOver={handleTimeSlotDragOver}
+            handleTimeSlotDragLeave={handleTimeSlotDragLeave}
+            handleTimeSlotDrop={handleTimeSlotDrop}
+            isDraggingTask={isDraggingTask}
+            dragOverDate={dragOverDate}
+            dragTargetHour={dragTargetHour}
+            dragTargetMinute={dragTargetMinute}
+            dragTargetDate={dragTargetDate}
+            onDayClick={handleDayClick}
+            onTaskHover={handleTaskHover}
+            onTaskMouseLeave={handleTaskMouseLeave}
+            handleTimeSlotMouseDown={handleTimeSlotMouseDown}
+            handleTimeSlotMouseMove={handleTimeSlotMouseMove}
+            handleTimeSlotMouseUp={handleTimeSlotMouseUp}
+            dragPreview={dragPreview}
+            draggedTask={draggedTask}
+          />
         ) : currentView === "week" ? (
           <WeekView
             currentDate={currentDate}
@@ -3140,6 +3141,7 @@ export function CalendarScheduler() {
             handleTimeSlotMouseMove={handleTimeSlotMouseMove}
             handleTimeSlotMouseUp={handleTimeSlotMouseUp}
             dragPreview={dragPreview}
+            draggedTask={draggedTask}
           />
         ) : currentView === "month" ? (
           <MonthView
@@ -4195,7 +4197,7 @@ export function CalendarScheduler() {
 
       {/* Undo Toast */}
       {showUndoToast && deletedTask && (
-        <div className="fixed bottom-6 left-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[10000] max-w-sm">
+        <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
           <div className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -4224,7 +4226,7 @@ export function CalendarScheduler() {
 
       {/* Undo Subtask Toast */}
       {showUndoSubtaskToast && deletedSubtask && (
-        <div className="fixed bottom-6 left-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[10000] max-w-sm">
+        <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
           <div className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -4616,10 +4618,7 @@ export function CalendarScheduler() {
         </>
       )}
       {showBanner && bannerTaskName && bannerTaskDueDate && (
-        <div
-          className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-4 animate-fade-in"
-          style={{ minWidth: 320, maxWidth: 480 }}
-        >
+        <div className="fixed left-1/2 top-8 transform -translate-x-1/2 flex justify-center items-center gap-4 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in" style={{ minWidth: 320, maxWidth: 480 }}>
           <span>
             Schedule a subtask for "<span className='font-semibold'>{bannerTaskName}</span>" (due <span className='font-semibold'>{formatDate(bannerTaskDueDate)}</span>)
           </span>
