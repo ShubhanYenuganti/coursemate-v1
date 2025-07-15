@@ -154,6 +154,32 @@ export const WeekView = ({
                 const minute = Math.floor((totalMinutes % 60) / 30) * 30;
                 handleTimeSlotDrop(e, d, hour, minute);
               }}
+              onMouseDown={e => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                const totalMinutes = (y / rect.height) * 1440;
+                const hour = Math.floor(totalMinutes / 60);
+                const minute = Math.floor((totalMinutes % 60) / 30) * 30;
+                handleTimeSlotMouseDown?.(e, d, hour, minute);
+              }}
+              onMouseMove={e => {
+                if (!handleTimeSlotMouseMove) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                const totalMinutes = (y / rect.height) * 1440;
+                const hour = Math.floor(totalMinutes / 60);
+                const minute = Math.floor((totalMinutes % 60) / 30) * 30;
+                handleTimeSlotMouseMove(e, d, hour, minute);
+              }}
+              onMouseUp={e => {
+                if (!handleTimeSlotMouseUp) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                const totalMinutes = (y / rect.height) * 1440;
+                const hour = Math.floor(totalMinutes / 60);
+                const minute = Math.floor((totalMinutes % 60) / 30) * 30;
+                handleTimeSlotMouseUp(e, d, hour, minute);
+              }}
             >
               {/* Hour grid lines (background only) */}
               {hours.map((h: number) => (
@@ -167,25 +193,48 @@ export const WeekView = ({
                   }}
                 />
               ))}
-              {/* Drag preview overlay for event placement */}
-              {isDraggingTask && draggedTask && dragTargetHour !== null && dragTargetDate?.toDateString() === d.toDateString() && (() => {
-                // Calculate overlay position and size
-                const durationMs = new Date(draggedTask.end_time).getTime() - new Date(draggedTask.start_time).getTime();
-                const durationMinutes = Math.max(30, Math.round(durationMs / 60000));
-                const top = ((dragTargetHour * 60 + (dragTargetMinute || 0)) / 1440) * 100;
-                const height = (durationMinutes / 1440) * 100;
+              {/* Drag preview overlay for event placement (drag-to-create) */}
+              {dragPreview && dragPreview.startDate.toDateString() === d.toDateString() && (() => {
+                // Calculate start and end in minutes
+                const startMinutes = dragPreview.startHour * 60 + (dragPreview.startMinute || 0);
+                const endMinutes = dragPreview.endHour * 60 + (dragPreview.endMinute || 0);
+                const top = (startMinutes / 1440) * 100;
+                const height = Math.max(2, (endMinutes - startMinutes) / 1440 * 100);
+                // Format time range
+                const start = new Date(dragPreview.startDate);
+                start.setHours(dragPreview.startHour, dragPreview.startMinute || 0, 0, 0);
+                const end = new Date(dragPreview.endDate);
+                end.setHours(dragPreview.endHour, dragPreview.endMinute || 0, 0, 0);
+                const options: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
+                const timeLabel = `${start.toLocaleTimeString([], options)} – ${end.toLocaleTimeString([], options)}`;
                 return (
                   <div
                     className="absolute left-0 w-full pointer-events-none"
                     style={{
                       top: `${top}%`,
                       height: `${height}%`,
-                      zIndex: 1000,
-                      border: '2px dashed #2563eb',
-                      background: 'rgba(37,99,235,0.08)',
+                      zIndex: 2000,
+                      border: '2px solid #0a80ed',
+                      background: 'rgba(10,128,237,0.10)',
                       borderRadius: '8px',
                     }}
-                  />
+                  >
+                    <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      background: 'rgba(10,128,237,0.95)',
+                      color: 'white',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                      padding: '2px 8px',
+                      borderTopLeftRadius: '8px',
+                      borderTopRightRadius: '8px',
+                      textAlign: 'center',
+                      pointerEvents: 'none',
+                    }}>{timeLabel}</div>
+                  </div>
                 );
               })()}
               {/* (Removed solid blue border highlight; only dashed overlay remains) */}
