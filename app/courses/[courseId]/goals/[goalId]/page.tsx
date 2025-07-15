@@ -1188,7 +1188,10 @@ const GoalDetailPage = () => {
                   <div className="text-sm text-gray-600">
                     Start: {subtask.start_time ? new Date(subtask.start_time).toLocaleString() : 'N/A'}<br/>
                     End: {subtask.end_time ? new Date(subtask.end_time).toLocaleString() : 'N/A'}<br/>
-                    Proposed Due Date: {pendingTaskUpdate?.scheduledDate ? new Date(pendingTaskUpdate.scheduledDate).toLocaleDateString() : 'N/A'}
+                    Proposed Due Date: {pendingTaskUpdate?.scheduledDate ? (() => {
+                      const [year, month, day] = pendingTaskUpdate.scheduledDate.split('-').map(Number);
+                      return new Date(year, month - 1, day).toLocaleDateString();
+                    })() : 'N/A'}
                   </div>
                 </li>
               ))}
