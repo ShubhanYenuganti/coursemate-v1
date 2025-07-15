@@ -607,7 +607,10 @@ def get_goal_tasks(goal_id):
         current_app.logger.error(f"Error getting tasks: {str(e)}")
         return jsonify({'error': 'An error occurred while getting tasks'}), 500
 
-
+# also check if changing due date creates conflicts with start time of subtask
+# if so send json of metadata on subtasks -- if bypass is set to false
+# frontend receives warning with subtasks, suggesting users to reschedule subtasks or adjust task due date
+# user can choose to bypass warnings if so itll change due date regardless
 @goals_bp.route('/api/goals/<goal_id>/tasks', methods=['PUT'])
 @jwt_required()
 def update_goal_tasks(goal_id):
@@ -631,6 +634,51 @@ def update_goal_tasks(goal_id):
         
         # Track which tasks are in the update
         updated_task_ids = set()
+        
+        # Track which subtasks have date conflicts
+        conflicting_subtasks = set()
+        
+        bypass = data.get('bypass')
+        if not bypass:
+            # Check for subtasks whose start_time date is after the task_due_date
+            for task_data in data['tasks']:
+                task_id = task_data.get('task_id')
+                # Find the corresponding task rows in the DB
+                task_rows = [g for g in goals if g.task_id == task_id]
+                # Get the task_due_date from the update payload if present, else from DB
+                if 'task_due_date' in task_data and task_data['task_due_date']:
+                    try:
+                        if isinstance(task_data['task_due_date'], str):
+                            if 'T' in task_data['task_due_date']:
+                                task_due_date = datetime.fromisoformat(task_data['task_due_date'].replace('Z', '+00:00'))
+                            else:
+                                task_due_date = datetime.fromisoformat(task_data['task_due_date'] + 'T00:00:00')
+                        else:
+                            task_due_date = task_data['task_due_date']
+                    except Exception as e:
+                        current_app.logger.error(f"Error parsing task_due_date: {task_data['task_due_date']}, error: {e}")
+                        task_due_date = None
+                else:
+                    # Fallback to DB value
+                    task_due_date = task_rows[0].task_due_date if task_rows and hasattr(task_rows[0], 'task_due_date') else None
+                # Only check if we have a due date
+                if task_due_date:
+                    for subtask_row in task_rows:
+                        # Skip placeholder rows
+                        if getattr(subtask_row, 'task_id', None) == 'placeholder' or getattr(subtask_row, 'subtask_id', None) == 'placeholder':
+                            continue
+                        start_time = getattr(subtask_row, 'start_time', None)
+                        subtask_id = getattr(subtask_row, 'subtask_id', None)
+                        if start_time and subtask_id:
+                            if start_time.date() > task_due_date.date():
+                                conflicting_subtasks.add(subtask_id)
+            # If there are any conflicting subtasks, return them and short-circuit
+            if conflicting_subtasks:
+                return jsonify({
+                    'conflicting_subtasks': list(conflicting_subtasks),
+                    'message': 'Some subtasks have a start_time after the task due date.'
+                }), 409
+
         
         for task_data in data['tasks']:
             task_id = task_data.get('task_id')

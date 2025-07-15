@@ -39,6 +39,9 @@ const GoalDetailPage = () => {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskWithProgress | null>(null);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [conflictingSubtasks, setConflictingSubtasks] = useState<Subtask[]>([]);
+  const [pendingTaskUpdate, setPendingTaskUpdate] = useState<TaskWithProgress | null>(null);
 
   useEffect(() => {
     const fetchGoalDetails = async () => {
@@ -161,7 +164,9 @@ const GoalDetailPage = () => {
               estimatedTimeMinutes: 15, // Default value
               completed: item.subtask_completed,
               createdAt: item.created_at,
-              updatedAt: item.updated_at
+              updatedAt: item.updated_at,
+              start_time: item.start_time, // <-- add this
+              end_time: item.end_time      // <-- add this
             });
           }
         });
@@ -352,7 +357,9 @@ const GoalDetailPage = () => {
             estimatedTimeMinutes: 15, // Default value
             completed: item.subtask_completed,
             createdAt: item.created_at,
-            updatedAt: item.updated_at
+            updatedAt: item.updated_at,
+            start_time: item.start_time, // <-- add this
+            end_time: item.end_time      // <-- add this
           });
         }
       });
@@ -417,10 +424,8 @@ const GoalDetailPage = () => {
     }
   };
 
-  const handleTaskUpdated = async (updatedTask: TaskWithProgress) => {
+  const handleTaskUpdated = async (updatedTask: TaskWithProgress, bypass = false) => {
     try {
-      console.log('Saving updated task:', updatedTask);
-      
       // Prepare the data for the API
       const taskData = {
         tasks: [{
@@ -436,10 +441,10 @@ const GoalDetailPage = () => {
             subtask_completed: subtask.completed,
             subtask_order: subtask.subtask_order !== undefined ? subtask.subtask_order : index
           }))
-        }]
+        }],
+        bypass
       };
-      
-      // Update task in backend
+
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
       const response = await fetch(`${api}/api/goals/${goalId}/tasks`, {
         method: 'PUT',
@@ -450,21 +455,28 @@ const GoalDetailPage = () => {
         body: JSON.stringify(taskData)
       });
 
+      if (response.status === 409) {
+        // Conflict: get the list of conflicting subtask IDs
+        const data = await response.json();
+        const conflictIds = data.conflicting_subtasks || [];
+        // Find the actual subtask objects from updatedTask.subtasks
+        const conflicts = updatedTask.subtasks.filter(st => conflictIds.includes(st.id));
+        setConflictingSubtasks(conflicts);
+        setPendingTaskUpdate(updatedTask);
+        setConflictModalOpen(true);
+        return;
+      }
+
       if (!response.ok) {
-        console.error('Failed to update task:', response.status, response.statusText);
         throw new Error('Failed to update task');
       }
-      
-      // Update local state
+
       setTasks(prevTasks => 
         prevTasks.map(task => 
           task.id === updatedTask.id ? updatedTask : task
         )
       );
-      
-      // Recalculate goal progress and completedTasks
       if (goal) {
-        // Use the updated tasks array
         const updatedTasks = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
         const totalTasks = updatedTasks.length;
         const completedTasks = updatedTasks.filter(t => t.completed).length;
@@ -480,17 +492,12 @@ const GoalDetailPage = () => {
           progress
         });
       }
-      
-      // Close the editor
       setEditingTask(null);
-      
-      // Refresh goal data to get updated progress
       const goalResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-
       if (goalResponse.ok) {
         const goalsData = await goalResponse.json();
         const currentGoal = goalsData.find((g: any) => 
@@ -499,7 +506,6 @@ const GoalDetailPage = () => {
           String(g.goal_id) === goalId || 
           String(g.id) === goalId
         );
-        
         if (currentGoal) {
           const updatedGoal: GoalWithProgress = {
             id: currentGoal.goal_id || currentGoal.id,
@@ -515,15 +521,22 @@ const GoalDetailPage = () => {
             completedTasks: currentGoal.completed_tasks || 0,
             completed: currentGoal.goal_completed || false
           };
-          
           setGoal(updatedGoal);
         }
       }
-      
       toast.success('Task updated successfully');
     } catch (error) {
       console.error('Error updating task:', error);
       toast.error('Failed to update task');
+    }
+  };
+
+  const handleBypassConflicts = () => {
+    if (pendingTaskUpdate) {
+      handleTaskUpdated(pendingTaskUpdate, true);
+      setConflictModalOpen(false);
+      setConflictingSubtasks([]);
+      setPendingTaskUpdate(null);
     }
   };
 
@@ -1155,10 +1168,47 @@ const GoalDetailPage = () => {
       {editingTask && (
         <TaskEditorModal
           isOpen={true}
+          taskDate={editingTask.scheduledDate}
           onClose={() => setEditingTask(null)}
           task={editingTask}
           onSave={handleTaskUpdated}
         />
+      )}
+
+      {/* Conflict Modal */}
+      {conflictModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full border border-gray-200">
+            <h3 className="text-lg font-semibold mb-4 text-red-600">Subtask Scheduling Conflict</h3>
+            <p className="mb-4 text-gray-700">The following subtasks have a <b>start time after the proposed task due date</b>:</p>
+            <ul className="mb-4">
+              {conflictingSubtasks.map(subtask => (
+                <li key={subtask.id} className="mb-2">
+                  <div className="font-medium">{subtask.name}</div>
+                  <div className="text-sm text-gray-600">
+                    Start: {subtask.start_time ? new Date(subtask.start_time).toLocaleString() : 'N/A'}<br/>
+                    End: {subtask.end_time ? new Date(subtask.end_time).toLocaleString() : 'N/A'}<br/>
+                    Proposed Due Date: {pendingTaskUpdate?.scheduledDate ? new Date(pendingTaskUpdate.scheduledDate).toLocaleDateString() : 'N/A'}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setConflictModalOpen(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleBypassConflicts}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Bypass and Save Anyway
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

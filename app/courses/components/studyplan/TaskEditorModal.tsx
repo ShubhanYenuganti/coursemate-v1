@@ -2,25 +2,36 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Save, Clock, Edit, Trash2 } from 'lucide-react';
 import { TaskWithProgress, Subtask } from './types';
+import { format } from 'date-fns';
 
 interface TaskEditorModalProps {
   isOpen: boolean;
+  taskDate: string;
   onClose: () => void;
   task: TaskWithProgress;
   onSave: (updatedTask: TaskWithProgress) => void;
 }
 
-const TaskEditorModal: React.FC<TaskEditorModalProps> = ({ isOpen, onClose, task, onSave }) => {
+const TaskEditorModal: React.FC<TaskEditorModalProps> = ({ isOpen, onClose, task, onSave, taskDate }) => {
   const [editedTask, setEditedTask] = useState<TaskWithProgress>(task);
   const [editedSubtasks, setEditedSubtasks] = useState<Subtask[]>(task.subtasks);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Reset form when task changes
+  // Set default due date if not present when modal opens
   useEffect(() => {
-    setEditedTask(task);
-    setEditedSubtasks(task.subtasks);
+
+    let scheduledDate = task.scheduledDate || taskDate || '';
+    if (scheduledDate) {
+      // If it's an ISO string, extract yyyy-MM-dd
+      if (scheduledDate.includes('T')) {
+        scheduledDate = scheduledDate.split('T')[0];
+      }
+    }
+    let initialTask = { ...task, scheduledDate };
+    setEditedTask(initialTask);
+    setEditedSubtasks(initialTask.subtasks);
     setErrors({});
-  }, [task]);
+  }, [task, taskDate]);
 
   const handleTaskChange = (field: string, value: any) => {
     setEditedTask(prev => ({ ...prev, [field]: value }));
