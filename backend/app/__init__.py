@@ -77,6 +77,7 @@ def create_app(config_class=Config):
     from .routes.calendar import calendar_bp, register_calendar_oauth
     from .routes.embeddings import embeddings_bp
     from .routes.notifications import notifications_bp
+    from .routes.materials import materials_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
@@ -92,6 +93,7 @@ def create_app(config_class=Config):
     app.register_blueprint(friends_bp)
     app.register_blueprint(embeddings_bp, url_prefix='/api/embeddings')
     app.register_blueprint(notifications_bp)
+    app.register_blueprint(materials_bp, url_prefix='/api/materials')
 
     # Ensure SocketIO handlers from blueprints are recognized
     # (This is implicitly handled by importing the blueprints before socketio runs,
