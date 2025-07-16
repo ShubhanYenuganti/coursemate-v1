@@ -259,9 +259,9 @@ const TodaysChecklist: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 min-h-[340px] flex flex-col justify-between" style={{height: '376px'}}>
+    <div className="bg-white rounded-2xl p-6 shadow-md border-l-4 border-emerald-500 min-h-[340px] flex flex-col justify-between" style={{height: '356px'}}>
       {/* Header */}
-      <div className="flex justify-between items-center mb-5">
+      <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-bold text-gray-800 tracking-tight">Checklist</h2>
         <div className="flex gap-2">
           <button
@@ -271,7 +271,7 @@ const TodaysChecklist: React.FC = () => {
             Overdue
           </button>
           <button
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'today' ? 'bg-indigo-500 text-white' : 'bg-white text-gray-500 border border-gray-200'}`}
+            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'today' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-500 border border-gray-200'}`}
             onClick={() => setSelectedFilter('today')}
           >
             Today's
@@ -288,7 +288,7 @@ const TodaysChecklist: React.FC = () => {
       <div className="flex-1 flex flex-col justify-center items-center">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-8">
-            <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
             <p className="text-gray-600">Loading tasks...</p>
           </div>
         ) : filteredTasks.length === 0 ? (
@@ -299,15 +299,15 @@ const TodaysChecklist: React.FC = () => {
         ) : (
           <ul className="w-full space-y-3">
             {filteredTasks.map(task => (
-              <li key={task.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+              <li key={task.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2 shadow-sm hover:shadow-md transition-all">
                 <input
                   type="checkbox"
                   checked={task.completed}
                   onChange={() => handleTaskToggle(task.id, !task.completed)}
-                  className="accent-indigo-500 w-5 h-5 rounded"
+                  className="accent-emerald-500 w-5 h-5 rounded border border-gray-300 hover:scale-110 transition-transform duration-150"
                 />
                 <div className="flex-1">
-                  <div className={`font-medium text-gray-800 ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
+                  <div className={`font-medium text-gray-800 text-sm ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
                   <div className="text-xs text-gray-500">{task.course} • {task.time}</div>
                 </div>
               </li>

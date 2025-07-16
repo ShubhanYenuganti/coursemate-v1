@@ -150,13 +150,13 @@ const Dashboard = () => {
       {/* Main dashboard area */}
       <div className="flex-1 p-6 flex flex-col gap-6 max-w-7xl mx-auto w-full justify-center">
         {/* Top row: left (analytics+courses), right (checklist) */}
-        <div className="flex flex-row gap-6 w-full" style={{minHeight: '420px', maxHeight: '480px'}}>
+        <div className="flex flex-row gap-6 w-full" style={{minHeight: '360px', maxHeight: '420px'}}>
           {/* Left column: vertical stack */}
           <div className="flex flex-col gap-6 flex-[2_2_0%] min-w-0">
-            <section className="rounded-2xl shadow-md bg-gradient-to-r from-indigo-50 via-blue-50 to-purple-50 p-4 border-l-4 border-indigo-400 flex-1 min-h-[120px] max-h-[160px]">
+            <section className="rounded-2xl shadow-md bg-indigo-100 p-4 border-l-4 border-indigo-400 flex-1 min-h-[80px] max-h-[120px]">
               <AnalyticsCards />
             </section>
-            <section className="rounded-2xl shadow-md bg-white p-6 border-l-4 border-blue-400 flex-1 min-h-[180px] max-h-[320px]">
+            <section className="rounded-2xl shadow-md bg-blue-100 p-7 border-l-4 border-blue-400 flex-1 min-h-[160px] max-h-[200px]">
               <MyCourses
                 courses={userCourses.map((course, index) => convertToMyCoursesFormat(course, index))}
                 isLoading={isLoadingCourses}
@@ -168,7 +168,7 @@ const Dashboard = () => {
           </div>
           {/* Right column: Checklist, matches height of left column */}
           <aside className="flex flex-col flex-[1.1_1.1_0%] min-w-[320px] max-w-[400px] h-full">
-            <section className="rounded-2xl shadow-md bg-white p-7 border-l-4 border-emerald-400 flex-1 h-full min-h-[320px] flex flex-col justify-between">
+            <section className="rounded-2xl shadow-md bg-emerald-100 p-7 border-l-4 border-emerald-400 flex-1 h-full min-h-[340px] max-h-[400px] flex flex-col justify-between">
               <ChecklistWidget
                 onTaskToggle={handleTaskToggle}
                 onAddTask={() => {console.log('Add Task')}}
@@ -176,8 +176,8 @@ const Dashboard = () => {
             </section>
           </aside>
         </div>
-        {/* Recent Activity: full width at the bottom */}
-        <section className="rounded-2xl shadow-md bg-white p-5 border-l-4 border-purple-400 w-full min-h-[120px] max-h-[180px]" style={{height: '220px'}}>
+        {/* Recent Activity: full width at the bottom, with top margin for spacing */}
+        <section className="rounded-2xl shadow-md bg-purple-100 p-4 border-l-4 border-purple-400 w-full">
           <CommunityActivity />
         </section>
       </div>

@@ -223,19 +223,6 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
     }
   };
 
-  // Combine messages and notifications, sort by time
-  const allActivities = [...messageActivities, ...notificationActivities].sort((a, b) => {
-    const timeA = new Date(a.time.includes('ago') ? Date.now() - getTimeDiff(a.time) : a.time).getTime();
-    const timeB = new Date(b.time.includes('ago') ? Date.now() - getTimeDiff(b.time) : b.time).getTime();
-    return timeB - timeA;
-  });
-
-  // Only show the most recent 10 activities for the horizontal feed
-  const activitiesToDisplay = activities.length > 0 ? activities : allActivities.slice(0, 10);
-
-  const totalPages = Math.ceil(activitiesToDisplay.length / CARDS_PER_PAGE);
-  const paginatedActivities = activitiesToDisplay.slice(page * CARDS_PER_PAGE, (page + 1) * CARDS_PER_PAGE);
-
   const getTimeDiff = (timeString: string) => {
     const match = timeString.match(/(\d+)\s*(min|hour|day)/);
     if (!match) return 0;
@@ -248,6 +235,19 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
       default: return 0;
     }
   };
+
+  // Combine messages and notifications, sort by time
+  const allActivities = [...messageActivities, ...notificationActivities].sort((a, b) => {
+    const timeA = new Date(a.time.includes('ago') ? Date.now() - getTimeDiff(a.time) : a.time).getTime();
+    const timeB = new Date(b.time.includes('ago') ? Date.now() - getTimeDiff(b.time) : b.time).getTime();
+    return timeB - timeA;
+  });
+
+  // Only show the most recent 10 activities for the horizontal feed
+  const activitiesToDisplay = activities.length > 0 ? activities : allActivities.slice(0, 10);
+
+  const totalPages = Math.ceil(activitiesToDisplay.length / CARDS_PER_PAGE);
+  const paginatedActivities = activitiesToDisplay.slice(page * CARDS_PER_PAGE, (page + 1) * CARDS_PER_PAGE);
 
   const handleActivityClick = async (activity: Activity) => {
     if (activity.type === 'message') {
@@ -395,26 +395,26 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   };
 
   return (
-    <div className="w-full group relative">
+    <div className="w-full group relative bg-purple-50 rounded-2xl shadow-md p-4">
       <h2 className="text-lg font-bold text-gray-800 mb-3 px-2">Recent Activity</h2>
       {/* Left Arrow */}
       {page > 0 && (
         <button
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-100"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-purple-200 border border-purple-300"
           style={{ pointerEvents: 'auto' }}
           onClick={() => setPage(page - 1)}
         >
-          <ChevronLeft className="w-6 h-6 text-gray-500" />
+          <ChevronLeft className="w-6 h-6 text-purple-600" />
         </button>
       )}
       {/* Right Arrow */}
       {page < totalPages - 1 && (
         <button
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-100"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-purple-200 border border-purple-300"
           style={{ pointerEvents: 'auto' }}
           onClick={() => setPage(page + 1)}
         >
-          <ChevronRight className="w-6 h-6 text-gray-500" />
+          <ChevronRight className="w-6 h-6 text-purple-600" />
         </button>
       )}
       <div className="flex gap-4 overflow-x-hidden pb-2 px-2 hide-scrollbar min-h-[120px]">
@@ -427,9 +427,10 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
           paginatedActivities.map((activity) => (
             <div
               key={activity.id}
-              className="min-w-[180px] max-w-[210px] h-[110px] bg-white rounded-xl shadow-md border border-gray-100 flex flex-col items-center p-3 hover:shadow-lg transition-all duration-200 cursor-pointer"
-              onClick={() => handleActivityClick(activity)}
+              className="min-w-[180px] max-w-[210px] h-[110px] bg-white rounded-xl shadow-md border border-gray-100 flex flex-col items-center p-3 hover:shadow-lg transition-all duration-200 cursor-pointer relative group"
             >
+              {/* Accent dot */}
+              <div className="absolute left-2 top-2 w-3 h-3 rounded-full bg-purple-300 group-hover:bg-purple-500 transition-colors"></div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-base font-bold text-indigo-600">
                   {activity.avatar}
@@ -438,7 +439,7 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
                   <span className="text-xs text-gray-500">{activity.time}</span>
                 </div>
               </div>
-              <div className="text-xs text-gray-700 text-center mb-0.5 font-semibold">
+              <div className="text-xs text-gray-700 text-center mb-0.5 font-semibold" style={{fontFamily: 'Inter, sans-serif'}}>
                 {activity.user} <span className="font-normal">{activity.action}</span>
               </div>
               {activity.content && (

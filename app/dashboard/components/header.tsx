@@ -39,10 +39,10 @@ export function Header({
   console.log('Rendering Header component');
 
   return (
-    <header className="w-full bg-white border-b border-gray-200 px-6 py-2 flex items-center justify-between" style={{minHeight: '56px'}}>
+    <header className="w-full bg-indigo-50 border-b border-gray-200 shadow-sm px-6 flex items-center justify-between" style={{height: '73px', minHeight: '73px', maxHeight: '73px'}}>
       {/* Left: Greeting only */}
       <div className="flex flex-col justify-center">
-        <span className="text-lg font-semibold text-gray-800 leading-tight">Welcome back, {userName}!</span>
+        <span className="text-lg font-bold text-gray-800 leading-tight">Welcome back, {userName}!</span>
       </div>
       {/* Right: Search and Notifications */}
       <div className="flex items-center gap-4">
@@ -51,10 +51,12 @@ export function Header({
             type="text"
             value={searchTerm}
             onChange={handleSearchChange}
-            className="w-56 pl-9 pr-4 py-1.5 rounded-full bg-gray-100 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 border border-gray-200 text-sm"
+            className="w-56 pl-9 pr-4 py-1.5 rounded-full bg-white text-gray-800 placeholder-gray-400 border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
             placeholder="Search courses, tasks..."
           />
-          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-base">🔍</span>
+          <span className="absolute left-3 top-1.5 text-gray-400">
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-2-2"/></svg>
+          </span>
         </form>
         <NotificationsDropdown />
       </div>
