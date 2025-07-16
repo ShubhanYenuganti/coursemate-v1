@@ -3982,6 +3982,10 @@ export function CalendarScheduler() {
                             </div>
                           )}
                         </div>
+                        {/* Warning icon if is_conflicting, now to the left of the trash icon */}
+                        {currentSubtask.is_conflicting === true && (
+                          <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{minWidth: '24px'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -4003,16 +4007,6 @@ export function CalendarScheduler() {
                   })}
                 </div>
 
-                {/* Add Subtask Button */}
-                <div className="pt-3 border-t border-gray-200">
-                  <button
-                    onClick={handleAddSubtask}
-                    className="w-full px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Subtask
-                  </button>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -4401,8 +4395,21 @@ export function CalendarScheduler() {
                     <div>
                       <p className="text-sm text-gray-600">Time: {formatEventTime(viewSubtaskModal.subtask.start_time!, viewSubtaskModal.subtask.end_time!)}</p>
                     </div>
+                    {/* Conflict warning message */}
+                    {viewSubtaskModal.subtask.is_conflicting === true && (
+                      <div className="flex items-center gap-2 mt-2 text-yellow-800 bg-yellow-100 rounded px-2 py-1 text-xs font-medium">
+                        <svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                        Conflicts with Task Due Date {(() => {
+                          const due = viewSubtaskModal.subtask.task_due_date || viewSubtaskModal.subtask.due_date;
+                          if (!due) return '';
+                          // Use the same logic as formatDate, but format as 'Tue, Jul 15'
+                          const [year, month, day] = due.split('T')[0].split('-');
+                          const date = new Date(Number(year), Number(month) - 1, Number(day));
+                          return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                        })()}
+                      </div>
+                    )}
                   </div>
-
                   <div className="pt-3 border-t border-gray-200">
                     <p className="text-sm text-gray-600">
                       {viewSubtaskModal.subtask.task_title}: {viewSubtaskModal.subtask.goal_descr}
