@@ -38,6 +38,7 @@ export interface Subtask {
   subtask_order?: number;
   start_time: string;
   end_time: string;
+  has_conflict?: boolean;
 }
 
 export interface StudyPlanStats {

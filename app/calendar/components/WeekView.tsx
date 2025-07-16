@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react"
 import { AllDayRow } from "./AllDayRow"
 import { goalsStartingAtHour } from "../utils/calendar.utils"
 import { calculateEventPositions } from "../utils/calendar.layout"
@@ -297,8 +297,12 @@ export const WeekView = ({
                     handleTimeSlotDrop(e, d, hour, minute);
                   }}
                 >
+                  {/* Warning icon for conflicting events */}
+                  {pos.goal.is_conflicting === true && (
+                    <AlertTriangle className="absolute right-2 top-2 w-6 h-6 text-white drop-shadow" style={{zIndex: 100}} title="Scheduled after task due date" />
+                  )}
                   {/* Event Title */}
-                  <div className="font-semibold leading-tight truncate" style={{ zIndex: pos.zIndex + 20 }}>
+                  <div className="font-semibold leading-tight truncate pr-6" style={{ zIndex: pos.zIndex + 20 }}>
                     {pos.goal.goal_id === 'Google Calendar' ? (pos.goal.task_title ?? "(untitled)") : (pos.goal.subtask_descr ?? "(untitled)")}
                   </div>
                   {/* Status indicator for non-Google Calendar events */}

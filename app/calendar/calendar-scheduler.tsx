@@ -519,7 +519,7 @@ export function CalendarScheduler() {
   };
 
   // Handle creating the subtask
-  const handleCreateSubtaskConfirm = async (bypassDueDateCheck = false) => {
+  const handleCreateSubtaskConfirm = async (bypassDueDateCheck = false, bypass = false) => {
     if (!selectedTaskId || !newSubtaskDescription.trim() || !createSubtaskStart || !createSubtaskEnd) {
       toast.error("Please fill in all required fields");
       return;
@@ -626,7 +626,8 @@ export function CalendarScheduler() {
               status: null,
               goal_completed: false,
               created_at: '',
-              updated_at: ''
+              updated_at: '',
+              is_conflicting: false // <-- Added field
             },
             targetDate: createSubtaskStart.date,
             targetHour: createSubtaskStart.hour,
@@ -668,13 +669,14 @@ export function CalendarScheduler() {
         endDateTime = new Date(startDateTime.getTime() + 30 * 60000);
       }
 
-      const payload = {
+      let payload: any = {
         subtask_descr: newSubtaskDescription.trim(),
         subtask_type: newSubtaskTypeForCreate,
         // Send as UTC ISO string (backend expects UTC)
         subtask_start_time: startDateTime.toISOString(),
-        subtask_end_time: endDateTime.toISOString()
+        subtask_end_time: endDateTime.toISOString(),
         // Don't send task_due_date - let backend use placeholder row's task_due_date
+        bypass_due_date: bypass
       };
 
       const res = await fetch(`${api}/api/goals/tasks/${selectedTaskId}/subtasks`, {
@@ -799,7 +801,7 @@ export function CalendarScheduler() {
     setDragTargetDate(null);
   };
 
-  const performSubtaskDrop = async (subtask: Goal, targetDate: Date, targetHour: number, targetMinute: number = 0) => {
+  const performSubtaskDrop = async (subtask: Goal, targetDate: Date, targetHour: number, targetMinute: number = 0, bypass = false) => {
     try {
       // Calculate new start and end times based on drop location in local timezone
       const newStartTime = new Date(
@@ -825,10 +827,13 @@ export function CalendarScheduler() {
       if (!token) return alert("Please log in first.");
 
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const payload = {
+      let payload: any = {
         subtask_start_time: newStartTime.toISOString(),
-        subtask_end_time: newEndTime.toISOString()
+        subtask_end_time: newEndTime.toISOString(),
+        bypass_due_date: bypass
       };
+
+      console.log("Payload", payload)
 
       const res = await fetch(`${api}/api/goals/tasks/subtasks/${subtask.subtask_id}`, {
         method: 'PUT',
@@ -957,8 +962,68 @@ export function CalendarScheduler() {
     setEditSubtaskData(null);
   }
 
-  const handleEditSubtaskSave = async () => {
+  const handleEditSubtaskSave = async (bypass = false) => {
     if (!editSubtaskData) return;
+    // Find the parent task (from goalsByDate)
+    const allGoals = Object.values(goalsByDate).flat();
+    const parentTask = allGoals.find(goal => goal.subtask_id === editSubtaskData.subtask_id);
+    let taskDueDateStr = parentTask?.task_due_date || parentTask?.due_date;
+    if (taskDueDateStr && !bypass) {
+      // Parse the due date as local date
+      let dueDateLocal;
+      if (taskDueDateStr.includes('-') && !taskDueDateStr.includes('T')) {
+        // YYYY-MM-DD format
+        const [year, month, day] = taskDueDateStr.split('-').map(Number);
+        dueDateLocal = new Date(year, month - 1, day);
+      } else {
+        // ISO format
+        const dueDateUTC = new Date(taskDueDateStr);
+        dueDateLocal = new Date(
+          dueDateUTC.getUTCFullYear(),
+          dueDateUTC.getUTCMonth(),
+          dueDateUTC.getUTCDate()
+        );
+      }
+      // Get the new scheduled date from the edit modal
+      const scheduledDate = new Date(editSubtaskData.startDate);
+      scheduledDate.setHours(editSubtaskData.startHour, editSubtaskData.startMinute, 0, 0);
+      const scheduledDateLocal = new Date(
+        scheduledDate.getFullYear(),
+        scheduledDate.getMonth(),
+        scheduledDate.getDate()
+      );
+      if (scheduledDateLocal > dueDateLocal) {
+        setDueDateWarningModal({
+          isOpen: true,
+          subtask: parentTask || {
+            ...editSubtaskData,
+            task_due_date: taskDueDateStr,
+            due_date: taskDueDateStr,
+            start_time: '',
+            end_time: '',
+            subtask_id: editSubtaskData.subtask_id,
+            subtask_descr: editSubtaskData.subtask_descr,
+            subtask_type: editSubtaskData.subtask_type,
+            subtask_completed: false,
+            task_completed: false,
+            progress: 0,
+            totalSubtasks: 0,
+            completedSubtasks: 0,
+            subtasks: [],
+            google_calendar_color: '',
+            status: null,
+            goal_completed: false,
+            created_at: '',
+            updated_at: '',
+            is_conflicting: false
+          },
+          targetDate: scheduledDate,
+          targetHour: editSubtaskData.startHour,
+          targetMinute: editSubtaskData.startMinute
+        });
+        return;
+      }
+    }
     const token = localStorage.getItem("token");
     if (!token) return;
     const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
@@ -988,6 +1053,7 @@ export function CalendarScheduler() {
       // Send as UTC ISO string (backend expects UTC)
       subtask_start_time: startDateTime.toISOString(),
       subtask_end_time: endDateTime.toISOString(),
+      bypass_due_date: bypass
     };
     try {
       const res = await fetch(`${api}/api/goals/tasks/subtasks/${editSubtaskData.subtask_id}`, {
@@ -1041,13 +1107,15 @@ export function CalendarScheduler() {
         // Check if this is from drag-to-create or add subtask modal
         if (showCreateSubtaskModal) {
           // This is from drag-to-create, proceed with creating the subtask
-          await handleCreateSubtaskConfirm(true);
+          await handleCreateSubtaskConfirm(true, true);
         } else if (addSubtaskModal?.isOpen) {
           // This is from add subtask modal, proceed with creating the subtask
-          await handleAddSubtaskConfirm(true);
+          await handleAddSubtaskConfirm(true, true);
+        } else if (showEditSubtaskModal) {
+          await handleEditSubtaskSave(true);
         } else {
           // This is from drag-and-drop, proceed with the drop
-          await performSubtaskDrop(subtask, targetDate, targetHour, targetMinute || 0);
+          await performSubtaskDrop(subtask, targetDate, targetHour, targetMinute || 0, true);
         }
       }
     }
@@ -1232,7 +1300,7 @@ export function CalendarScheduler() {
     setNewSubtaskTime(15);
   }
 
-  const handleAddSubtaskConfirm = async (bypassDueDateCheck = false) => {
+  const handleAddSubtaskConfirm = async (bypassDueDateCheck = false, bypass = false) => {
     if (!addSubtaskModal?.task || !newSubtaskDescr.trim()) {
       toast.error('Please enter a subtask description');
       return;
@@ -1321,7 +1389,8 @@ export function CalendarScheduler() {
               status: null,
               goal_completed: false,
               created_at: '',
-              updated_at: ''
+              updated_at: '',
+              is_conflicting: false // <-- Added field
             },
             targetDate: currentDate,
             targetHour: currentDate.getHours(),
@@ -1337,11 +1406,13 @@ export function CalendarScheduler() {
       if (!token) return alert("Please log in first.");
 
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const payload = {
+      let payload: any = {
         subtask_descr: newSubtaskDescr.trim(),
-        subtask_type: newSubtaskTypeForAdd
+        subtask_type: newSubtaskTypeForAdd,
         // Don't send task_due_date - let backend use placeholder row's task_due_date
+        bypass_due_date: bypass
       };
+
 
       const res = await fetch(`${api}/api/goals/tasks/${addSubtaskModal.task.task_id}/subtasks`, {
         method: 'POST',
@@ -4743,7 +4814,7 @@ export function CalendarScheduler() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleEditSubtaskSave}
+                  onClick={() => handleEditSubtaskSave()}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>

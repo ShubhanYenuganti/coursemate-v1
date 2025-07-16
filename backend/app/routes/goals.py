@@ -1149,6 +1149,9 @@ def update_subtask(subtask_id):
                 row.goal_completed = all_tasks_completed
                 row.updated_at = datetime.utcnow()
         
+        if 'bypass_due_date' in data:
+            subtask.is_conflicting = bool(data.get('bypass_due_date'))
+        
         subtask.updated_at = datetime.utcnow()
         db.session.commit()
         
@@ -1177,6 +1180,7 @@ def update_subtask(subtask_id):
         return jsonify({'error': 'An error occurred while updating the subtask'}), 500
 
 # call this when adding a new subtask
+# new -- add a check to flag the subtask as a conflict or not
 @goals_bp.route('/api/goals/tasks/<task_id>/subtasks', methods=['POST'])
 @jwt_required()
 def create_subtask(task_id):
@@ -1293,7 +1297,8 @@ def create_subtask(task_id):
             subtask_completed=data.get('subtask_completed', False),
             start_time=start_time,
             end_time=end_time,
-            subtask_order=subtask_order
+            subtask_order=subtask_order,
+            is_conflicting=data.get('bypass_due_date', False)
         )
         
         db.session.add(new_subtask)
