@@ -353,7 +353,7 @@ const TodaysChecklist: React.FC = () => {
               >
                 {/* Play button links to studyplan tab and goal */}
                 <a
-                  href={`/courses/${task.courseId}?tab=study&goal=${task.goalId}`}
+                  href={`/courses/${task.courseId}/goals/${task.goalId}`}
                   className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-700 text-white mr-3 shadow"
                   title="Go to Study Plan"
                   style={{ minWidth: 24, minHeight: 24 }}
