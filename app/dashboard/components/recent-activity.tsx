@@ -428,7 +428,7 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
                   {activity.avatar}
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <span className="text-[11px] text-gray-300 mb-0.5">{activity.time}</span>
+                  <span className="text-[11px] text-gray-400 mb-0.5">{activity.time}</span>
                   <div className="text-[15px] text-gray-900 font-bold truncate">
                     {activity.user && <span className="font-bold text-gray-900">{activity.user}</span>}
                     {activity.action && <span className="font-normal text-gray-700 ml-1">{activity.action}</span>}
