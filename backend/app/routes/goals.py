@@ -1659,3 +1659,45 @@ def get_subtask_orders_for_task(task_id, user_id):
     subtasks = Goal.query.filter_by(task_id=task_id, user_id=user_id).order_by(asc(Goal.subtask_order)).all()
     orders = [subtask.subtask_order for subtask in subtasks if subtask.subtask_order is not None]
     return sorted(orders)
+
+@goals_bp.route("/api/goals/checklist", methods=["GET"])
+@jwt_required()
+def get_checklist():
+    """Return tasks for the checklist: today, overdue, or upcoming (excluding Google Calendar events)."""
+    user_id = get_jwt_identity()
+    try:
+        # Get filter type from query param: 'today', 'overdue', 'upcoming' (default: today)
+        filter_type = request.args.get("type", "today")
+        now = datetime.now(timezone.utc)
+        today = now.date()
+
+        # Get all tasks for the user that are not Google Calendar events and not completed
+        tasks = Goal.query.filter(
+            Goal.user_id == user_id,
+            Goal.goal_id != "Google Calendar",
+            Goal.task_completed == False,
+        ).all()
+
+        filtered_tasks = []
+        for t in tasks:
+            due = None
+            if t.task_due_date:
+                due = t.task_due_date.date()
+            elif t.due_date:
+                due = t.due_date.date()
+            else:
+                continue  # skip if no due date
+
+            if filter_type == "today" and due == today:
+                filtered_tasks.append(t.to_dict())
+            elif filter_type == "overdue" and due < today:
+                filtered_tasks.append(t.to_dict())
+            elif filter_type == "upcoming" and due > today:
+                filtered_tasks.append(t.to_dict())
+
+        # Optionally sort by due date ascending
+        filtered_tasks.sort(key=lambda x: x.get("task_due_date") or x.get("due_date") or "")
+        return jsonify(filtered_tasks), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching checklist: {e}")
+        return jsonify({"error": "An error occurred"}), 500

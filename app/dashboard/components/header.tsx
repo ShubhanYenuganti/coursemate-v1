@@ -39,39 +39,27 @@ export function Header({
   console.log('Rendering Header component');
 
   return (
-    <div className="sticky top-0 z-10 border-gray-200 mb-6">
-      <div className="flex justify-between items-center px-4 pt-3 pb-0">
-        {/* Welcome Section */}
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Welcome back, {userName}!
-          </h1>
-          <p className="text-gray-600 italic">
-            "{quote}"
-          </p>
-        </div>
-        
-        {/* Search and Notifications */}
-        <div className="flex items-center gap-4">
-          <form onSubmit={handleSearchSubmit} className="relative">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                🔍
-              </span>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-96 pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
-                placeholder="Search courses, tasks..."
-              />
-            </div>
-          </form>
-          
-          {/* Notifications Dropdown */}
-          <NotificationsDropdown />
-        </div>
+    <header className="w-full bg-indigo-50 border-b border-gray-200 shadow-sm px-6 flex items-center justify-between" style={{height: '73px', minHeight: '73px', maxHeight: '73px'}}>
+      {/* Left: Greeting only */}
+      <div className="flex flex-col justify-center">
+        <span className="text-lg font-bold text-gray-800 leading-tight">Welcome back, {userName}!</span>
       </div>
-    </div>
+      {/* Right: Search and Notifications */}
+      <div className="flex items-center gap-4">
+        <form onSubmit={handleSearchSubmit} className="relative">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="w-56 pl-9 pr-4 py-1.5 rounded-full bg-white text-gray-800 placeholder-gray-400 border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            placeholder="Search courses, tasks..."
+          />
+          <span className="absolute left-3 top-1.5 text-gray-400">
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-2-2"/></svg>
+          </span>
+        </form>
+        <NotificationsDropdown />
+      </div>
+    </header>
   );
 } 

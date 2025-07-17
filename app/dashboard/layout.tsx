@@ -52,7 +52,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="sticky top-0 z-20 w-full bg-white shadow-sm">
             <Header />
           </div>
-          <div className="flex-1 p-6">{children}</div>
+          <div className="flex-1">{children}</div>
         </div>
       </div>
     </OnboardingGuard>

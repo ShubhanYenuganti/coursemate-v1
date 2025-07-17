@@ -140,13 +140,6 @@ const NotificationsDropdown: React.FC = () => {
     return 'bg-indigo-500';
   };
 
-  // Combine messages and notifications, sort by time
-  const allActivities = [...messageActivities, ...notificationActivities].sort((a, b) => {
-    const timeA = new Date(a.time.includes('ago') ? Date.now() - getTimeDiff(a.time) : a.time).getTime();
-    const timeB = new Date(b.time.includes('ago') ? Date.now() - getTimeDiff(b.time) : b.time).getTime();
-    return timeB - timeA;
-  });
-
   const getTimeDiff = (timeString: string) => {
     const match = timeString.match(/(\d+)\s*(min|hour|day)/);
     if (!match) return 0;
@@ -159,6 +152,13 @@ const NotificationsDropdown: React.FC = () => {
       default: return 0;
     }
   };
+
+  // Combine messages and notifications, sort by time
+  const allActivities = [...messageActivities, ...notificationActivities].sort((a, b) => {
+    const timeA = new Date(a.time.includes('ago') ? Date.now() - getTimeDiff(a.time) : a.time).getTime();
+    const timeB = new Date(b.time.includes('ago') ? Date.now() - getTimeDiff(b.time) : b.time).getTime();
+    return timeB - timeA;
+  });
 
   const handleActivityClick = async (activity: Activity) => {
     if (activity.type === 'message') {
