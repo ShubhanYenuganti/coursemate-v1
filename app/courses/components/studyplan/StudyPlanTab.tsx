@@ -5,7 +5,6 @@ import { getGoalsWithProgress } from './mockData';
 import { GoalWithProgress, Goal, Task, Subtask } from './types';
 import GoalCard from './GoalCard';
 import AddGoalModal from './AddGoalModal';
-import TaskScaffoldingScreen from './TaskScaffoldingScreen';
 import FeedbackSection from './FeedbackSection';
 import AIGenerateStudyPlan from './AIGenerateStudyPlan';
 import GeneratedStudyPlan from './GeneratedStudyPlan';
@@ -30,8 +29,6 @@ function formatDate(dateString: string) {
 
 const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
-  const [isScaffoldingOpen, setIsScaffoldingOpen] = useState(false);
-  const [newGoal, setNewGoal] = useState<GoalWithProgress | null>(null);
   const [goals, setGoals] = useState<GoalWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,14 +62,15 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
             courseId: courseId,
             title: goal.goal_descr,
             targetDate: formatDate(goal.due_date || new Date().toISOString()),
-            workMinutesPerDay: 60, // Default value
-            frequency: 'daily', // Default value
+            workMinutesPerDay: goal.workMinutesPerDay, 
+            frequency: goal.frequency,
             createdAt: goal.created_at,
             updatedAt: goal.updated_at,
             progress: goal.progress || 0,
             totalTasks: goal.total_tasks || 0,
             completedTasks: goal.completed_tasks || 0,
-            completed: goal.goal_completed || false
+            completed: goal.goal_completed || false,
+            customScheduledDays: goal.customScheduleDays // Assuming backend sends this
           };
         });
 
@@ -91,40 +89,9 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   }, [courseId]);
 
   const handleGoalAdded = async (goal: GoalWithProgress) => {
+    setIsAddGoalModalOpen(false);
+    setIsSubmitting(true);
     try {
-      // Create a temporary local goal with a temporary ID
-      const tempGoal: GoalWithProgress = {
-        ...goal,
-        id: `temp-${Date.now()}`, // Use a temporary ID that will be replaced after saving to backend
-        progress: 0,
-        totalTasks: 0,
-        completedTasks: 0
-      };
-
-      // Store the goal locally instead of sending to backend immediately
-      setNewGoal(tempGoal);
-      setIsAddGoalModalOpen(false);
-      setIsScaffoldingOpen(true);
-
-      console.log('Created temporary goal:', tempGoal);
-    } catch (error) {
-      console.error('Error creating temporary goal:', error);
-      toast.error('Failed to create goal. Please try again.');
-    }
-  };
-
-  const handleScaffoldingSave = async (tasks: Task[], subtasks: Subtask[]) => {
-    try {
-      console.log('Tasks saved from scaffolding:', tasks);
-      console.log('Subtasks saved from scaffolding:', subtasks);
-
-      setIsSubmitting(true);
-
-      if (!newGoal) {
-        throw new Error('No goal data available');
-      }
-
-      // Now save the goal to the backend along with tasks and subtasks
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
       const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
         method: 'POST',
@@ -133,9 +100,11 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
-          goal_descr: newGoal.title,
-          due_date: newGoal.targetDate,
-          skip_default_task: true // Skip creating the default task since we'll add tasks explicitly
+          goal_descr: goal.title,
+          due_date: goal.targetDate,
+          workMinutesPerDay: goal.workMinutesPerDay,
+          frequency: goal.frequency === 'custom' ? goal.customScheduleDays ?? [] : goal.frequency,
+          skip_default_task: true
         })
       });
 
@@ -144,101 +113,43 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         throw new Error(errorData.error || 'Failed to create goal');
       }
 
-      const savedGoal = await response.json();
-      console.log('Saved goal response:', savedGoal);
-
-      const goalId = savedGoal[0].goal_id;
-
-      // Now save tasks and subtasks
-      const tasksData = tasks.map(task => {
-        const taskSubtasks = subtasks.filter(subtask => subtask.taskId === task.id);
-        console.log(`Task ${task.id} (${task.name}) has ${taskSubtasks.length} subtasks:`, taskSubtasks);
-
-        return {
-          task_title: task.name,
-          task_descr: '',
-          scheduledDate: task.scheduledDate,
-          completed: task.completed,
-          subtasks: taskSubtasks.map(subtask => ({
-            subtask_descr: subtask.name,
-            subtask_type: subtask.type,
-            subtask_completed: subtask.completed,
-            subtask_order: subtask.subtask_order ?? 0
-          }))
-        };
-      });
-
-      console.log('Sending tasks to backend:', { tasks: tasksData });
-      console.log('Original tasks:', tasks);
-      console.log('Original subtasks:', subtasks);
-
-      const tasksResponse = await fetch(`${api}/api/goals/${goalId}/save-tasks`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ tasks: tasksData })
-      });
-
-      if (!tasksResponse.ok) {
-        const errorData = await tasksResponse.json();
-        console.error('Error saving tasks:', errorData);
-        throw new Error(errorData.error || 'Failed to save tasks');
-      }
-
-      setIsScaffoldingOpen(false);
-      setNewGoal(null);
-
-      // Refetch goals from the backend to ensure data consistency
+      // Refetch goals to update UI
       setLoading(true);
       const fetchResponse = await fetch(`${api}/api/courses/${courseId}/goals`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-
       if (!fetchResponse.ok) {
-        throw new Error('Failed to fetch goals after save');
+        throw new Error('Failed to fetch goals after creation');
       }
-
       const data = await fetchResponse.json();
-      console.log('Goals data after save:', data);
-
-      // Transform backend data to match frontend types
       const transformedGoals: GoalWithProgress[] = data.map((goal: any) => {
-        console.log('Processing goal from API:', goal);
         return {
-          id: goal.goal_id || goal.id, // Handle both ID formats
+          id: goal.goal_id || goal.id,
           courseId: courseId,
           title: goal.goal_descr,
-          targetDate: goal.due_date || new Date().toISOString(),
-          workMinutesPerDay: 60, // Default value
-          frequency: 'daily', // Default value
+          targetDate: formatDate(goal.due_date || new Date().toISOString()),
+          workMinutesPerDay: goal.workMinutesPerDay,
+          frequency: goal.frequency,
           createdAt: goal.created_at,
           updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0,
-          completed: goal.goal_completed || false
+          completed: goal.goal_completed || false,
+          customScheduledDays: goal.customScheduleDays // Assuming backend sends this
         };
       });
-
       setGoals(transformedGoals);
-      toast.success('Study plan created successfully!');
+      toast.success('Goal created successfully!');
     } catch (error) {
-      console.error('Error saving goal with tasks:', error);
-      toast.error('Failed to save study plan. Please try again.');
+      console.error('Error creating goal:', error);
+      toast.error('Failed to create goal. Please try again.');
     } finally {
       setIsSubmitting(false);
       setLoading(false);
     }
-  };
-
-  const handleScaffoldingBack = () => {
-    // Simply close the scaffolding screen and reset the new goal
-    setIsScaffoldingOpen(false);
-    setNewGoal(null);
   };
 
   const handleGoalUpdated = async (updatedGoal: GoalWithProgress) => {
@@ -285,14 +196,15 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           courseId: courseId,
           title: goal.goal_descr,
           targetDate: goal.due_date || new Date().toISOString(),
-          workMinutesPerDay: 60, // Default value
-          frequency: 'daily', // Default value
+          workMinutesPerDay: goal.workMinutesPerDay, // Default value
+          frequency: goal.frequency, // Default value
           createdAt: goal.created_at,
           updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0,
-          completed: goal.goal_completed || false
+          completed: goal.goal_completed || false,
+          customScheduledDays: goal.customScheduleDays // Assuming backend sends this
         };
       });
 
@@ -348,14 +260,15 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           courseId: courseId,
           title: goal.goal_descr,
           targetDate: goal.due_date || new Date().toISOString(),
-          workMinutesPerDay: 60, // Default value
-          frequency: 'daily', // Default value
+          workMinutesPerDay: goal.workMinutesPerDay, // Default value
+          frequency: goal.frequency, // Default value
           createdAt: goal.created_at,
           updatedAt: goal.updated_at,
           progress: goal.progress || 0,
           totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0,
-          completed: goal.goal_completed || false
+          completed: goal.goal_completed || false,
+          customScheduledDays: goal.customScheduleDays // Assuming backend sends this
         };
       });
 
@@ -389,8 +302,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         courseId: courseId,
         title: goal.goal_descr,
         targetDate: goal.due_date || new Date().toISOString(),
-        workMinutesPerDay: 60,
-        frequency: 'daily',
+        workMinutesPerDay: goal.workMinutesPerDay,
+        frequency: goal.frequency,
         createdAt: goal.created_at,
         updatedAt: goal.updated_at,
         progress: goal.progress || 0,
@@ -450,28 +363,14 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
       completed: false
     };
 
-    setNewGoal(newGoalFromPlan);
-    setIsScaffoldingOpen(true);
-    setGeneratedStudyPlan(null);
+    setGoals(prev => [...prev, newGoalFromPlan]);
+    toast.success('Study plan created successfully!');
   };
 
   const handleRegenerateStudyPlan = () => {
     setGeneratedStudyPlan(null);
     setShowAIGenerator(true);
   };
-
-  if (isScaffoldingOpen && newGoal) {
-    return (
-      <>
-        <Toaster position="top-right" />
-        <TaskScaffoldingScreen
-          goal={newGoal}
-          onBack={handleScaffoldingBack}
-          onSave={handleScaffoldingSave}
-        />
-      </>
-    );
-  }
 
   return (
     <div className="space-y-6">

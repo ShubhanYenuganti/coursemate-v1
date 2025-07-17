@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Target, Calendar, Clock, Repeat } from 'lucide-react';
 import { Goal, GoalWithProgress } from './types';
 import { Portal } from '../../../../components/Portal';
@@ -12,15 +12,23 @@ interface AddGoalModalProps {
 }
 
 const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, onGoalAdded }) => {
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     title: '',
     targetDate: '',
     workMinutesPerDay: 60,
     frequency: 'daily' as 'daily' | 'weekly' | 'custom',
     customScheduleDays: [] as number[]
-  });
-
+  };
+  const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Reset form when modal is closed or opened
+  useEffect(() => {
+    if (!isOpen) {
+      setFormData(initialFormData);
+      setErrors({});
+    }
+  }, [isOpen]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -103,8 +111,10 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
       completedTasks: 0,
       completed: false
     };
-
+    console.log('[AddGoalModal] Submitting goalWithProgress:', goalWithProgress);
     onGoalAdded(goalWithProgress);
+    setFormData(initialFormData);
+    setErrors({});
   };
 
   const handleCustomDayToggle = (dayNumber: number) => {

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle, Circle, Clock, BookOpen, Brain, Target, FileText, Zap, Trash2, Edit, Plus, AlertTriangle } from 'lucide-react';
 import { Subtask } from './types';
 import { toast } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 interface SubtaskListProps {
   taskId: string;
@@ -11,11 +12,15 @@ interface SubtaskListProps {
   onSubtaskAdded?: (subtask: Subtask) => void;
   onSubtaskToggled?: (subtaskId: string, completed: boolean) => void;
   taskDueDate: string;
+  taskName?: string; // Add taskName prop
+  goalId?: string; // Add goalId prop
+  courseId?: string; // Add courseId prop
 }
 
-const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDeleted, onSubtaskAdded, onSubtaskToggled, taskDueDate }) => {
+const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDeleted, onSubtaskAdded, onSubtaskToggled, taskDueDate, taskName, goalId, courseId }) => {
   const [localSubtasks, setLocalSubtasks] = useState<Subtask[]>(subtasks);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const router = useRouter();
 
   // Update local subtasks when props change and maintain order
   useEffect(() => {
@@ -214,8 +219,8 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
           subtask_descr: newSubtaskName,
           subtask_type: newSubtaskType,
           subtask_completed: false,
-          subtask_order: localSubtasks.length > 0 ? Math.max(...localSubtasks.map(s => s.subtask_order ?? 0)) + 1 : 0,
-          task_due_date: taskDueDate
+          subtask_order: localSubtasks.length > 0 ? Math.max(...localSubtasks.map(s => s.subtask_order ?? 0)) + 1 : 0
+          // Don't send task_due_date - let backend use placeholder row's task_due_date
         })
       });
 
@@ -494,7 +499,19 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ taskId, subtasks, onSubtaskDe
         </div>
       ) : (
         <button
-          onClick={() => setIsAddingSubtask(true)}
+          onClick={() => {
+            // Convert ISO date to YYYY-MM-DD format for URL parameter
+            const dueDateForUrl = taskDueDate ? new Date(taskDueDate).toISOString().split('T')[0] : '';
+            
+            const params = new URLSearchParams({
+              addSubtaskForTask: taskId,
+              taskDueDate: dueDateForUrl,
+              taskName: encodeURIComponent(taskName || 'Task'),
+              goalId: goalId || '',
+              courseId: courseId || '',
+            });
+            router.push(`/calendar?${params.toString()}`);
+          }}
           className="mt-2 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
         >
           <Plus className="w-3 h-3" />

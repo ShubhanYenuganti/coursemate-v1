@@ -243,6 +243,8 @@ def create_goal(course_id):
         # Create a new goal with initial task and subtask
         goal_descr = data['goal_descr']
         due_date = datetime.fromisoformat(data['due_date']) if 'due_date' in data and data['due_date'] else None
+        workMinutesPerDay = data['workMinutesPerDay'] if 'workMinutesPerDay' in data and data['workMinutesPerDay'] else None
+        frequency = data['frequency'] if 'frequency' in data and data['frequency'] else None
         skip_default_task = data.get('skip_default_task', False)
         
         # Generate IDs
@@ -273,7 +275,9 @@ def create_goal(course_id):
                             subtask_id=str(uuid.uuid4()),
                             subtask_descr=subtask_data.get('subtask_descr', 'New Subtask'),
                             subtask_type=subtask_data.get('subtask_type', 'other'),
-                            subtask_order=subtask_data.get('subtask_order', None)
+                            subtask_order=subtask_data.get('subtask_order', None),
+                            workMinutesPerDay=workMinutesPerDay,
+                            frequency=frequency
                         )
                         rows_to_add.append(subtask)
                 else:
@@ -290,7 +294,9 @@ def create_goal(course_id):
                         subtask_id=str(uuid.uuid4()),
                         subtask_descr='Default Subtask',
                         subtask_type='other',
-                        subtask_order=0
+                        subtask_order=0,
+                        workMinutesPerDay=workMinutesPerDay,
+                        frequency=frequency
                     )
                     rows_to_add.append(subtask)
         elif not skip_default_task:
@@ -299,7 +305,7 @@ def create_goal(course_id):
                 user_id=user_id,
                 course_id=course_combo_id,
                 goal_descr=goal_descr,
-                due_date=due_date
+                due_date=due_date,
             )
             rows_to_add.append(new_goal)
         else:
@@ -315,7 +321,9 @@ def create_goal(course_id):
                 task_descr='',
                 subtask_id='placeholder',
                 subtask_descr='',
-                subtask_type='other'
+                subtask_type='other',
+                workMinutesPerDay=workMinutesPerDay,
+                frequency=frequency
             )
             rows_to_add.append(placeholder_goal)
         
@@ -868,10 +876,9 @@ def save_tasks_and_subtasks(goal_id):
                     db.session.add(subtask)
                     new_rows.append(subtask)
             else:
-                # Create a default subtask if none provided
-                current_app.logger.info(f"No subtasks provided for task: {task_title}, creating default")
-                
-                subtask = Goal(
+                # Create a placeholder row for a task with no subtasks
+                current_app.logger.info(f"No subtasks provided for task: {task_title}, creating placeholder row")
+                placeholder = Goal(
                     user_id=user_id,
                     course_id=reference_goal.course_id,
                     goal_id=goal_id,
@@ -882,15 +889,15 @@ def save_tasks_and_subtasks(goal_id):
                     task_title=task_title,
                     task_descr=task_descr,
                     task_completed=task_completed,
-                    subtask_id=str(uuid.uuid4()),
-                    subtask_descr='Default Subtask',
+                    subtask_id='placeholder',
+                    subtask_descr='',
                     subtask_type='other',
                     subtask_completed=False,
                     task_due_date=task_due_date,
                     subtask_order=0
                 )
-                db.session.add(subtask)
-                new_rows.append(subtask)
+                db.session.add(placeholder)
+                new_rows.append(placeholder)
         
         db.session.commit()
         
@@ -1152,7 +1159,15 @@ def create_subtask(task_id):
         
         # Handle task_due_date - use the one from request if provided, otherwise use task's due_date
         task_due_date = None
-        if 'task_due_date' in data and data['task_due_date']:
+        
+        # First, try to get the task_due_date from the placeholder row for this task
+        placeholder_row = Goal.query.filter_by(task_id=task_id, user_id=user_id, subtask_id='placeholder').first()
+        if placeholder_row and placeholder_row.task_due_date:
+            task_due_date = placeholder_row.task_due_date
+            print(f"Using task_due_date from placeholder row: {task_due_date}")
+        
+        # If no placeholder row or no task_due_date in placeholder, use the request data
+        if not task_due_date and 'task_due_date' in data and data['task_due_date']:
             try:
                 if isinstance(data['task_due_date'], str):
                     # Handle different date formats
@@ -1166,7 +1181,9 @@ def create_subtask(task_id):
             except Exception as e:
                 current_app.logger.error(f"Error parsing task_due_date: {data['task_due_date']}, error: {e}")
                 task_due_date = task_row.task_due_date if hasattr(task_row, 'task_due_date') and task_row.task_due_date else task_row.due_date
-        else:
+        
+        # If still no task_due_date, use the task's due_date
+        if not task_due_date:
             task_due_date = task_row.task_due_date if hasattr(task_row, 'task_due_date') and task_row.task_due_date else task_row.due_date
         
         # Get all existing subtask orders for this task
