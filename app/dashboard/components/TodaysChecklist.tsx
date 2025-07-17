@@ -66,30 +66,41 @@ const TodaysChecklist: React.FC = () => {
     fetchUserCourses();
   }, []);
 
-  // Fetch tasks based on selected filter
+  // Replace the old fetchTasks useEffect with a new one that calls the backend checklist endpoint
   useEffect(() => {
-    const fetchTasks = async () => {
+    const fetchChecklistTasks = async () => {
       setIsLoading(true);
       try {
-        const apiTasks = await taskService.getTasks('all');
-        const transformedTasks: Task[] = apiTasks.map(task => ({
-          id: task.id,
-          title: task.title,
-          course: task.course,
-          dueDate: task.due_date,
-          completed: task.completed,
-          color: task.color,
-          time: format(parseISO(task.due_date), 'MMM d'),
-        }));
+        const apiTasks = await taskService.getChecklistTasks(selectedFilter);
+        const transformedTasks: Task[] = apiTasks.map(task => {
+          const t = task as any;
+          // Try to get the course title from userCourses
+          let courseTitle = t.course || t.course_id || '';
+          if (t.course_id && userCourses.length > 0) {
+            const found = userCourses.find(c => c.id === t.course_id || c.combo_id === t.course_id);
+            if (found && found.title) {
+              courseTitle = found.title;
+            }
+          }
+          return {
+            id: t.id || t.task_id || '',
+            title: t.title || t.task_title || '',
+            course: courseTitle,
+            dueDate: t.due_date || t.task_due_date || '',
+            completed: t.completed || t.task_completed || false,
+            color: t.color || t.google_calendar_color || '',
+            time: (t.due_date || t.task_due_date) ? format(parseISO(t.due_date || t.task_due_date), 'MMM d') : '',
+          };
+        });
         setTasks(transformedTasks);
       } catch (error) {
-        console.error('❌ Failed to fetch tasks:', error);
+        console.error('❌ Failed to fetch checklist tasks:', error);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchTasks();
-  }, []);
+    fetchChecklistTasks();
+  }, [selectedFilter]);
 
   const filteredCourses = userCourses.filter(course =>
     course.title.toLowerCase().includes(courseSearchTerm.toLowerCase()) ||
@@ -241,16 +252,27 @@ const TodaysChecklist: React.FC = () => {
   const refreshTasks = async () => {
     try {
       console.log('🔄 Refreshing tasks...');
-      const apiTasks = await taskService.getTasks('all');
-      const transformedTasks: Task[] = apiTasks.map(task => ({
-        id: task.id,
-        title: task.title,
-        course: task.course,
-        dueDate: task.due_date,
-        completed: task.completed,
-        color: task.color,
-        time: format(parseISO(task.due_date), 'MMM d'),
-      }));
+      const apiTasks = await taskService.getChecklistTasks(selectedFilter);
+      const transformedTasks: Task[] = apiTasks.map(task => {
+        const t = task as any;
+        // Try to get the course title from userCourses
+        let courseTitle = t.course || t.course_id || '';
+        if (t.course_id && userCourses.length > 0) {
+          const found = userCourses.find(c => c.id === t.course_id || c.combo_id === t.course_id);
+          if (found && found.title) {
+            courseTitle = found.title;
+          }
+        }
+        return {
+          id: t.id || t.task_id || '',
+          title: t.title || t.task_title || '',
+          course: courseTitle,
+          dueDate: t.due_date || t.task_due_date || '',
+          completed: t.completed || t.task_completed || false,
+          color: t.color || t.google_calendar_color || '',
+          time: (t.due_date || t.task_due_date) ? format(parseISO(t.due_date || t.task_due_date), 'MMM d') : '',
+        };
+      });
       setTasks(transformedTasks);
       console.log('✅ Tasks refreshed:', transformedTasks);
     } catch (error) {
@@ -258,8 +280,25 @@ const TodaysChecklist: React.FC = () => {
     }
   };
 
+  // Limit the number of tasks shown
+  const MAX_TASKS = 6;
+  const visibleTasks = filteredTasks.slice(0, MAX_TASKS);
+  const hasMoreTasks = filteredTasks.length > MAX_TASKS;
+
+  // Helper for due date formatting
+  const getDueDateLabel = (dueDate: string) => {
+    if (!dueDate) return '';
+    const due = parseISO(dueDate);
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+    if (isToday(due)) return 'Today';
+    if (due.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+    return format(due, 'MMM d');
+  };
+
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-md border-l-4 border-emerald-500 min-h-[340px] flex flex-col justify-between" style={{height: '356px'}}>
+    <div className="bg-white rounded-2xl p-6 shadow-md border border-gray-100 min-h-[340px] flex flex-col justify-start" style={{height: '460px', paddingTop: '18px'}}>
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-bold text-gray-800 tracking-tight">Checklist</h2>
@@ -285,35 +324,59 @@ const TodaysChecklist: React.FC = () => {
         </div>
       </div>
       {/* Checklist Content */}
-      <div className="flex-1 flex flex-col justify-center items-center">
+      <div className="flex-1 flex flex-col justify-start items-stretch overflow-y-auto" style={{minHeight: '220px', paddingTop: 0}}>
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-8">
             <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
             <p className="text-gray-600">Loading tasks...</p>
           </div>
-        ) : filteredTasks.length === 0 ? (
+        ) : visibleTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8">
             <span className="text-3xl mb-2">📅</span>
             <p className="text-gray-500 text-center">No {selectedFilter === 'today' ? "today's" : selectedFilter} tasks.<br />Time to relax or plan ahead!</p>
           </div>
         ) : (
-          <ul className="w-full space-y-3">
-            {filteredTasks.map(task => (
-              <li key={task.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2 shadow-sm hover:shadow-md transition-all">
+          <ul className="w-full space-y-2">
+            {visibleTasks.map(task => (
+              <li
+                key={task.id}
+                className="flex items-center bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2 gap-2 group hover:shadow-md transition-all relative"
+              >
                 <input
                   type="checkbox"
                   checked={task.completed}
                   onChange={() => handleTaskToggle(task.id, !task.completed)}
-                  className="accent-emerald-500 w-5 h-5 rounded border border-gray-300 hover:scale-110 transition-transform duration-150"
+                  className="accent-emerald-500 w-4 h-4 rounded border border-gray-300 mr-3"
+                  style={{ marginTop: 0 }}
                 />
-                <div className="flex-1">
-                  <div className={`font-medium text-gray-800 text-sm ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
-                  <div className="text-xs text-gray-500">{task.course} • {task.time}</div>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <div className={`font-bold text-gray-800 text-sm truncate ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
+                  <div className="text-xs text-gray-500 truncate max-w-[120px]">{task.course}</div>
+                </div>
+                <div className="flex flex-col items-end justify-center min-w-[48px]">
+                  <span className="text-xs text-gray-400 font-medium">{getDueDateLabel(task.dueDate)}</span>
                 </div>
               </li>
             ))}
           </ul>
         )}
+      </div>
+      {/* Divider */}
+      <div className="my-4 border-t border-gray-200"></div>
+      {/* Bottom area: more tasks indicator and Go to Calendar button */}
+      <div className="flex flex-row items-end justify-between w-full pt-0 pb-3" style={{ minHeight: 40 }}>
+        <div className="flex-1">
+          {hasMoreTasks && (
+            <div className="text-xs text-gray-400">+{filteredTasks.length - MAX_TASKS} more tasks in calendar</div>
+          )}
+        </div>
+        <a
+          href="/calendar"
+          className="inline-block px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow transition-colors text-sm ml-2"
+          style={{ minWidth: 130 }}
+        >
+          Go to Calendar
+        </a>
       </div>
     </div>
   );

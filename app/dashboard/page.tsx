@@ -9,6 +9,7 @@ import AnalyticsCards from "./components/summary-cards";
 import CourseTasksModal from "./components/CourseTasksModal";
 import { courseService, CourseData } from "../../lib/api/courseService";
 import useAuthRedirect from "@/hooks/useAuthRedirect"
+import { QuickAccess } from "./components/quick-access";
 
 const Dashboard = () => {
   const router = useRouter();
@@ -146,17 +147,19 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="bg-gray-50 font-sans flex flex-col">
-      {/* Main dashboard area */}
-      <div className="flex-1 p-6 flex flex-col gap-6 max-w-7xl mx-auto w-full justify-center">
-        {/* Top row: left (analytics+courses), right (checklist) */}
-        <div className="flex flex-row gap-6 w-full" style={{minHeight: '360px', maxHeight: '420px'}}>
-          {/* Left column: vertical stack */}
-          <div className="flex flex-col gap-6 flex-[2_2_0%] min-w-0">
-            <section className="rounded-2xl shadow-md bg-indigo-100 p-4 border-l-4 border-indigo-400 flex-1 min-h-[80px] max-h-[120px]">
-              <AnalyticsCards />
-            </section>
-            <section className="rounded-2xl shadow-md bg-blue-100 p-7 border-l-4 border-blue-400 flex-1 min-h-[160px] max-h-[200px]">
+    <div className="bg-[#F8F9FB] font-sans w-full">
+      <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col gap-6">
+        {/* Analytics Cards Row */}
+        <section className="w-full bg-indigo-100 rounded-2xl shadow p-4 flex flex-row gap-6 items-center mb-1">
+          <div className="flex-1">
+            <AnalyticsCards />
+          </div>
+        </section>
+        {/* Main Content Row: Left (My Courses + Recent Activity), Right (Checklist) */}
+        <div className="flex flex-row gap-6 w-full items-stretch">
+          {/* Left column: My Courses + Recent Activity */}
+          <div className="flex flex-col gap-6 flex-1 min-w-0" style={{ minWidth: 0 }}>
+            <div>
               <MyCourses
                 courses={userCourses.map((course, index) => convertToMyCoursesFormat(course, index))}
                 isLoading={isLoadingCourses}
@@ -164,22 +167,19 @@ const Dashboard = () => {
                 onViewCourse={handleViewCourse}
                 onContinueCourse={handleContinueCourse}
               />
+            </div>
+            <section className="flex-1 flex flex-col justify-end min-h-[120px]">
+              <CommunityActivity />
             </section>
           </div>
-          {/* Right column: Checklist, matches height of left column */}
-          <aside className="flex flex-col flex-[1.1_1.1_0%] min-w-[320px] max-w-[400px] h-full">
-            <section className="rounded-2xl shadow-md bg-emerald-100 p-7 border-l-4 border-emerald-400 flex-1 h-full min-h-[340px] max-h-[400px] flex flex-col justify-between">
-              <ChecklistWidget
-                onTaskToggle={handleTaskToggle}
-                onAddTask={() => {console.log('Add Task')}}
-              />
-            </section>
-          </aside>
+          {/* Right column: Checklist */}
+          <section className="" style={{height: '510px', width: '477.29px'}}>
+            <ChecklistWidget
+              onTaskToggle={handleTaskToggle}
+              onAddTask={() => {console.log('Add Task')}}
+            />
+          </section>
         </div>
-        {/* Recent Activity: full width at the bottom, with top margin for spacing */}
-        <section className="rounded-2xl shadow-md bg-purple-100 p-4 border-l-4 border-purple-400 w-full">
-          <CommunityActivity />
-        </section>
       </div>
       {/* Course Tasks Modal */}
       {selectedCourse && (

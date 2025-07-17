@@ -96,6 +96,9 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   const router = useRouter();
   const { socket } = useSocket();
   const [page, setPage] = useState(0);
+  const [showModal, setShowModal] = useState(false);
+  const activitiesToShow = activities.length > 0 ? activities : [...messageActivities, ...notificationActivities];
+  const visibleActivities = activitiesToShow.slice(0, 2);
 
   // Fetch recent messages and convert them to activities
   useEffect(() => {
@@ -394,63 +397,104 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
     }
   };
 
+  const pastelAvatarColors = ['bg-[#E0D7FB]', 'bg-[#D0E7FB]', 'bg-[#D0FBE7]'];
+
   return (
-    <div className="w-full group relative bg-purple-50 rounded-2xl shadow-md p-4">
-      <h2 className="text-lg font-bold text-gray-800 mb-3 px-2">Recent Activity</h2>
-      {/* Left Arrow */}
-      {page > 0 && (
+    <div className="bg-indigo-100 w-full rounded-2xl shadow-lg border border-[#ECE6FA] bg-[#F3F0FF] flex flex-col justify-center min-h-[180px] max-h-[220px] p-0 relative">
+      <div className="flex flex-row items-center justify-between px-6 pt-4 pb-1">
+        <h2 className="text-base font-bold text-gray-800">Recent Activity</h2>
         <button
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-purple-200 border border-purple-300"
-          style={{ pointerEvents: 'auto' }}
-          onClick={() => setPage(page - 1)}
+          className="text-gray-400 hover:text-gray-700 text-xl px-2 py-1 rounded transition"
+          aria-label="Show all recent activity"
+          onClick={() => setShowModal(true)}
         >
-          <ChevronLeft className="w-6 h-6 text-purple-600" />
+          &#8230;
         </button>
-      )}
-      {/* Right Arrow */}
-      {page < totalPages - 1 && (
-        <button
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-purple-200 border border-purple-300"
-          style={{ pointerEvents: 'auto' }}
-          onClick={() => setPage(page + 1)}
-        >
-          <ChevronRight className="w-6 h-6 text-purple-600" />
-        </button>
-      )}
-      <div className="flex gap-4 overflow-x-hidden pb-2 px-2 hide-scrollbar min-h-[120px]">
-        {paginatedActivities.length === 0 ? (
-          <div className="flex items-center justify-center text-gray-400 w-full h-24">
+      </div>
+      <div className="flex flex-col gap-0.5 px-6 pb-4 h-full items-start">
+        {visibleActivities.length === 0 ? (
+          <div className="flex items-center justify-center text-gray-400 w-full h-20">
             <span className="text-2xl">🕒</span>
             <span className="ml-2">No recent activity</span>
           </div>
         ) : (
-          paginatedActivities.map((activity) => (
-            <div
-              key={activity.id}
-              className="min-w-[180px] max-w-[210px] h-[110px] bg-white rounded-xl shadow-md border border-gray-100 flex flex-col items-center p-3 hover:shadow-lg transition-all duration-200 cursor-pointer relative group"
-            >
-              {/* Accent dot */}
-              <div className="absolute left-2 top-2 w-3 h-3 rounded-full bg-purple-300 group-hover:bg-purple-500 transition-colors"></div>
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-base font-bold text-indigo-600">
+          visibleActivities.map((activity, idx, arr) => {
+            const avatarBg = pastelAvatarColors[idx % pastelAvatarColors.length];
+            return (
+              <div key={activity.id} className="flex flex-row items-start w-full gap-3 py-1.5 relative">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-[#6C4AB6] text-sm shadow ${avatarBg}`}
+                  style={{ fontFamily: 'Inter, sans-serif' }}
+                >
                   {activity.avatar}
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs text-gray-500">{activity.time}</span>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <span className="text-[11px] text-gray-300 mb-0.5">{activity.time}</span>
+                  <div className="text-[15px] text-gray-900 font-bold truncate">
+                    {activity.user && <span className="font-bold text-gray-900">{activity.user}</span>}
+                    {activity.action && <span className="font-normal text-gray-700 ml-1">{activity.action}</span>}
+                    {activity.target && <span className="font-medium text-blue-600 ml-1 underline cursor-pointer">{activity.target}</span>}
+                  </div>
+                  {activity.content && (
+                    <div className="text-xs text-gray-500 truncate mt-0.5">{activity.content}</div>
+                  )}
                 </div>
+                {/* Divider except for last item */}
+                {idx < arr.length - 1 && <div className="absolute left-11 right-0 bottom-0 border-b border-[#ECE6FA]" />}
               </div>
-              <div className="text-xs text-gray-700 text-center mb-0.5 font-semibold" style={{fontFamily: 'Inter, sans-serif'}}>
-                {activity.user} <span className="font-normal">{activity.action}</span>
-              </div>
-              {activity.content && (
-                <div className="text-xs text-gray-500 text-center italic mb-0.5">
-                  {activity.content}
-                </div>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </div>
+      {/* Modal for all activities */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">All Recent Activity</h2>
+              <button
+                className="text-gray-400 hover:text-gray-700 text-2xl px-2 py-1 rounded transition"
+                aria-label="Close activity modal"
+                onClick={() => setShowModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-2">
+              {activitiesToShow.length === 0 ? (
+                <div className="flex items-center justify-center text-gray-400 w-full h-20">
+                  <span className="text-2xl">🕒</span>
+                  <span className="ml-2">No recent activity</span>
+                </div>
+              ) : (
+                activitiesToShow.map((activity, idx) => {
+                  const avatarColors = ['bg-purple-400', 'bg-blue-400', 'bg-green-400'];
+                  const avatarBg = avatarColors[idx % avatarColors.length];
+                  return (
+                    <div key={activity.id} className="flex flex-row items-start w-full gap-3 py-2">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm shadow ${avatarBg}`}
+                        style={{ fontFamily: 'Inter, sans-serif' }}
+                      >
+                        {activity.avatar}
+                      </div>
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <span className="text-xs text-gray-400 mb-0.5">{activity.time}</span>
+                        <div className="text-sm text-gray-900 font-semibold truncate">
+                          {activity.user && <span className="font-semibold text-gray-900">{activity.user}</span>}
+                          {activity.action && <span className="font-normal text-gray-700 ml-1">{activity.action}</span>}
+                          {activity.target && <span className="font-medium text-blue-600 ml-1 underline cursor-pointer">{activity.target}</span>}
+                        </div>
+                        {activity.content && (
+                          <div className="text-xs text-gray-500 truncate mt-0.5">{activity.content}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

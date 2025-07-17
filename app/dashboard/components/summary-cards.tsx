@@ -45,7 +45,7 @@ const AnalyticsCards: React.FC<AnalyticsCardsProps> = ({ analyticsData = [] }) =
       {dataToDisplay.map((item) => (
         <div
           key={item.id}
-          className={`rounded-xl p-4 h-24 flex items-center gap-4 ${item.bgGradient}`}
+          className={`rounded-xl p-4 h-24 flex items-center gap-4 ${item.bgGradient} shadow-lg`}
         >
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20">
             {item.icon}
