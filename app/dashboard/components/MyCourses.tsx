@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { courseService } from '../../../lib/api/courseService';
 
 export interface Course {
   id: number;
@@ -22,6 +23,13 @@ interface MyCoursesProps {
   onContinueCourse?: (course: Course) => void;
 }
 
+const getProgressColor = (progress: number) => {
+  if (progress === 100) return 'bg-green-500';
+  if (progress >= 80) return 'bg-green-400';
+  if (progress >= 50) return 'bg-yellow-400';
+  return 'bg-red-400';
+};
+
 const MyCourses: React.FC<MyCoursesProps> = ({
   courses = [],
   isLoading = false,
@@ -29,6 +37,64 @@ const MyCourses: React.FC<MyCoursesProps> = ({
   onViewCourse,
   onContinueCourse,
 }) => {
+  const [progressMap, setProgressMap] = useState<{ [courseId: string]: { progress: number, total: number, completed: number } }>({});
+
+  useEffect(() => {
+    const fetchProgress = async () => {
+      const newMap: { [courseId: string]: { progress: number, total: number, completed: number } } = {};
+      await Promise.all(
+        courses.map(async (course) => {
+          try {
+            console.log(`Processing course: ${course.name} (ID: ${course.dbId || course.id})`);
+            // Use the dbId as the courseId for API
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/courses/${course.dbId}/goals`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+            });
+            if (!res.ok) return;
+            const goals = await res.json();
+            console.log(`  Goals for course ${course.name}:`, goals);
+            let total = 0;
+            let completed = 0;
+            // For each goal, fetch all tasks and aggregate subtasks
+            await Promise.all(
+              goals.map(async (goal: any) => {
+                // Fetch all tasks for this goal
+                const tasksRes = await fetch(`/api/goals/${goal.goal_id}/tasks`, {
+                  headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json',
+                  },
+                  credentials: 'include',
+                });
+                if (!tasksRes.ok) return;
+                const tasks = await tasksRes.json();
+                console.log(`    Tasks for goal ${goal.goal_descr} (${goal.goal_id}):`, tasks);
+                tasks.forEach((task: any) => {
+                  // Each task row is a subtask row
+                  total += 1;
+                  if (task.subtask_completed) completed += 1;
+                });
+              })
+            );
+            const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+            console.log(`  Course: ${course.name} | Total subtasks: ${total}, Completed: ${completed}, Progress: ${progress}%`);
+            newMap[course.dbId || course.id] = { progress, total, completed };
+          } catch (e) {
+            // fallback: 0 progress
+            newMap[course.dbId || course.id] = { progress: 0, total: 0, completed: 0 };
+          }
+        })
+      );
+      setProgressMap(newMap);
+    };
+    if (courses.length > 0) fetchProgress();
+  }, [courses]);
+
   const coursesToDisplay = courses;
 
   const handleViewDetails = (course: Course) => {
@@ -72,37 +138,41 @@ const MyCourses: React.FC<MyCoursesProps> = ({
               </button>
             </div>
           ) : (
-            coursesToDisplay.map((course) => (
-              <div
-                key={course.id}
-                className="bg-white rounded-2xl shadow flex flex-col items-start border border-gray-100 hover:shadow-lg transition-all duration-200 p-4 min-h-[120px]"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              >
-                <div className="w-full h-10 rounded-lg mb-2 overflow-hidden flex items-center justify-center bg-gray-100">
-                  {course.banner ? (
-                    <img src={course.banner} alt={course.name} className="object-cover w-full h-full" />
-                  ) : (
-                    <span className="text-2xl">{course.icon}</span>
-                  )}
-                </div>
-                <div className="mb-1 w-full">
-                  <div className="font-bold text-gray-800 text-base leading-tight mb-0.5 truncate">{course.name}</div>
-                  <div className="text-xs text-gray-500 mb-1 truncate">{course.professor} | {course.schedule}</div>
-                  {/* Progress Bar */}
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
-                    <div
-                      className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300"
-                    ></div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onContinueCourse && onContinueCourse(course)}
-                  className="mt-auto w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-1.5 rounded-lg transition-colors duration-150 text-sm"
+            coursesToDisplay.map((course) => {
+              const progressData = progressMap[course.dbId || course.id] || { progress: 0, total: 0, completed: 0 };
+              return (
+                <div
+                  key={course.id}
+                  className="bg-white rounded-2xl shadow flex flex-col items-start border border-gray-100 hover:shadow-lg transition-all duration-200 p-4 min-h-[120px]"
+                  style={{ fontFamily: 'Inter, sans-serif' }}
                 >
-                  Enter Course
-                </button>
-              </div>
-            ))
+                  <div className="w-full h-10 rounded-lg mb-2 overflow-hidden flex items-center justify-center bg-gray-100">
+                    {course.banner ? (
+                      <img src={course.banner} alt={course.name} className="object-cover w-full h-full" />
+                    ) : (
+                      <span className="text-2xl">{course.icon}</span>
+                    )}
+                  </div>
+                  <div className="mb-1 w-full">
+                    <div className="font-bold text-gray-800 text-base leading-tight mb-0.5 truncate">{course.name}</div>
+                    <div className="text-xs text-gray-500 mb-1 truncate">{course.professor} | {course.schedule}</div>
+                    {/* Progress Bar */}
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
+                      <div
+                        className={`h-1.5 rounded-full transition-all duration-300 ${getProgressColor(progressData.progress)}`}
+                        style={{ width: `${progressData.progress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onContinueCourse && onContinueCourse(course)}
+                    className="mt-auto w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-1.5 rounded-lg transition-colors duration-150 text-sm"
+                  >
+                    Enter Course
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
       )}

@@ -13,6 +13,8 @@ export interface Task {
   completed: boolean;
   dueDate: string;
   color?: string;
+  courseId?: string;
+  goalId?: string;
 }
 
 const FILTERS = [
@@ -68,31 +70,38 @@ const TodaysChecklist: React.FC = () => {
 
   // Replace the old fetchTasks useEffect with a new one that calls the backend checklist endpoint
   useEffect(() => {
+    if (userCourses.length === 0) return;
     const fetchChecklistTasks = async () => {
       setIsLoading(true);
       try {
         const apiTasks = await taskService.getChecklistTasks(selectedFilter);
-        const transformedTasks: Task[] = apiTasks.map(task => {
+        // Deduplicate tasks by composite key (task_title + course_id + goal_id)
+        const taskMap = new Map();
+        apiTasks.forEach(task => {
           const t = task as any;
-          // Try to get the course title from userCourses
-          let courseTitle = t.course || t.course_id || '';
-          if (t.course_id && userCourses.length > 0) {
-            const found = userCourses.find(c => c.id === t.course_id || c.combo_id === t.course_id);
-            if (found && found.title) {
-              courseTitle = found.title;
+          const compositeKey = `${t.title || t.task_title || ''}_${t.course_id || ''}_${t.goal_id || ''}`;
+          if (!taskMap.has(compositeKey)) {
+            let courseTitle = t.course || t.course_id || '';
+            if (t.course_id && userCourses.length > 0) {
+              const found = userCourses.find(c => c.id === t.course_id || c.combo_id === t.course_id);
+              if (found && found.title) {
+                courseTitle = found.title;
+              }
             }
+            taskMap.set(compositeKey, {
+              id: t.id || t.task_id || compositeKey,
+              title: t.title || t.task_title || '',
+              course: courseTitle,
+              dueDate: t.due_date || t.task_due_date || '',
+              completed: t.completed || t.task_completed || false,
+              color: t.color || t.google_calendar_color || '',
+              time: (t.due_date || t.task_due_date) ? format(parseISO(t.due_date || t.task_due_date), 'MMM d') : '',
+              courseId: t.course_id && typeof t.course_id === 'string' && t.course_id.includes('+') ? t.course_id.split('+')[0] : t.course_id,
+              goalId: t.goal_id,
+            });
           }
-          return {
-            id: t.id || t.task_id || '',
-            title: t.title || t.task_title || '',
-            course: courseTitle,
-            dueDate: t.due_date || t.task_due_date || '',
-            completed: t.completed || t.task_completed || false,
-            color: t.color || t.google_calendar_color || '',
-            time: (t.due_date || t.task_due_date) ? format(parseISO(t.due_date || t.task_due_date), 'MMM d') : '',
-          };
         });
-        setTasks(transformedTasks);
+        setTasks(Array.from(taskMap.values()));
       } catch (error) {
         console.error('❌ Failed to fetch checklist tasks:', error);
       } finally {
@@ -100,7 +109,7 @@ const TodaysChecklist: React.FC = () => {
       }
     };
     fetchChecklistTasks();
-  }, [selectedFilter]);
+  }, [selectedFilter, userCourses]);
 
   const filteredCourses = userCourses.filter(course =>
     course.title.toLowerCase().includes(courseSearchTerm.toLowerCase()) ||
@@ -281,7 +290,7 @@ const TodaysChecklist: React.FC = () => {
   };
 
   // Limit the number of tasks shown
-  const MAX_TASKS = 6;
+  const MAX_TASKS = 5;
   const visibleTasks = filteredTasks.slice(0, MAX_TASKS);
   const hasMoreTasks = filteredTasks.length > MAX_TASKS;
 
@@ -342,13 +351,15 @@ const TodaysChecklist: React.FC = () => {
                 key={task.id}
                 className="flex items-center bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2 gap-2 group hover:shadow-md transition-all relative"
               >
-                <input
-                  type="checkbox"
-                  checked={task.completed}
-                  onChange={() => handleTaskToggle(task.id, !task.completed)}
-                  className="accent-emerald-500 w-4 h-4 rounded border border-gray-300 mr-3"
-                  style={{ marginTop: 0 }}
-                />
+                {/* Play button links to studyplan tab and goal */}
+                <a
+                  href={`/courses/${task.courseId}?tab=study&goal=${task.goalId}`}
+                  className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-700 text-white mr-3 shadow"
+                  title="Go to Study Plan"
+                  style={{ minWidth: 24, minHeight: 24 }}
+                >
+                  <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20" className="lucide lucide-play"><polygon points="5,3 19,12 5,21" /></svg>
+                </a>
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
                   <div className={`font-bold text-gray-800 text-sm truncate ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
                   <div className="text-xs text-gray-500 truncate max-w-[120px]">{task.course}</div>
@@ -372,7 +383,7 @@ const TodaysChecklist: React.FC = () => {
         </div>
         <a
           href="/calendar"
-          className="inline-block px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow transition-colors text-sm ml-2"
+          className="inline-block px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow transition-colors text-sm ml-2 mt-2"
           style={{ minWidth: 130 }}
         >
           Go to Calendar

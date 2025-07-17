@@ -66,21 +66,16 @@ const Dashboard = () => {
       try {
         setIsLoadingCourses(true);
         const courses = await courseService.getCourses();
-        
-        // Filter courses to only show those accessed in the last 24 hours
-        const twentyFourHoursAgo = new Date();
-        twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
-        
-        const recentlyAccessedCourses = courses.filter(course => {
-          // Exclude Google Calendar courses
-          if (course.id && course.id.startsWith('google-calendar')) return false;
-          
-          if (!course.last_accessed) return false;
-          const lastAccessed = new Date(course.last_accessed);
-          return lastAccessed >= twentyFourHoursAgo;
+
+        // Filter out Google Calendar courses
+        const filtered = courses.filter(course => !(course.id && course.id.startsWith('google-calendar')));
+        // Sort by created_at descending and take the last 2 created courses
+        const sorted = [...filtered].sort((a, b) => {
+          const aDate = new Date(a.created_at || 0).getTime();
+          const bDate = new Date(b.created_at || 0).getTime();
+          return bDate - aDate;
         });
-        
-        setUserCourses(recentlyAccessedCourses);
+        setUserCourses(sorted.slice(0, 2));
       } catch (error) {
         console.error('Failed to fetch user courses:', error);
       } finally {

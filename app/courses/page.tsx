@@ -93,6 +93,56 @@ const CoursesPage = () => {
     loadCourses();
   }, [showArchived, searchTerm, selectedSemester, sortBy]);
 
+  // After loading courses, aggregate progress for each course
+  useEffect(() => {
+    if (!courses.length) return;
+    const fetchAllProgress = async () => {
+      const updatedCourses = await Promise.all(
+        courses.map(async (course) => {
+          try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/courses/${course.id}/goals`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+            });
+            if (!res.ok) return { ...course, daily_progress: 0 };
+            const goals = await res.json();
+            let total = 0;
+            let completed = 0;
+            await Promise.all(
+              goals.map(async (goal: any) => {
+                const tasksRes = await fetch(`/api/goals/${goal.goal_id}/tasks`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  credentials: 'include',
+                });
+                if (!tasksRes.ok) return;
+                const tasks = await tasksRes.json();
+                tasks.forEach((task: any) => {
+                  // Each task row is a subtask row
+                  total += 1;
+                  if (task.subtask_completed) completed += 1;
+                });
+              })
+            );
+            const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+            return { ...course, daily_progress: progress };
+          } catch (e) {
+            return { ...course, daily_progress: 0 };
+          }
+        })
+      );
+      setCourses(updatedCourses);
+    };
+    fetchAllProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courses.length]);
+
   const togglePin = async (courseId: string) => {
     try {
       await courseService.togglePin(courseId);
