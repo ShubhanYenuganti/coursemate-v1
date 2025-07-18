@@ -316,6 +316,14 @@ export function CalendarScheduler() {
   const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
   const [highlightSubtaskId, setHighlightSubtaskId] = useState<string | null>(null);
 
+  const [showRescheduleTaskModal, setShowRescheduleTaskModal] = useState(false);
+  const [rescheduleTaskDueDate, setRescheduleTaskDueDate] = useState<string>('');
+  const [rescheduleTaskSubtasks, setRescheduleTaskSubtasks] = useState<any[]>([]);
+  const latestSubtaskEnd = rescheduleTaskSubtasks.length > 0
+    ? new Date(Math.max(...rescheduleTaskSubtasks.map((sub: any) => sub.end_time ? new Date(sub.end_time).getTime() : 0)))
+    : null;
+  const minDueDate = latestSubtaskEnd ? latestSubtaskEnd.toISOString().split('T')[0] : undefined;
+
   /** Edit Subtask Modal */
   const [showEditSubtaskModal, setShowEditSubtaskModal] = useState(false);
   const [editSubtaskData, setEditSubtaskData] = useState<any>(null);
@@ -1138,6 +1146,67 @@ export function CalendarScheduler() {
       setNewSubtaskDescr('');
       setNewSubtaskTypeForAdd('other');
       setNewSubtaskTime(15);
+    }
+  };
+
+  // Add this handler inside CalendarScheduler:
+  const handleRescheduleTaskSave = async () => {
+    // Use the first subtask as a fallback if viewSubtaskModal.subtask is null
+    const subtask = viewSubtaskModal?.subtask || rescheduleTaskSubtasks[0];
+    if (!subtask) return;
+    const taskId = subtask.task_id;
+    const goalId = subtask.goal_id;
+    const token = localStorage.getItem('token');
+    if (!token) return toast.error('Not logged in');
+    try {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5173';
+      const payload = {
+        tasks: [{
+          task_id: taskId,
+          task_due_date: rescheduleTaskDueDate,
+        }],
+        bypass: false
+      };
+      const res = await fetch(`${api}/api/goals/${goalId}/tasks`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.conflicting_subtasks) {
+        // Find descriptions for conflicting subtasks
+        const descs = rescheduleTaskSubtasks
+          .filter((sub: any) => data.conflicting_subtasks.includes(sub.subtask_id))
+          .map((sub: any) => sub.subtask_descr || sub.subtask_id);
+        alert('Conflicting subtasks: ' + descs.join(', '));
+      } else {
+        setShowRescheduleTaskModal(false);
+        // Refresh goals data
+        try {
+          const res = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          const grouped: Record<string, any[]> = await res.json();
+          const filteredGrouped: Record<string, any[]> = {};
+          Object.keys(grouped).forEach((key: string) => {
+            filteredGrouped[key] = grouped[key].filter((goal: any) => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc: Record<string, any[]>, k: string) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, any[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) {
+          console.error('fetchGoals error', err);
+        }
+        toast.success('Task due date updated');
+      }
+    } catch (err) {
+      toast.error('Failed to update task due date');
     }
   };
 
@@ -3354,7 +3423,7 @@ export function CalendarScheduler() {
                 <div className="flex items-center gap-2">
                   <GripVertical className="w-4 h-4 text-gray-400" />
                   <CardTitle className="text-lg truncate">
-                    {selectedGoal.goal_id !== "Google Calendar" ? "Edit Task" : "Google Calendar Event"}
+                    {selectedGoal.goal_id !== "Google Calendar" ? "View Task" : "Google Calendar Event"}
                   </CardTitle>
                   {selectedGoal.goal_id !== "Google Calendar" && (
                     <button
@@ -3987,7 +4056,7 @@ export function CalendarScheduler() {
                         </div>
                         {/* Warning icon if is_conflicting, now to the left of the trash icon */}
                         {currentSubtask.is_conflicting === true && (
-                          <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{minWidth: '24px'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                          <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ minWidth: '24px' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
                         )}
                         <button
                           onClick={(e) => {
@@ -4360,10 +4429,10 @@ export function CalendarScheduler() {
                     <GripVertical className="w-4 h-4 text-gray-400" />
                     <CardTitle className="text-lg truncate">
                       <span className={`px-2 py-1 rounded text-sm font-medium ${calculateSubtaskStatus(viewSubtaskModal.subtask) === "Completed"
-                          ? "bg-green-100 text-green-800"
-                          : calculateSubtaskStatus(viewSubtaskModal.subtask) === "Overdue"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-yellow-100 text-yellow-800"
+                        ? "bg-green-100 text-green-800"
+                        : calculateSubtaskStatus(viewSubtaskModal.subtask) === "Overdue"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
                         }`}>
                         {calculateSubtaskStatus(viewSubtaskModal.subtask)}
                       </span>
@@ -4415,7 +4484,23 @@ export function CalendarScheduler() {
                         <div className="flex gap-2 mt-1">
                           <button
                             className="px-3 py-1 rounded bg-blue-100 text-blue-700 text-xs font-semibold hover:bg-blue-200 transition-colors"
-                            onClick={() => { console.log('Change Task Due Date clicked'); }}
+                            onClick={() => {
+                              if (viewSubtaskModal.subtask) {
+                                // Find all subtasks for this task
+                                const allGoals = Object.values(goalsByDate).flat();
+                                const taskSubtasks = allGoals.filter((g: any) => g.task_id === viewSubtaskModal.subtask!.task_id);
+                                setRescheduleTaskSubtasks(taskSubtasks);
+                                const minDueDate = taskSubtasks.length > 0
+                                  ? new Date(Math.max(...taskSubtasks.map((sub: any) => sub.end_time ? new Date(sub.end_time).getTime() : 0))).toISOString().split('T')[0]
+                                  : undefined;
+                                let initialDueDate = (viewSubtaskModal.subtask!.task_due_date || viewSubtaskModal.subtask!.due_date || '').split('T')[0];
+                                if (minDueDate && (!initialDueDate || initialDueDate < minDueDate)) {
+                                  initialDueDate = minDueDate;
+                                }
+                                setRescheduleTaskDueDate(initialDueDate);
+                                setShowRescheduleTaskModal(true);
+                              }
+                            }}
                           >
                             Change Task Due Date
                           </button>
@@ -4857,6 +4942,63 @@ export function CalendarScheduler() {
           </div>
         </div>
       )}
+      {/* Reschedule Task Modal */}
+      {showRescheduleTaskModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Reschedule Task</h2>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={rescheduleTaskDueDate}
+                  min={minDueDate}
+                  onChange={e => setRescheduleTaskDueDate(e.target.value)}
+                />
+              </div>
+              {minDueDate && rescheduleTaskDueDate && rescheduleTaskDueDate < minDueDate && (
+                <div className="text-xs text-red-600 mt-1">Due date cannot be before the latest subtask end time.</div>
+              )}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subtasks</label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {rescheduleTaskSubtasks.map((sub, idx) => (
+                    <div key={sub.subtask_id || idx} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">{sub.subtask_descr || `Subtask ${idx + 1}`}</div>
+                        <div className="text-xs text-gray-600">
+                          {sub.start_time && sub.end_time ?
+                            `${new Date(sub.start_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })} - ${new Date(sub.end_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`
+                            : 'No time scheduled'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end mt-6">
+                <button
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => setShowRescheduleTaskModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  type="button"
+                  disabled={!!(minDueDate && rescheduleTaskDueDate && rescheduleTaskDueDate < minDueDate)}
+                  onClick={handleRescheduleTaskSave}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
