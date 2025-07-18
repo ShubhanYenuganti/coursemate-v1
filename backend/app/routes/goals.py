@@ -7,7 +7,7 @@ from app.models.course import Course
 from app.init import db
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import SQLAlchemyError
-from app.routes.calendar import sync_task_to_google_calendar, delete_task_from_google_calendar
+from app.routes.calendar import delete_task_from_google_calendar, sync_subtask_to_google_calendar
 from app.models.user import User
 import threading
 import queue
@@ -60,39 +60,37 @@ def background_sync_worker():
                                 print(f"Skipping sync for user {user_id}: no Google access token")
                                 continue
                                 
-                            task = None
-                            max_retries = 3
-                            retry_delay = 0.3  # 300ms between retries
+                            # Get all subtasks for this task
+                            subtasks = Goal.query.filter_by(task_id=task_id, user_id=user_id).all()
+                            if not subtasks:
+                                print(f"No subtasks found for task {task_id}, skipping sync")
+                                continue
                             
-                            for attempt in range(max_retries):
-                                task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
-                                if task:
-                                    break
-                                elif attempt < max_retries - 1:
-                                    print(f"Task {task_id} not found on attempt {attempt + 1}, retrying in {retry_delay}s...")
-                                    time.sleep(retry_delay)
+                            course = Course.query.get(course_id) if course_id else None
+                            course_title = course.title if course else str(course_id) if course_id else "CourseMate Tasks"
+                            
+                            print(f"Processing background sync: {action} for task {task_id} with {len(subtasks)} subtasks")
+                            
+                            if action == "sync":
+                                # Add a small delay to allow for automatic subtask creation
+                                # This is especially important when syncing after subtask deletion
+                                time.sleep(0.2)  # 200ms delay
+                                
+                                # Refresh subtask data to get the latest state including any auto-created subtasks
+                                subtasks = Goal.query.filter_by(task_id=task_id, user_id=user_id).all()
+                                if subtasks:
+                                    print(f"🔄 Starting Google Calendar sync for task {task_id} with {len(subtasks)} subtasks")
+                                    # Sync each subtask as an individual event
+                                    success_count = 0
+                                    for subtask in subtasks:
+                                        if subtask.start_time and subtask.end_time:  # Only sync subtasks with timing
+                                            if sync_subtask_to_google_calendar(user, subtask, course_title):
+                                                success_count += 1
+                                        else:
+                                            print(f"⚠️  Skipping subtask {subtask.subtask_id}: No start/end times")
+                                    print(f"✅ Google Calendar sync completed for task {task_id}: {success_count}/{len(subtasks)} subtasks synced")
                                 else:
-                                    print(f"Task {task_id} not found after {max_retries} attempts, skipping sync")
-                                    break
-                            
-                            if task:
-                                course = Course.query.get(course_id) if course_id else None
-                                course_title = course.title if course else str(course_id) if course_id else "CourseMate Tasks"
-                                
-                                print(f"Processing background sync: {action} for task {task_id}")
-                                
-                                if action == "sync":
-                                    # Add a small delay to allow for automatic subtask creation
-                                    # This is especially important when syncing after subtask deletion
-                                    time.sleep(0.2)  # 200ms delay
-                                    
-                                    # Refresh task data to get the latest state including any auto-created subtasks
-                                    task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
-                                    if task:
-                                        sync_task_to_google_calendar(user, task, course_title)
-                                        print(f"Sync completed for task {task_id}")
-                                    else:
-                                        print(f"Task {task_id} no longer exists after delay, skipping sync")
+                                    print(f"⚠️  Task {task_id} no longer exists after delay, skipping sync")
                     except Exception as e:
                         print(f"Background sync failed for task {task_id}: {str(e)}")
                     finally:
@@ -333,13 +331,6 @@ def create_goal(course_id):
         
         db.session.commit()
         
-        # Queue Google Calendar sync for any tasks created (excluding placeholders)
-        if rows_to_add:
-            # Get unique task IDs from created rows (excluding placeholders)
-            task_ids = set(row.task_id for row in rows_to_add if row.task_id != 'placeholder')
-            for task_id in task_ids:
-                queue_google_calendar_sync("sync", user_id, task_id, course_id)
-        
         # Return the created rows
         result = [row.to_dict() for row in rows_to_add]
         return jsonify(result), 201
@@ -515,13 +506,6 @@ def update_goal(goal_id):
                 g.goal_completed = all_tasks_completed
         
         db.session.commit()
-        
-        # Queue Google Calendar sync for all tasks in this goal if due_date changed
-        if 'due_date' in data:
-            # Get all unique task IDs for this goal (excluding placeholders)
-            task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
-            for task_id in task_ids:
-                queue_google_calendar_sync("sync", user_id, task_id, goals[0].course_id)
         
         # Get the updated rows
         updated_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
@@ -702,19 +686,34 @@ def update_goal_tasks(goal_id):
                                 if isinstance(task_data['task_due_date'], str):
                                     # Handle different date formats
                                     if 'T' in task_data['task_due_date']:
-                                        task_row.task_due_date = datetime.fromisoformat(task_data['task_due_date'].replace('Z', '+00:00'))
+                                        task_due_date = datetime.fromisoformat(task_data['task_due_date'].replace('Z', '+00:00'))
                                     else:
                                         # Assume YYYY-MM-DD format
-                                        task_row.task_due_date = datetime.fromisoformat(task_data['task_due_date'] + 'T00:00:00')
+                                        task_due_date = datetime.fromisoformat(task_data['task_due_date'] + 'T00:00:00')
                                 else:
-                                    task_row.task_due_date = task_data['task_due_date']
-                                print(f"Updated task_due_date for task {task_id}: {task_row.task_due_date}")
+                                    task_due_date = task_data['task_due_date']
+                                task_row.task_due_date = task_due_date
                             except Exception as e:
                                 current_app.logger.error(f"Error parsing task_due_date: {task_data['task_due_date']}, error: {e}")
                                 # Keep existing value if parsing fails
                         else:
                             task_row.task_due_date = None
                             print(f"Set task_due_date to None for task {task_id}")
+                        # Update all subtasks for this task with the new task_due_date
+                        subtasks = Goal.query.filter_by(task_id=task_id, user_id=user_id).all()
+                        for subtask in subtasks:
+                            subtask.task_due_date = task_row.task_due_date
+                            subtask.updated_at = datetime.utcnow()
+                        
+                        # Now that all subtasks are updated, queue Google Calendar sync
+                        for subtask in subtasks:
+                            if subtask.start_time and subtask.end_time:
+                                queue_google_calendar_sync("sync", user_id, subtask.task_id, subtask.course_id)
+                                print(f"🔄 Queued Google Calendar sync for subtask {subtask.subtask_id}")
+                            else:
+                                print(f"⚠️  Skipping Google Calendar sync for subtask {subtask.subtask_id}: No start/end times")
+                        
+                        print(f"🔄 Queued Google Calendar sync for {len([s for s in subtasks if s.start_time and s.end_time])} subtasks")
                     if 'task_descr' in task_data:
                         task_row.task_descr = task_data['task_descr']
                 
@@ -812,39 +811,39 @@ def update_goal_tasks(goal_id):
                         subtask_order=0
                     )
                     db.session.add(new_subtask)
-            
-            # Instead of deleting tasks that weren't in the update, we'll keep them
-            # This allows for incremental additions without losing existing data
-            
-            # After all updates, check if ALL tasks for the goal are completed (excluding placeholders)
-            all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
-            all_tasks_completed = True if all_task_ids else False
-            for tid in all_task_ids:
-                task_rows = [g for g in goals if g.task_id == tid]
-                if not all(g.task_completed for g in task_rows):
-                    all_tasks_completed = False
-                    break
-            for g in goals:
-                g.goal_completed = all_tasks_completed
-        
-        db.session.commit()
-        
-        # Queue Google Calendar sync for all updated tasks
-        updated_task_ids = set()
-        for task_data in data['tasks']:
-            task_id = task_data.get('task_id')
-            if task_id and task_id in existing_task_ids:
-                updated_task_ids.add(task_id)
-        
-        # Sync all updated tasks to Google Calendar
-        for task_id in updated_task_ids:
-            queue_google_calendar_sync("sync", user_id, task_id, goals[0].course_id)
-        
-        # Get the updated rows
-        updated_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
-        result = [goal.to_dict() for goal in updated_goals]
-        
-        return jsonify(result), 200
+                
+                # Instead of deleting tasks that weren't in the update, we'll keep them
+                # This allows for incremental additions without losing existing data
+                
+                # After all updates, check if ALL tasks for the goal are completed (excluding placeholders)
+                all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
+                all_tasks_completed = True if all_task_ids else False
+                for tid in all_task_ids:
+                    task_rows = [g for g in goals if g.task_id == tid]
+                    if not all(g.task_completed for g in task_rows):
+                        all_tasks_completed = False
+                        break
+                for g in goals:
+                    g.goal_completed = all_tasks_completed
+                
+                db.session.commit()
+                
+                # Queue Google Calendar sync for all updated tasks
+                updated_task_ids = set()
+                for task_data in data['tasks']:
+                    task_id = task_data.get('task_id')
+                    if task_id and task_id in existing_task_ids:
+                        updated_task_ids.add(task_id)
+                
+                # Sync all updated tasks to Google Calendar
+                for task_id in updated_task_ids:
+                    queue_google_calendar_sync("sync", user_id, task_id, goals[0].course_id)
+                
+                # Get the updated rows
+                updated_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
+                result = [goal.to_dict() for goal in updated_goals]
+                
+                return jsonify(result), 200
         
     except SQLAlchemyError as e:
         db.session.rollback()
@@ -949,14 +948,9 @@ def save_tasks_and_subtasks(goal_id):
         
         db.session.commit()
         
-        # Queue Google Calendar sync for all created tasks in background
-        if new_rows:
-            # Get unique task IDs to avoid syncing the same task multiple times
-            unique_task_ids = set(row.task_id for row in new_rows)
-            for task_id in unique_task_ids:
-                queue_google_calendar_sync("sync", user_id, task_id, reference_goal.course_id)
-        
-        return jsonify([row.to_dict() for row in new_rows]), 201
+        # Return the created rows
+        result = [row.to_dict() for row in new_rows]
+        return jsonify(result), 201
         
     except SQLAlchemyError as e:
         db.session.rollback()
@@ -987,10 +981,11 @@ def delete_task(goal_id, task_id):
             return jsonify({'error': 'Task not found or you do not have access'}), 404
         
         # Delete from Google Calendar if the task has a Google Calendar event
-        # Queue deletion in background instead of doing it synchronously
+        # Queue deletion of all subtask events for this task
         for row in task_rows:
             if row.google_event_id and row.sync_status == "Synced":
                 queue_google_calendar_sync("delete", user_id, row.task_id, row.course_id, row.google_event_id)
+                print(f"🔄 Queued Google Calendar deletion for task {task_id}")
                 break  # Only need to delete once since it's the same event
         
         # Delete all rows for this task
@@ -1038,12 +1033,10 @@ def delete_subtask(subtask_id):
         reindex_subtasks(task_id, user_id)
         db.session.commit()
         
-        # Always sync to Google Calendar to update the event
-        # This handles both cases:
-        # 1. If subtasks remain, sync with remaining subtasks
-        # 2. If no subtasks remain and a "Default Subtask" is automatically created, 
-        #    sync will include the new default subtask
-        queue_google_calendar_sync("sync", user_id, task_id, subtask.course_id)
+        # Queue the specific subtask event deletion from Google Calendar
+        if subtask.google_event_id and subtask.sync_status == "Synced":
+            queue_google_calendar_sync("delete", user_id, subtask.task_id, subtask.course_id, subtask.google_event_id)
+            print(f"🔄 Queued Google Calendar deletion for subtask {subtask.subtask_id}")
         
         # Return success immediately - Google Calendar sync will happen in background
         return jsonify({
@@ -1155,8 +1148,12 @@ def update_subtask(subtask_id):
         subtask.updated_at = datetime.utcnow()
         db.session.commit()
         
-        # Queue Google Calendar sync in background
-        queue_google_calendar_sync("sync", user_id, subtask.task_id, subtask.course_id)
+        # Now that the subtask is updated, queue Google Calendar sync
+        if subtask.start_time and subtask.end_time:
+            queue_google_calendar_sync("sync", user_id, subtask.task_id, subtask.course_id)
+            print(f"🔄 Queued Google Calendar sync for updated subtask {subtask.subtask_id}")
+        else:
+            print(f"⚠️  Skipping Google Calendar sync for subtask {subtask.subtask_id}: No start/end times")
         
         # Return success immediately - Google Calendar sync will happen in background
         return jsonify({
@@ -1304,8 +1301,12 @@ def create_subtask(task_id):
         db.session.add(new_subtask)
         db.session.commit()
         
-        # Queue Google Calendar sync in background
-        queue_google_calendar_sync("sync", user_id, new_subtask.task_id, new_subtask.course_id)
+        # Now that the subtask is saved, queue Google Calendar sync
+        if new_subtask.start_time and new_subtask.end_time:
+            queue_google_calendar_sync("sync", user_id, new_subtask.task_id, new_subtask.course_id)
+            print(f"🔄 Queued Google Calendar sync for new subtask {new_subtask.subtask_id}")
+        else:
+            print(f"⚠️  Skipping Google Calendar sync for subtask {new_subtask.subtask_id}: No start/end times")
         
         # Return success immediately - Google Calendar sync will happen in background
         return jsonify({
@@ -1373,8 +1374,6 @@ def create_empty_task(goal_id):
         db.session.add(new_task)
         db.session.commit()
         
-        # Queue Google Calendar sync in background
-        queue_google_calendar_sync("sync", user_id, new_task.task_id, new_task.course_id)
         
         # Return success immediately - Google Calendar sync will happen in background
         return jsonify({
@@ -1653,9 +1652,15 @@ def create_task(goal_id):
 
         db.session.commit()
         
-        # Queue Google Calendar sync in background
-        if created_rows:
-            queue_google_calendar_sync("sync", user_id, task_id, ref_goal.course_id)
+        # Now that all subtasks are saved, queue Google Calendar sync
+        for subtask in created_rows:
+            if subtask.start_time and subtask.end_time:
+                queue_google_calendar_sync("sync", user_id, subtask.task_id, subtask.course_id)
+                print(f"🔄 Queued Google Calendar sync for subtask {subtask.subtask_id}")
+            else:
+                print(f"⚠️  Skipping Google Calendar sync for subtask {subtask.subtask_id}: No start/end times")
+        
+        print(f"🔄 Queued Google Calendar sync for {len([s for s in created_rows if s.start_time and s.end_time])} subtasks")
         
         # Return success immediately - Google Calendar sync will happen in background
         return jsonify({

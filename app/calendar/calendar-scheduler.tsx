@@ -1204,6 +1204,40 @@ export function CalendarScheduler() {
           console.error('fetchGoals error', err);
         }
         toast.success('Task due date updated');
+        // In handleRescheduleTaskSave, after a successful update_goal_tasks and before refreshing goals:
+        if (!data.conflicting_subtasks) {
+          // Greedily remove the conflict flag in the main calendar state
+          setGoalsByDate(prev => {
+            const updated = { ...prev };
+            Object.keys(updated).forEach(dateKey => {
+              updated[dateKey] = updated[dateKey].map((goal: any) =>
+                rescheduleTaskSubtasks.some((sub: any) => sub.subtask_id === goal.subtask_id)
+                  ? { ...goal, is_conflicting: false }
+                  : goal
+              );
+            });
+            return updated;
+          });
+          // Optionally also update rescheduleTaskSubtasks for modal consistency
+          setRescheduleTaskSubtasks(prev => prev.map((sub: any) => ({ ...sub, is_conflicting: false })));
+          // Update each subtask with bypass_due_date: false
+          for (const sub of rescheduleTaskSubtasks) {
+            await fetch(`${api}/api/goals/tasks/subtasks/${sub.subtask_id}`, {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                subtask_descr: sub.subtask_descr,
+                subtask_type: sub.subtask_type,
+                subtask_start_time: sub.start_time,
+                subtask_end_time: sub.end_time,
+                bypass_due_date: false
+              })
+            });
+          }
+        }
       }
     } catch (err) {
       toast.error('Failed to update task due date');

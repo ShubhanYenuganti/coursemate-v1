@@ -13,6 +13,9 @@ from datetime import timezone
 from app.models.course import Course
 from sqlalchemy import asc
 import requests
+import pytz
+from typing import Optional
+import uuid
 
 calendar_bp = Blueprint('calendar', __name__)
 oauth = OAuth()
@@ -88,13 +91,17 @@ def calendar_callback():
 
 # Helper: Refresh token if expired
 def refresh_google_token(user: User):
+    """Refresh Google OAuth access token using refresh token"""
     if not user.google_refresh_token:
-        print(f"No refresh token found for user {user.id}")
+        print(f"❌ No refresh token found for user {user.id}")
         raise ValueError("No refresh token found")
     
     if user.token_expiry and user.token_expiry > datetime.now(timezone.utc):
+        print(f"✅ Token still valid for user {user.id}, expiry: {user.token_expiry}")
         return # Token is still valid
 
+    print(f"🔄 Refreshing token for user {user.id}")
+    
     # Token is expired, refresh it
     token_url = "https://oauth2.googleapis.com/token"
     data = {
@@ -104,17 +111,49 @@ def refresh_google_token(user: User):
         "grant_type": "refresh_token"
     }
 
-    response = requests.post(token_url, data=data)
-    if response.status_code != 200:
-        print(f"Failed to refresh token for user {user.id}: {response.status_code}")
-        raise ValueError("Failed to refresh token")
-    
-    new_token = response.json()
-    user.google_access_token = new_token["access_token"]
-    user.token_expiry = (datetime.now(timezone.utc)
-                        + timedelta(seconds=new_token["expires_in"]))
-    db.session.commit()
-    print(f"Successfully refreshed token for user {user.id}")
+    try:
+        response = requests.post(token_url, data=data)
+        print(f"🔍 Token refresh response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            new_token = response.json()
+            user.google_access_token = new_token["access_token"]
+            user.token_expiry = (datetime.now(timezone.utc)
+                                + timedelta(seconds=new_token["expires_in"]))
+            db.session.commit()
+            print(f"✅ Successfully refreshed token for user {user.id}")
+        else:
+            error_data = response.json() if response.content else {}
+            error_message = error_data.get('error_description', error_data.get('error', 'Unknown error'))
+            print(f"❌ Failed to refresh token for user {user.id}: {response.status_code}")
+            print(f"❌ Error details: {error_message}")
+            print(f"❌ Response content: {response.text}")
+            
+            # Handle specific error cases
+            if response.status_code == 400:
+                if 'invalid_grant' in error_message.lower():
+                    print(f"⚠️  Invalid grant - user {user.id} needs to re-authenticate")
+                    # Clear the invalid refresh token
+                    user.google_refresh_token = None
+                    user.google_access_token = None
+                    user.token_expiry = None
+                    db.session.commit()
+                    raise ValueError("Invalid grant - user needs to re-authenticate")
+                elif 'invalid_client' in error_message.lower():
+                    print(f"⚠️  Invalid client credentials for user {user.id}")
+                    raise ValueError("Invalid client credentials")
+                else:
+                    print(f"⚠️  Unknown 400 error for user {user.id}: {error_message}")
+                    raise ValueError(f"Token refresh failed: {error_message}")
+            else:
+                raise ValueError(f"Token refresh failed with status {response.status_code}: {error_message}")
+                
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Network error during token refresh for user {user.id}: {str(e)}")
+        raise ValueError(f"Network error during token refresh: {str(e)}")
+    except Exception as e:
+        print(f"❌ Unexpected error during token refresh for user {user.id}: {str(e)}")
+        raise ValueError(f"Unexpected error during token refresh: {str(e)}")
     
     
 def sync_google_events(user: User, full_sync: bool = True):
@@ -331,11 +370,16 @@ def convert_google_event_to_goal(user_id, course_id, event, calendar_name, calen
     )
 
 def ensure_google_calendar_course(user) -> str:
+    """Ensure a Google Calendar course exists for the user and return its combo_id"""
     stub_id = f"google-calendar-{user.id}"
-    course = Course.query.get(stub_id)
-    if course is None:                                  # create once
+    
+    # Check if course already exists by combo_id
+    course = Course.query.filter_by(combo_id=stub_id, user_id=user.id).first()
+    if course is None:
+        # Create the Google Calendar course
         course = Course(
-            id=stub_id,
+            combo_id=stub_id,  # Use combo_id as primary key
+            id=str(uuid.uuid4()),  # Generate a unique id
             user_id=user.id,
             title="Google Calendar",
             subject="External",
@@ -347,6 +391,10 @@ def ensure_google_calendar_course(user) -> str:
         )
         db.session.add(course)
         db.session.commit()
+        print(f"✅ Created Google Calendar course with combo_id: {stub_id}")
+    else:
+        print(f"✅ Found existing Google Calendar course with combo_id: {stub_id}")
+    
     return stub_id
 
 def get_or_create_calendar(service, cal_name):
@@ -369,15 +417,174 @@ def get_or_create_calendar(service, cal_name):
     ).execute()
     return new_cal["id"]
 
-def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = None):
+def sync_subtask_to_google_calendar(user: User, subtask: Goal, course_title: Optional[str] = None):
     """
-    Sync a task to Google Calendar. If the task already has a google_event_id,
-    update the existing event. Otherwise, create a new event.
+    Sync a subtask to Google Calendar as an individual event. 
+    Each subtask gets its own event with the subtask description as the title.
     """
     try:
-        refresh_google_token(user)
+        print(f"🔄 Starting Google Calendar sync for subtask {subtask.subtask_id} (Task: {subtask.task_title})")
+        
+        try:
+            refresh_google_token(user)
+        except ValueError as e:
+            if "needs to re-authenticate" in str(e):
+                print(f"❌ User {user.id} needs to re-authenticate with Google Calendar")
+                return False
+            elif "Invalid client credentials" in str(e):
+                print(f"❌ Invalid Google OAuth client credentials")
+                return False
+            else:
+                print(f"❌ Token refresh failed: {str(e)}")
+                return False
+        
         if not user.google_access_token:
-            current_app.logger.warning("No Google access token for user %s", user.id)
+            print(f"❌ No Google access token for user {user.id}")
+            return False
+        
+        # Get course title if not provided
+        if not course_title:
+            # Try to find the course by combo_id first, then by id
+            course = Course.query.filter_by(combo_id=subtask.course_id, user_id=user.id).first()
+            if not course:
+                # Fallback to searching by id
+                course = Course.query.filter_by(id=subtask.course_id, user_id=user.id).first()
+            
+            if course:
+                course_title = course.title
+            else:
+                print(f"⚠️  Course not found for course_id: {subtask.course_id}, using fallback title")
+                course_title = f"Course {subtask.course_id}"
+        
+        # Convert UTC times to local timezone for Google Calendar
+        local_tz = pytz.timezone('America/New_York')  # Default timezone
+        
+        if not subtask.start_time or not subtask.end_time:
+            print(f"⚠️  Skipping subtask {subtask.subtask_id}: No start/end times")
+            return False
+        
+        # Convert UTC to local time
+        start_time_local = subtask.start_time.replace(tzinfo=timezone.utc).astimezone(local_tz)
+        end_time_local = subtask.end_time.replace(tzinfo=timezone.utc).astimezone(local_tz)
+        
+        # Format for Google Calendar API
+        start_time_str = start_time_local.isoformat()
+        end_time_str = end_time_local.isoformat()
+        
+        # Create event description with task due date, goal, and course info
+        description_parts = []
+        if subtask.task_due_date:
+            task_due_str = subtask.task_due_date.strftime('%Y-%m-%d')
+            description_parts.append(f"Task Due: {task_due_str}")
+        if subtask.goal_descr:
+            description_parts.append(f"Goal: {subtask.goal_descr}")
+        if course_title:
+            description_parts.append(f"Course: {course_title}")
+        
+        event_description = "\n".join(description_parts) if description_parts else "CourseMate Task"
+        
+        # Build credentials and service
+        credentials = Credentials(
+            token=user.google_access_token,
+            refresh_token=user.google_refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=current_app.config["GOOGLE_CLIENT_ID"],
+            client_secret=current_app.config["GOOGLE_CLIENT_SECRET"],
+            scopes=["https://www.googleapis.com/auth/calendar"]
+        )
+        
+        service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
+        
+        # Get or create calendar for this course
+        calendar_id = get_or_create_calendar(service, course_title)
+        
+        # Check if event already exists
+        existing_event = None
+        if subtask.google_event_id:
+            try:
+                existing_event = service.events().get(
+                    calendarId=calendar_id,
+                    eventId=subtask.google_event_id
+                ).execute()
+            except HttpError as e:
+                if e.resp.status == 404:
+                    print(f"⚠️  Event {subtask.google_event_id} not found, will create new")
+                    existing_event = None
+                else:
+                    raise
+        
+        # Prepare event data
+        event_data = {
+            'summary': subtask.subtask_descr,
+            'description': event_description,
+            'start': {
+                'dateTime': start_time_str,
+                'timeZone': str(local_tz)
+            },
+            'end': {
+                'dateTime': end_time_str,
+                'timeZone': str(local_tz)
+            },
+            'extendedProperties': {
+                'private': {
+                    'source': 'coursemate-app',
+                    'subtask_id': subtask.subtask_id,
+                    'task_id': subtask.task_id
+                }
+            }
+        }
+        
+        if existing_event:
+            # Update existing event
+            updated_event = service.events().update(
+                calendarId=calendar_id,
+                eventId=subtask.google_event_id,
+                body=event_data
+            ).execute()
+            
+            print(f"✅ Calendar event updated: {subtask.subtask_descr} (Event ID: {updated_event['id']})")
+            
+            # Update database with new event ID (in case it changed)
+            subtask.google_event_id = updated_event['id']
+            subtask.google_calendar_id = calendar_id
+            subtask.sync_status = "Synced"
+            db.session.commit()
+            
+        else:
+            # Create new event
+            new_event = service.events().insert(
+                calendarId=calendar_id,
+                body=event_data
+            ).execute()
+            
+            print(f"✅ Calendar event created: {subtask.subtask_descr} (Event ID: {new_event['id']})")
+            
+            # Update database
+            subtask.google_event_id = new_event['id']
+            subtask.google_calendar_id = calendar_id
+            subtask.sync_status = "Synced"
+            db.session.commit()
+        
+        return True
+        
+    except HttpError as e:
+        print(f"❌ Google Calendar API error for subtask {subtask.subtask_id}: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Unexpected error syncing subtask {subtask.subtask_id}: {str(e)}")
+        return False
+
+def sync_task_to_google_calendar(user: User, task: Goal, course_title: Optional[str] = None):
+    """
+    Sync a task to Google Calendar by syncing all its subtasks as individual events.
+    This function now delegates to sync_subtask_to_google_calendar for each subtask.
+    """
+    try:
+        # Get all subtasks for this task
+        all_subtasks = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).order_by(asc(Goal.subtask_order)).all()
+        
+        if not all_subtasks:
+            current_app.logger.warning("Task %s has no subtasks, skipping Google Calendar sync", task.task_id)
             return False
         
         # Get course title if not provided
@@ -385,196 +592,18 @@ def sync_task_to_google_calendar(user: User, task: Goal, course_title: str = Non
             course = Course.query.get(task.course_id)
             course_title = course.title if course else str(task.course_id)
         
-        # Build credentials
-        creds = Credentials(
-            token=user.google_access_token,
-            refresh_token=user.google_refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=current_app.config["GOOGLE_CLIENT_ID"],
-            client_secret=current_app.config["GOOGLE_CLIENT_SECRET"],
-            scopes=["https://www.googleapis.com/auth/calendar"],
-        )
-        service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+        # Sync each subtask as an individual event
+        success_count = 0
+        for subtask in all_subtasks:
+            if sync_subtask_to_google_calendar(user, subtask, course_title):
+                success_count += 1
         
-        # Get or create calendar for this course
-        calendar_id = get_or_create_calendar(service, course_title)
+        current_app.logger.info("Synced %d/%d subtasks for task %s to Google Calendar", 
+                               success_count, len(all_subtasks), task.task_id)
+        return success_count > 0
         
-        # Prepare event data - make title unique by including goal context
-        base_title = task.task_title or "Untitled Task"
-        # Include goal description to make it unique across different goals
-        if task.goal_descr and task.goal_descr != base_title:
-            summary = f"{base_title} ({task.goal_descr})"
-        else:
-            summary = base_title
-        description = task.task_descr or ""
-        
-        # Add subtask information to description if available
-        # Get all subtasks for this task to include in the description, ordered by subtask_order
-        all_subtasks = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).order_by(asc(Goal.subtask_order)).all()
-        if all_subtasks and len(all_subtasks) > 1:  # Only add subtasks section if there are multiple subtasks
-            if description:
-                description += "\n\nSubtasks:\n"
-            else:
-                description = "Subtasks:\n"
-            
-            for subtask in all_subtasks:
-                status = "✓" if subtask.subtask_completed else "○"
-                description += f"• {status} {subtask.subtask_descr}\n"
-        elif task.subtask_descr and task.subtask_descr != task.task_descr:
-            # Single subtask case
-            if description:
-                description += "\n\nSubtasks:\n"
-            else:
-                description = "Subtasks:\n"
-            status = "✓" if task.subtask_completed else "○"
-            description += f"• {status} {task.subtask_descr}\n"
-        
-        # Parse due date - use task_due_date if available, otherwise fall back to due_date
-        due_date = task.task_due_date if hasattr(task, 'task_due_date') and task.task_due_date else task.due_date
-        if not due_date:
-            current_app.logger.warning("Task %s has no due date, skipping Google Calendar sync", task.task_id)
-            return False
-        
-        # Convert to date for all-day event
-        if isinstance(due_date, datetime):
-            start_date = due_date.date()
-        else:
-            start_date = due_date
-        end_date = start_date + timedelta(days=1)
-        
-        event_body = {
-            "summary": summary,
-            "description": description,
-            "start": {"date": start_date.isoformat()},
-            "end": {"date": end_date.isoformat()},
-            "extendedProperties": {
-                "private": {
-                    "source": "coursemate-app",
-                    "task_id": task.task_id,
-                    "goal_id": task.goal_id
-                }
-            }
-        }
-        
-        # Check if task already has a Google Calendar event
-        if task.google_event_id and task.sync_status == "Synced":
-            try:
-                # Update existing event
-                updated_event = service.events().update(
-                    calendarId=calendar_id,
-                    eventId=task.google_event_id,
-                    body=event_body
-                ).execute()
-                
-                # Update ALL task rows with the same task_id with Google Calendar info
-                all_task_rows = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).order_by(asc(Goal.subtask_order)).all()
-                for task_row in all_task_rows:
-                    task_row.google_event_id = updated_event["id"]
-                    task_row.google_calendar_id = calendar_id
-                    task_row.sync_status = "Synced"
-                    task_row.updated_at = datetime.now(timezone.utc)
-                
-                # Commit the database changes
-                db.session.commit()
-                
-                print(f"Updated Google Calendar event {updated_event['id']} in calendar {calendar_id} for task {task.task_id}")
-                return True
-            except HttpError as e:
-                if e.resp.status == 404:
-                    # Event not found, create new one
-                    current_app.logger.warning("Google Calendar event %s not found, creating new event", 
-                                             task.google_event_id)
-                    task.google_event_id = None
-                    task.sync_status = None
-                else:
-                    current_app.logger.error("Failed to update Google Calendar event: %s", str(e))
-                    return False
-        
-        # Always delete any existing events for this task first to avoid duplicates
-        try:
-            # First, try to delete the specific event if we have its ID
-            if task.google_event_id:
-                try:
-                    service.events().delete(
-                        calendarId=task.google_calendar_id or calendar_id,
-                        eventId=task.google_event_id
-                    ).execute()
-                    current_app.logger.info("Deleted existing Google Calendar event %s for task %s", 
-                                          task.google_event_id, task.task_id)
-                except HttpError as e:
-                    if e.resp.status != 404:  # Ignore 404 errors
-                        current_app.logger.warning("Error deleting specific event %s: %s", task.google_event_id, str(e))
-            
-            # Also search for any other events that might belong to this task
-            all_calendars = service.calendarList().list().execute()
-            for cal in all_calendars.get("items", []):
-                cal_id = cal["id"]
-                try:
-                    # Search for events with our metadata
-                    events = service.events().list(
-                        calendarId=cal_id,
-                        q=task.task_title,  # Search by task title
-                        timeMin=(datetime.now(timezone.utc) - timedelta(days=365)).isoformat(),
-                        timeMax=(datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
-                        singleEvents=True
-                    ).execute()
-                    
-                    for event in events.get("items", []):
-                        # Check if this event belongs to our task
-                        event_props = event.get("extendedProperties", {}).get("private", {})
-                        if event_props.get("task_id") == task.task_id:
-                            # Delete this event (skip if it's the one we already deleted)
-                            if event["id"] != task.google_event_id:
-                                service.events().delete(
-                                    calendarId=cal_id,
-                                    eventId=event["id"]
-                                ).execute()
-                                current_app.logger.info("Deleted duplicate Google Calendar event %s for task %s", 
-                                                      event["id"], task.task_id)
-                except HttpError as e:
-                    if e.resp.status != 404:  # Ignore 404 errors
-                        current_app.logger.warning("Error checking calendar %s: %s", cal_id, str(e))
-        except Exception as e:
-            current_app.logger.warning("Error cleaning up existing events: %s", str(e))
-        
-        # Clear the stored event ID since we're creating a new one
-        # Update ALL task rows with the same task_id to clear Google Calendar info
-        all_task_rows = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).order_by(asc(Goal.subtask_order)).all()
-        for task_row in all_task_rows:
-            task_row.google_event_id = None
-            task_row.sync_status = None
-            task_row.updated_at = datetime.now(timezone.utc)
-        
-        # Commit the database changes
-        db.session.commit()
-        
-        # Create new event
-        try:
-            new_event = service.events().insert(
-                calendarId=calendar_id,
-                body=event_body
-            ).execute()
-            
-            # Update ALL task rows with the same task_id with Google Calendar info
-            all_task_rows = Goal.query.filter_by(task_id=task.task_id, user_id=user.id).order_by(asc(Goal.subtask_order)).all()
-            for task_row in all_task_rows:
-                task_row.google_event_id = new_event["id"]
-                task_row.google_calendar_id = calendar_id
-                task_row.sync_status = "Synced"
-                task_row.updated_at = datetime.now(timezone.utc)
-            
-            # Commit the database changes
-            db.session.commit()
-            
-            print(f"Created Google Calendar event {new_event['id']} in calendar {calendar_id} for task {task.task_id}")
-            return True
-            
-        except HttpError as e:
-            current_app.logger.error("Failed to create Google Calendar event: %s", str(e))
-            return False
-            
     except Exception as e:
-        current_app.logger.exception("Error syncing task to Google Calendar: %s", str(e))
+        current_app.logger.exception("Error syncing task subtasks to Google Calendar: %s", str(e))
         return False
 
 def delete_task_from_google_calendar(user: User, task):
@@ -588,14 +617,14 @@ def delete_task_from_google_calendar(user: User, task):
         google_calendar_id = getattr(task, 'google_calendar_id', None)
         
         if not google_event_id:
-            print(f"No Google Calendar event ID found for deletion")
+            print(f"ℹ️  No Google Calendar event ID found for deletion")
             return True  # Nothing to delete
         
-        print(f"Attempting to delete event {google_event_id} from calendar {google_calendar_id or 'primary'}")
+        print(f"🗑️  Attempting to delete Google Calendar event {google_event_id} from calendar {google_calendar_id or 'primary'}")
         
         refresh_google_token(user)
         if not user.google_access_token:
-            print(f"No Google access token for user {user.id}")
+            print(f"❌ No Google access token for user {user.id}")
             return False
         
         # Build credentials
@@ -617,12 +646,12 @@ def delete_task_from_google_calendar(user: User, task):
                 eventId=google_event_id
             ).execute()
             
-            print(f"Successfully deleted Google Calendar event: {google_event_id} from {calendar_to_try}")
+            print(f"✅ Successfully deleted Google Calendar event: {google_event_id} from {calendar_to_try}")
             return True
             
         except HttpError as e:
             if e.resp.status == 404:
-                print(f"Event {google_event_id} not found in calendar {calendar_to_try}, searching other calendars...")
+                print(f"⚠️  Event {google_event_id} not found in calendar {calendar_to_try}, searching other calendars...")
                 
                 # If not found in the specific calendar, search all calendars
                 try:
@@ -637,28 +666,87 @@ def delete_task_from_google_calendar(user: User, task):
                                 calendarId=cal_id,
                                 eventId=google_event_id
                             ).execute()
-                            print(f"Successfully deleted Google Calendar event: {google_event_id} from calendar {cal_id}")
+                            print(f"✅ Successfully deleted Google Calendar event: {google_event_id} from calendar {cal_id}")
                             return True
                         except HttpError as inner_e:
                             if inner_e.resp.status == 404:
                                 continue  # Event not in this calendar, try next
                             else:
-                                print(f"Error deleting from calendar {cal_id}: {str(inner_e)}")
+                                print(f"❌ Error deleting from calendar {cal_id}: {str(inner_e)}")
                                 break
                     
-                    print(f"Event {google_event_id} not found in any calendar")
+                    print(f"ℹ️  Event {google_event_id} not found in any calendar")
                     return True  # Consider it deleted if not found anywhere
                     
                 except Exception as search_e:
-                    print(f"Error searching calendars: {str(search_e)}")
+                    print(f"❌ Error searching calendars: {str(search_e)}")
                     return False
             else:
-                print(f"Failed to delete Google Calendar event {google_event_id}: {str(e)}")
+                print(f"❌ Failed to delete Google Calendar event {google_event_id}: {str(e)}")
                 return False
                 
     except Exception as e:
-        print(f"Error deleting task from Google Calendar: {str(e)}")
+        print(f"❌ Error deleting task from Google Calendar: {str(e)}")
         return False
+
+def check_user_google_auth_status(user: User) -> dict:
+    """
+    Check if a user has valid Google Calendar authentication.
+    Returns a dict with status and message.
+    """
+    if not user.google_refresh_token:
+        return {
+            "status": "needs_auth",
+            "message": "User has not connected Google Calendar"
+        }
+    
+    try:
+        refresh_google_token(user)
+        return {
+            "status": "authenticated",
+            "message": "User has valid Google Calendar access"
+        }
+    except ValueError as e:
+        if "needs to re-authenticate" in str(e):
+            return {
+                "status": "needs_reauth",
+                "message": "User needs to re-authenticate with Google Calendar"
+            }
+        elif "Invalid client credentials" in str(e):
+            return {
+                "status": "config_error",
+                "message": "Google OAuth configuration error"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"Authentication error: {str(e)}"
+            }
+
+@calendar_bp.route("/api/calendar/auth-status", methods=["GET"])
+@jwt_required()
+def check_google_auth_status():
+    """Check the current user's Google Calendar authentication status"""
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        auth_status = check_user_google_auth_status(user)
+        
+        return jsonify({
+            "user_id": user_id,
+            "has_refresh_token": bool(user.google_refresh_token),
+            "has_access_token": bool(user.google_access_token),
+            "token_expiry": user.token_expiry.isoformat() if user.token_expiry else None,
+            "auth_status": auth_status
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error checking auth status: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @calendar_bp.route("/api/calendar/sync", methods=["POST"])
 @jwt_required()
@@ -682,3 +770,48 @@ def trigger_google_calendar_sync():
     except Exception as e:
         current_app.logger.exception("Error during Google Calendar sync: %s", str(e))
         return jsonify({"error": f"Sync failed: {str(e)}"}), 500
+
+def cleanup_orphaned_google_calendar_events():
+    """Clean up Google Calendar events that reference non-existent courses"""
+    try:
+        # Find all Google Calendar events
+        google_events = Goal.query.filter_by(goal_id="Google Calendar").all()
+        orphaned_count = 0
+        
+        for event in google_events:
+            # Check if the referenced course exists
+            course = Course.query.filter_by(combo_id=event.course_id, user_id=event.user_id).first()
+            if not course:
+                # Course doesn't exist, delete the event
+                print(f"🗑️  Deleting orphaned Google Calendar event: {event.google_event_id} (course_id: {event.course_id})")
+                db.session.delete(event)
+                orphaned_count += 1
+        
+        if orphaned_count > 0:
+            db.session.commit()
+            print(f"✅ Cleaned up {orphaned_count} orphaned Google Calendar events")
+        else:
+            print("✅ No orphaned Google Calendar events found")
+        
+        return orphaned_count
+        
+    except Exception as e:
+        print(f"❌ Error cleaning up orphaned events: {str(e)}")
+        db.session.rollback()
+        return 0
+
+@calendar_bp.route("/api/calendar/cleanup", methods=["POST"])
+@jwt_required()
+def cleanup_google_calendar_events():
+    """Clean up orphaned Google Calendar events"""
+    try:
+        orphaned_count = cleanup_orphaned_google_calendar_events()
+        
+        return jsonify({
+            "message": f"Cleanup completed",
+            "orphaned_events_removed": orphaned_count
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error during cleanup: {str(e)}")
+        return jsonify({"error": str(e)}), 500
