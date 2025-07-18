@@ -9,6 +9,7 @@ import AnalyticsCards from "./components/summary-cards";
 import CourseTasksModal from "./components/CourseTasksModal";
 import { courseService, CourseData } from "../../lib/api/courseService";
 import useAuthRedirect from "@/hooks/useAuthRedirect"
+import { QuickAccess } from "./components/quick-access";
 
 const Dashboard = () => {
   const router = useRouter();
@@ -65,21 +66,16 @@ const Dashboard = () => {
       try {
         setIsLoadingCourses(true);
         const courses = await courseService.getCourses();
-        
-        // Filter courses to only show those accessed in the last 24 hours
-        const twentyFourHoursAgo = new Date();
-        twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
-        
-        const recentlyAccessedCourses = courses.filter(course => {
-          // Exclude Google Calendar courses
-          if (course.id && course.id.startsWith('google-calendar')) return false;
-          
-          if (!course.last_accessed) return false;
-          const lastAccessed = new Date(course.last_accessed);
-          return lastAccessed >= twentyFourHoursAgo;
+
+        // Filter out Google Calendar courses
+        const filtered = courses.filter(course => !(course.id && course.id.startsWith('google-calendar')));
+        // Sort by created_at descending and take the last 2 created courses
+        const sorted = [...filtered].sort((a, b) => {
+          const aDate = new Date(a.created_at || 0).getTime();
+          const bDate = new Date(b.created_at || 0).getTime();
+          return bDate - aDate;
         });
-        
-        setUserCourses(recentlyAccessedCourses);
+        setUserCourses(sorted.slice(0, 2));
       } catch (error) {
         console.error('Failed to fetch user courses:', error);
       } finally {
@@ -146,56 +142,40 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="bg-gray-50 font-sans">
-      <div className="p-5 flex flex-col lg:flex-row gap-8">
-        {/* Main Content (left) */}
-        <div className="flex-1 min-w-0">
-          {/* Search Results */}
-          {isSearching && searchResults.length > 0 && (
-            <div className="mb-6 bg-white rounded-xl p-4 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Search Results</h3>
-              <div className="space-y-2">
-                {searchResults.map((result) => (
-                  <div
-                    key={`${result.type}-${result.id}`}
-                    className="flex items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
-                  >
-                    <span className="mr-2">
-                      {result.type === 'task' ? '📝' : '📚'}
-                    </span>
-                    <span className="text-gray-700">{result.title}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Motivation analytics */}
-          <div className="mb-6">
+    <div className="bg-[#F8F9FB] font-sans w-full">
+      <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col gap-6">
+        {/* Analytics Cards Row */}
+        <section className="w-full bg-indigo-100 rounded-2xl shadow p-4 flex flex-row gap-6 items-center mb-1">
+          <div className="flex-1">
             <AnalyticsCards />
           </div>
-
-          {/* My Courses */}
-          <div className="mb-6">
-            <MyCourses
-              courses={userCourses.map((course, index) => convertToMyCoursesFormat(course, index))}
-              isLoading={isLoadingCourses}
-              onViewAllCourses={handleViewAllCourses}
-              onViewCourse={handleViewCourse}
-              onContinueCourse={handleContinueCourse}
-            />
+        </section>
+        {/* Main Content Row: Left (My Courses + Recent Activity), Right (Checklist) */}
+        <div className="flex flex-row gap-6 w-full items-stretch">
+          {/* Left column: My Courses + Recent Activity */}
+          <div className="flex flex-col gap-6 flex-1 min-w-0" style={{ minWidth: 0 }}>
+            <div>
+              <MyCourses
+                courses={userCourses.map((course, index) => convertToMyCoursesFormat(course, index))}
+                isLoading={isLoadingCourses}
+                onViewAllCourses={handleViewAllCourses}
+                onViewCourse={handleViewCourse}
+                onContinueCourse={handleContinueCourse}
+              />
+            </div>
+            <section className="flex-1 flex flex-col justify-end min-h-[120px]">
+              <CommunityActivity />
+            </section>
           </div>
-        </div>
-        {/* Right sidebar with Checklist and Notifications */}
-        <div className="w-full lg:w-[400px] flex-shrink-0 space-y-6">
-          <ChecklistWidget
-            onTaskToggle={handleTaskToggle}
-            onAddTask={() => {console.log("Add Task")}}
-          />
-          <CommunityActivity />
+          {/* Right column: Checklist */}
+          <section className="" style={{height: '510px', width: '477.29px'}}>
+            <ChecklistWidget
+              onTaskToggle={handleTaskToggle}
+              onAddTask={() => {console.log('Add Task')}}
+            />
+          </section>
         </div>
       </div>
-
       {/* Course Tasks Modal */}
       {selectedCourse && (
         <CourseTasksModal

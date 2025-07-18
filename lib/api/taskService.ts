@@ -100,6 +100,13 @@ class TaskService {
     });
     return response.task;
   }
+
+  async getChecklistTasks(type: 'today' | 'overdue' | 'upcoming'): Promise<Task[]> {
+    const params = new URLSearchParams();
+    params.append('type', type);
+    const endpoint = `/api/goals/checklist?${params.toString()}`;
+    return this.makeRequest(endpoint);
+  }
 }
 
 export const taskService = new TaskService(); 

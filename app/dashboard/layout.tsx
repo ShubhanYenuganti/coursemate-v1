@@ -44,15 +44,32 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const [userName, setUserName] = useState<string>("");
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch("/api/users/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const user = await res.json();
+      const firstName = user.name ? user.name.split(' ')[0] : "User";
+      setUserName(firstName);
+    };
+    fetchUser();
+  }, []);
+
   return (
     <OnboardingGuard>
       <div className="flex h-screen">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50">
           <div className="sticky top-0 z-20 w-full bg-white shadow-sm">
-            <Header />
+            <Header userName={userName} />
           </div>
-          <div className="flex-1 p-6">{children}</div>
+          <div className="flex-1">{children}</div>
         </div>
       </div>
     </OnboardingGuard>
