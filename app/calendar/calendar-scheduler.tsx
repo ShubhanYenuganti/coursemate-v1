@@ -314,6 +314,7 @@ export function CalendarScheduler() {
   const [isDraggingTask, setIsDraggingTask] = useState(false);
   const [draggedTask, setDraggedTask] = useState<Goal | null>(null);
   const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
+  const [highlightSubtaskId, setHighlightSubtaskId] = useState<string | null>(null);
 
   /** Edit Subtask Modal */
   const [showEditSubtaskModal, setShowEditSubtaskModal] = useState(false);
@@ -3179,6 +3180,7 @@ export function CalendarScheduler() {
             handleTimeSlotMouseUp={handleTimeSlotMouseUp}
             dragPreview={dragPreview}
             draggedTask={draggedTask}
+            highlightSubtaskId={highlightSubtaskId}
           />
         ) : currentView === "week" ? (
           <WeekView
@@ -3211,6 +3213,7 @@ export function CalendarScheduler() {
             handleTimeSlotMouseUp={handleTimeSlotMouseUp}
             dragPreview={dragPreview}
             draggedTask={draggedTask}
+            highlightSubtaskId={highlightSubtaskId}
           />
         ) : currentView === "month" ? (
           <MonthView
@@ -4397,16 +4400,38 @@ export function CalendarScheduler() {
                     </div>
                     {/* Conflict warning message */}
                     {viewSubtaskModal.subtask.is_conflicting === true && (
-                      <div className="flex items-center gap-2 mt-2 text-yellow-800 bg-yellow-100 rounded px-2 py-1 text-xs font-medium">
-                        <svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-                        Conflicts with Task Due Date {(() => {
-                          const due = viewSubtaskModal.subtask.task_due_date || viewSubtaskModal.subtask.due_date;
-                          if (!due) return '';
-                          // Use the same logic as formatDate, but format as 'Tue, Jul 15'
-                          const [year, month, day] = due.split('T')[0].split('-');
-                          const date = new Date(Number(year), Number(month) - 1, Number(day));
-                          return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-                        })()}
+                      <div className="flex flex-col gap-2 mt-2">
+                        <div className="flex items-center gap-2 text-yellow-800 bg-yellow-100 rounded px-2 py-1 text-xs font-medium">
+                          <svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                          Conflicts with Task Due Date {(() => {
+                            const due = viewSubtaskModal.subtask.task_due_date || viewSubtaskModal.subtask.due_date;
+                            if (!due) return '';
+                            // Use the same logic as formatDate, but format as 'Tue, Jul 15'
+                            const [year, month, day] = due.split('T')[0].split('-');
+                            const date = new Date(Number(year), Number(month) - 1, Number(day));
+                            return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                          })()}
+                        </div>
+                        <div className="flex gap-2 mt-1">
+                          <button
+                            className="px-3 py-1 rounded bg-blue-100 text-blue-700 text-xs font-semibold hover:bg-blue-200 transition-colors"
+                            onClick={() => { console.log('Change Task Due Date clicked'); }}
+                          >
+                            Change Task Due Date
+                          </button>
+                          <button
+                            className="px-3 py-1 rounded bg-green-100 text-green-700 text-xs font-semibold hover:bg-green-200 transition-colors"
+                            onClick={() => {
+                              setViewSubtaskModal(null);
+                              if (viewSubtaskModal.subtask) {
+                                setHighlightSubtaskId(viewSubtaskModal.subtask.subtask_id);
+                                setTimeout(() => setHighlightSubtaskId(null), 3000);
+                              }
+                            }}
+                          >
+                            Reschedule Subtask
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

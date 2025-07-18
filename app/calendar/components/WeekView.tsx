@@ -44,7 +44,8 @@ export const WeekView = ({
   handleTimeSlotMouseMove,
   handleTimeSlotMouseUp,
   dragPreview, // NEW
-  draggedTask
+  draggedTask,
+  highlightSubtaskId
 }: any) => (
   <>
     <div className="flex flex-col border-b border-gray-200">
@@ -265,12 +266,14 @@ export const WeekView = ({
               {/* Render events */}
               {eventPositions.map((pos) => {
                 const isOverdue = calculateSubtaskStatus(pos.goal) === 'Overdue' && pos.goal.goal_id !== 'Google Calendar';
+                const isHighlighted = highlightSubtaskId === pos.goal.subtask_id;
                 return (
                   <div
                     key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
                     className={`absolute rounded p-2 text-xs font-medium cursor-pointer hover:opacity-90 shadow-sm
                       ${pos.goal.task_completed ? 'bg-gray-300 text-gray-500' : 'text-white'}
                       ${isOverdue ? 'border-4 border-red-500' : 'border-2 border-white'}
+                      ${isHighlighted ? 'ring-4 ring-blue-400 animate-pulse z-[10000]' : ''}
                     `}
                     style={{
                       backgroundColor: pos.goal.task_completed ? undefined : getEventColor(pos.goal),
@@ -303,6 +306,12 @@ export const WeekView = ({
                       handleTimeSlotDrop(e, d, hour, minute);
                     }}
                   >
+                    {/* Tooltip for highlight */}
+                    {isHighlighted && (
+                      <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2 bg-blue-600 text-white text-xs px-3 py-1 rounded shadow z-[10001] whitespace-nowrap">
+                        Drag this event to reschedule
+                      </div>
+                    )}
                     {/* Warning icon for conflicting events */}
                     {pos.goal.is_conflicting === true && (
                       <AlertTriangle className="absolute right-2 top-2 w-6 h-6 text-white drop-shadow" style={{zIndex: 100}} />
