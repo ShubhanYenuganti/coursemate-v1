@@ -7,6 +7,7 @@ import { groupTasksByTaskId } from "../utils/goal.progress"
 import { calculateStatus } from "../utils/goal.status"
 import { startOfToday } from "../utils/date.utils"
 import { calculateDayEventPositions } from "../utils/calendar.layout";
+import { calculateSubtaskStatus } from "../utils/goal.status";
 
 function formatEventTime(start: string, end: string) {
   const startDate = new Date(start);
@@ -262,62 +263,68 @@ export const WeekView = ({
                 );
               })()}
               {/* Render events */}
-              {eventPositions.map((pos) => (
-                <div
-                  key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
-                  className="absolute rounded p-2 text-xs text-white font-medium cursor-pointer hover:opacity-90 shadow-sm border-2 border-white"
-                  style={{
-                    backgroundColor: getEventColor(pos.goal),
-                    width: `${pos.width}%`,
-                    left: `${pos.left}%`,
-                    top: `${pos.top}%`,
-                    height: `${pos.height}%`,
-                    zIndex: pos.zIndex + 50,
-                    minHeight: '16px',
-                    boxShadow: '0 2px 8px 0 rgba(0,0,0,0.06)',
-                  }}
-                  tabIndex={0}
-                  onClick={(e) => handleGoalClick(pos.goal, e)}
-                  onMouseEnter={(e) => onTaskHover(pos.goal, e)}
-                  onMouseLeave={onTaskMouseLeave}
-                  draggable={pos.goal.goal_id !== "Google Calendar"}
-                  onDragStart={e => handleSubtaskDragStart(e, pos.goal)}
-                  onDragEnd={e => handleSubtaskDragEnd(e)}
-                  onDragOver={e => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                  }}
-                  onDrop={e => {
-                    if (!isDraggingTask || !draggedTask) return;
-                    const rect = e.currentTarget.parentElement!.getBoundingClientRect();
-                    const y = e.clientY - rect.top;
-                    const totalMinutes = (y / rect.height) * 1440;
-                    const hour = Math.floor(totalMinutes / 60);
-                    const minute = Math.floor((totalMinutes % 60) / 30) * 30;
-                    handleTimeSlotDrop(e, d, hour, minute);
-                  }}
-                >
-                  {/* Warning icon for conflicting events */}
-                  {pos.goal.is_conflicting === true && (
-                    <AlertTriangle className="absolute right-2 top-2 w-6 h-6 text-white drop-shadow" style={{zIndex: 100}} title="Scheduled after task due date" />
-                  )}
-                  {/* Event Title */}
-                  <div className="font-semibold leading-tight truncate pr-6" style={{ zIndex: pos.zIndex + 20 }}>
-                    {pos.goal.goal_id === 'Google Calendar' ? (pos.goal.task_title ?? "(untitled)") : (pos.goal.subtask_descr ?? "(untitled)")}
-                  </div>
-                  {/* Status indicator for non-Google Calendar events */}
-                  {pos.goal.goal_id !== "Google Calendar" && pos.goal.status && (
-                    <div className="text-[10px] mt-1 flex items-center gap-1" style={{ zIndex: pos.zIndex + 20 }}>
-                      <div className={`w-2 h-2 rounded-full ${
-                        pos.goal.status === "Overdue" ? "bg-red-400" :
-                        pos.goal.status === "In Progress" ? "bg-yellow-400" :
-                        "bg-green-400"
-                      }`} />
-                      <span className="opacity-90">{pos.goal.status}</span>
+              {eventPositions.map((pos) => {
+                const isOverdue = calculateSubtaskStatus(pos.goal) === 'Overdue' && pos.goal.goal_id !== 'Google Calendar';
+                return (
+                  <div
+                    key={`${pos.goal.goal_id}-${pos.goal.task_id}-${pos.goal.subtask_id}-${pos.goal.id}`}
+                    className={`absolute rounded p-2 text-xs font-medium cursor-pointer hover:opacity-90 shadow-sm
+                      ${pos.goal.task_completed ? 'bg-gray-300 text-gray-500' : 'text-white'}
+                      ${isOverdue ? 'border-4 border-red-500' : 'border-2 border-white'}
+                    `}
+                    style={{
+                      backgroundColor: pos.goal.task_completed ? undefined : getEventColor(pos.goal),
+                      width: `${pos.width}%`,
+                      left: `${pos.left}%`,
+                      top: `${pos.top}%`,
+                      height: `${pos.height}%`,
+                      zIndex: pos.zIndex + 50,
+                      minHeight: '16px',
+                      boxShadow: '0 2px 8px 0 rgba(0,0,0,0.06)',
+                    }}
+                    tabIndex={0}
+                    onClick={(e) => handleGoalClick(pos.goal, e)}
+                    onMouseEnter={(e) => onTaskHover(pos.goal, e)}
+                    onMouseLeave={onTaskMouseLeave}
+                    draggable={pos.goal.goal_id !== "Google Calendar"}
+                    onDragStart={e => handleSubtaskDragStart(e, pos.goal)}
+                    onDragEnd={e => handleSubtaskDragEnd(e)}
+                    onDragOver={e => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={e => {
+                      if (!isDraggingTask || !draggedTask) return;
+                      const rect = e.currentTarget.parentElement!.getBoundingClientRect();
+                      const y = e.clientY - rect.top;
+                      const totalMinutes = (y / rect.height) * 1440;
+                      const hour = Math.floor(totalMinutes / 60);
+                      const minute = Math.floor((totalMinutes % 60) / 30) * 30;
+                      handleTimeSlotDrop(e, d, hour, minute);
+                    }}
+                  >
+                    {/* Warning icon for conflicting events */}
+                    {pos.goal.is_conflicting === true && (
+                      <AlertTriangle className="absolute right-2 top-2 w-6 h-6 text-white drop-shadow" style={{zIndex: 100}} />
+                    )}
+                    {/* Event Title */}
+                    <div className={`font-semibold leading-tight truncate pr-6 ${pos.goal.task_completed ? 'line-through' : ''}`} style={{ zIndex: pos.zIndex + 20 }}>
+                      {pos.goal.goal_id === 'Google Calendar' ? (pos.goal.task_title ?? "(untitled)") : (pos.goal.subtask_descr ?? "(untitled)")}
                     </div>
-                  )}
-                </div>
-              ))}
+                    {/* Status indicator for non-Google Calendar events */}
+                    {pos.goal.goal_id !== "Google Calendar" && pos.goal.status && (
+                      <div className="text-[10px] mt-1 flex items-center gap-1" style={{ zIndex: pos.zIndex + 20 }}>
+                        <div className={`w-2 h-2 rounded-full ${
+                          pos.goal.status === "Overdue" ? "bg-red-400" :
+                          pos.goal.status === "In Progress" ? "bg-yellow-400" :
+                          "bg-green-400"
+                        }`} />
+                        <span className="opacity-90">{pos.goal.status}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {/* Drag Preview and other overlays can go here if needed */}
             </div>
           );
