@@ -18,7 +18,17 @@ import { GoalWithProgress, Task, TaskWithProgress, Subtask } from '../../../comp
 import TaskCard from '../../../components/studyplan/TaskCard';
 import SubtaskList from '../../../components/studyplan/SubtaskList';
 import TaskEditorModal from '../../../components/studyplan/TaskEditorModal';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isAfter, startOfDay } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+// Helper to compare only the date part (YYYY-MM-DD), not affected by timezones
+function isAfterDay(dateA: string, dateB: string) {
+  const [aYear, aMonth, aDay] = dateA.split('T')[0].split('-').map(Number);
+  const [bYear, bMonth, bDay] = dateB.split('T')[0].split('-').map(Number);
+  if (aYear !== bYear) return aYear > bYear;
+  if (aMonth !== bMonth) return aMonth > bMonth;
+  return aDay > bDay;
+}
 
 const GoalDetailPage = () => {
   // Use the useParams hook to get the route parameters
@@ -42,6 +52,8 @@ const GoalDetailPage = () => {
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
   const [conflictingSubtasks, setConflictingSubtasks] = useState<Subtask[]>([]);
   const [pendingTaskUpdate, setPendingTaskUpdate] = useState<TaskWithProgress | null>(null);
+  const [goalDueDateConflictModalOpen, setGoalDueDateConflictModalOpen] = useState(false);
+  const [goalDueDateConflicts, setGoalDueDateConflicts] = useState<{ type: 'task' | 'subtask', name: string, date: string }[]>([]);
 
   useEffect(() => {
     const fetchGoalDetails = async () => {
@@ -237,6 +249,25 @@ const GoalDetailPage = () => {
 
   const handleSaveGoalEdit = async () => {
     if (!goal) return;
+
+    // Restrict goal due date to not be before any task due date or subtask start time (date-only, timezone-safe)
+    const newGoalDateStr = editedGoalDate.split('T')[0]; // 'YYYY-MM-DD'
+    const invalidTasks = tasks.filter(
+      (task) => isAfterDay(task.scheduledDate, newGoalDateStr)
+    );
+    const invalidSubtasks = tasks.flatMap(task => task.subtasks).filter(
+      (subtask) => isAfterDay(subtask.start_time, newGoalDateStr)
+    );
+    if (invalidTasks.length > 0 || invalidSubtasks.length > 0) {
+      // Collect conflicts for modal
+      const conflicts = [
+        ...invalidTasks.map(task => ({ type: 'task' as const, name: task.name, date: task.scheduledDate })),
+        ...invalidSubtasks.map(subtask => ({ type: 'subtask' as const, name: subtask.name, date: subtask.start_time }))
+      ];
+      setGoalDueDateConflicts(conflicts);
+      setGoalDueDateConflictModalOpen(true);
+      return;
+    }
     
     try {
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
@@ -1172,10 +1203,11 @@ const GoalDetailPage = () => {
           onClose={() => setEditingTask(null)}
           task={editingTask}
           onSave={handleTaskUpdated}
+          goalDueDate={goal ? new Date(goal.targetDate).toISOString().split('T')[0] : undefined}
         />
       )}
 
-      {/* Conflict Modal */}
+      {/* Subtask Conflict Modal */}
       {conflictModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
           <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full border border-gray-200">
@@ -1213,6 +1245,39 @@ const GoalDetailPage = () => {
           </div>
         </div>
       )}
+
+      {/* Goal Due Date Conflict Modal */}
+      <Dialog open={goalDueDateConflictModalOpen} onOpenChange={setGoalDueDateConflictModalOpen}>
+        <DialogContent>
+          <DialogTitle>Goal Due Date Conflict</DialogTitle>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold mb-2 text-red-600">Conflict!</h3>
+            <p className="mb-4 text-gray-700">You cannot set the goal due date before the following tasks or subtasks:</p>
+            <ul className="mb-4">
+              {goalDueDateConflicts.map((item, idx) => (
+                <li key={idx} className="mb-2">
+                  <div className="font-medium">
+                    <span className="capitalize">{item.type}:</span> {item.name}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {item.type === 'task'
+                      ? `Task Due Date: ${item.date ? format(parseISO(item.date.split('T')[0]), 'MMM d, yyyy') : 'N/A'}`
+                      : `Subtask Start: ${item.date ? format(parseISO(item.date), 'MMM d, yyyy, h:mm a') : 'N/A'}`}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end gap-3">
+              <button
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                onClick={() => setGoalDueDateConflictModalOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

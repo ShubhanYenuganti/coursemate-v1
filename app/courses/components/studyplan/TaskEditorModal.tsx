@@ -10,19 +10,19 @@ interface TaskEditorModalProps {
   onClose: () => void;
   task: TaskWithProgress;
   onSave: (updatedTask: TaskWithProgress) => void;
+  goalDueDate?: string; // YYYY-MM-DD
 }
 
-const TaskEditorModal: React.FC<TaskEditorModalProps> = ({ isOpen, onClose, task, onSave, taskDate }) => {
+const TaskEditorModal: React.FC<TaskEditorModalProps> = ({ isOpen, onClose, task, onSave, taskDate, goalDueDate }) => {
   const [editedTask, setEditedTask] = useState<TaskWithProgress>(task);
   const [editedSubtasks, setEditedSubtasks] = useState<Subtask[]>(task.subtasks);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [lastValidDate, setLastValidDate] = useState<string>(task.scheduledDate);
 
   // Set default due date if not present when modal opens
   useEffect(() => {
-
     let scheduledDate = task.scheduledDate || taskDate || '';
     if (scheduledDate) {
-      // If it's an ISO string, extract yyyy-MM-dd
       if (scheduledDate.includes('T')) {
         scheduledDate = scheduledDate.split('T')[0];
       }
@@ -31,11 +31,21 @@ const TaskEditorModal: React.FC<TaskEditorModalProps> = ({ isOpen, onClose, task
     setEditedTask(initialTask);
     setEditedSubtasks(initialTask.subtasks);
     setErrors({});
+    setLastValidDate(scheduledDate);
   }, [task, taskDate]);
 
   const handleTaskChange = (field: string, value: any) => {
+    if (field === 'scheduledDate' && goalDueDate) {
+      // Only allow date <= goalDueDate
+      if (value > goalDueDate) {
+        setEditedTask(prev => ({ ...prev, scheduledDate: lastValidDate }));
+        setErrors(prev => ({ ...prev, scheduledDate: 'Task due date cannot be after the goal due date.' }));
+        return;
+      } else {
+        setLastValidDate(value);
+      }
+    }
     setEditedTask(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -56,7 +66,9 @@ const TaskEditorModal: React.FC<TaskEditorModalProps> = ({ isOpen, onClose, task
       estimatedTimeMinutes: 15,
       completed: false,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      start_time: '',
+      end_time: ''
     };
     setEditedSubtasks(prev => [...prev, newSubtask]);
   };
@@ -159,6 +171,8 @@ const TaskEditorModal: React.FC<TaskEditorModalProps> = ({ isOpen, onClose, task
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                     errors.scheduledDate ? 'border-red-500' : 'border-gray-300'
                   }`}
+                  // Restrict calendar selection to goal due date or earlier
+                  {...(goalDueDate ? { max: goalDueDate } : {})}
                 />
                 {errors.scheduledDate && (
                   <p className="mt-1 text-sm text-red-600">{errors.scheduledDate}</p>
