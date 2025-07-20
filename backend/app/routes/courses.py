@@ -35,8 +35,8 @@ def get_user_courses():
     semester = request.args.get('semester', '')
     sort_by = request.args.get('sort_by', 'last_accessed')
     
-    # Base query - only get courses for current user
-    query = Course.query.filter_by(user_id=current_user_id)
+    # Base query - only get courses for current user and exclude 'Google Calendar'
+    query = Course.query.filter_by(user_id=current_user_id).filter(Course.title != 'Google Calendar')
     
     # Apply filters
     if not show_archived:
@@ -61,6 +61,7 @@ def get_user_courses():
         query = query.order_by(Course.is_pinned.desc(), Course.last_accessed.desc())
     
     courses = query.all()
+    
     return jsonify([course.to_dict() for course in courses])
 
 @courses_bp.route('/', methods=['POST'], strict_slashes=False)
