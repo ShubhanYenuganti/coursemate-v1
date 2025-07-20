@@ -178,14 +178,27 @@ def sync_google_events(user: User, full_sync: bool = True):
     if not calendars:
         raise ValueError("No calendars found")
     
+    token_map = user.google_sync_tokens or {}
+    processed_calendars = 0
+    total_events_processed = 0
+    total_events_created = 0
+    total_events_updated = 0
+    total_events_deleted = 0
+    
     for cal in calendars:
         cal_id = cal["id"]
         cal_name = cal.get("summary", "Untitled")
         cal_color = cal.get("backgroundColor", "#4285f4")  # Default Google Calendar blue
         
-        token_map = user.google_sync_tokens or {}
         have_token = cal_id in token_map and not full_sync
-    
+        
+        if not full_sync and not have_token:
+            current_app.logger.info(f"Skipping calendar {cal_name} (no sync token for incremental sync)")
+            continue
+        
+        current_app.logger.info(f"Processing calendar: {cal_name} ({'incremental' if have_token else 'full'} sync)")
+        processed_calendars += 1
+        
         params = {
             "calendarId": cal_id,
             "maxResults": 2500,
@@ -200,6 +213,11 @@ def sync_google_events(user: User, full_sync: bool = True):
             params["timeMax"] = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
         
         events_resource = service.events()
+        calendar_events_processed = 0
+        calendar_events_created = 0
+        calendar_events_updated = 0
+        calendar_events_deleted = 0
+        
         while True:
             try:
                 feed = events_resource.list(**params).execute()
@@ -217,85 +235,121 @@ def sync_google_events(user: User, full_sync: bool = True):
                     continue
                 raise
             
-            for item in feed.get("items", []):
+            events = feed.get("items", [])
+            if not events and have_token:
+                current_app.logger.info(f"No changes detected for calendar: {cal_name}")
+                # Store the sync token even if no changes
+                new_token = feed.get("nextSyncToken")
+                if new_token:
+                    token_map[cal_id] = new_token
+                    user.google_sync_tokens = token_map
+                    db.session.commit()
+                break
+            
+            # Pre-fetch all existing events for this batch to reduce database queries
+            event_ids = [item.get('id') for item in events if item.get('id')]
+            existing_events = {}
+            if event_ids:
+                # Use the index for efficient lookup
+                existing_goals = Goal.query.filter(
+                    Goal.google_event_id.in_(event_ids),
+                    Goal.user_id == user.id
+                ).all()
+                existing_events = {goal.google_event_id: goal for goal in existing_goals}
+            
+            for item in events:
+                calendar_events_processed += 1
+                total_events_processed += 1
+                
+                event_id = item.get('id')
+                if not event_id:
+                    continue
+                
                 # Log the event being processed
-                current_app.logger.info(f"Processing event: {item.get('id')} - {item.get('summary')} - Status: {item.get('status')}")
+                current_app.logger.info(f"Processing event: {event_id} - {item.get('summary')} - Status: {item.get('status')}")
                 
                 # Skip events that were created by this application to avoid circular sync
                 extended_props = item.get("extendedProperties", {})
                 private_props = extended_props.get("private", {})
                 if private_props.get("source") == "coursemate-app":
-                    current_app.logger.info(f"Skipping application-created event: {item.get('id')} - {item.get('summary')}")
+                    current_app.logger.info(f"Skipping application-created event: {event_id} - {item.get('summary')}")
                     continue
                 
                 # Also skip events that already exist in our database with sync_status "Synced"
                 # (these are likely events created by our app before the metadata fix)
-                existing_synced = Goal.query.filter_by(google_event_id=item["id"], sync_status="Synced").first()
+                existing_synced = Goal.query.filter_by(google_event_id=event_id, sync_status="Synced").first()
                 if existing_synced:
-                    current_app.logger.info(f"Skipping already synced event: {item.get('id')} - {item.get('summary')}")
+                    current_app.logger.info(f"Skipping already synced event: {event_id} - {item.get('summary')}")
                     continue
                 
                 # Handle deleted events
                 if item.get("status") == "cancelled":
-                    existing_rows = Goal.query.filter_by(google_event_id=item["id"]).all()
+                    existing_rows = existing_events.get(event_id)
                     if existing_rows:
-                        current_app.logger.info(f"Deleting {len(existing_rows)} rows for cancelled event: {item.get('id')}")
-                        for existing in existing_rows:
-                            db.session.delete(existing)
-                        db.session.commit()
+                        current_app.logger.info(f"Deleting rows for cancelled event: {event_id}")
+                        db.session.delete(existing_rows)
+                        calendar_events_deleted += 1
+                        total_events_deleted += 1
                     continue
                 
-                existing_rows = Goal.query.filter_by(google_event_id=item["id"]).all()
-                if existing_rows:
-                    for existing in existing_rows:
-                        # Check if there are actual changes to avoid unnecessary updates
-                        start_raw = item["start"].get("dateTime") or item["start"].get("date")
-                        end_raw = item["end"].get("dateTime") or item["end"].get("date")
-                        
-                        # Parse new times for comparison
-                        if "T" in end_raw:
-                            new_due_date = isoparse(end_raw).astimezone(timezone.utc)
-                        else:
-                            new_due_date = isoparse(end_raw + "T00:00:00Z").astimezone(timezone.utc)
-                        
-                        if "T" in start_raw:
-                            new_start_time = isoparse(start_raw).astimezone(timezone.utc)
-                        else:
-                            new_start_time = isoparse(start_raw + "T00:00:00Z").astimezone(timezone.utc)
-                        
-                        if "T" in end_raw:
-                            new_end_time = isoparse(end_raw).astimezone(timezone.utc)
-                        else:
-                            new_end_time = isoparse(end_raw + "T00:00:00Z").astimezone(timezone.utc)
-                        
-                        new_task_descr = item.get("description", "")
-                        new_goal_descr = f"Imported from {cal_name}"
-                        
-                        # Check if any fields have actually changed
-                        has_changes = (
-                            existing.goal_descr != new_goal_descr or
-                            existing.task_descr != new_task_descr or
-                            existing.due_date != new_due_date or
-                            existing.start_time != new_start_time or
-                            existing.end_time != new_end_time
-                        )
-                        
-                        if has_changes:
-                            current_app.logger.info(f"Updating existing goal for event: {item.get('id')} - {item.get('summary')}")
-                            # Update fields if needed
-                            existing.goal_descr = new_goal_descr
-                            existing.task_descr = new_task_descr
-                            existing.due_date = new_due_date
-                            existing.start_time = new_start_time
-                            existing.end_time = new_end_time
-                            existing.updated_at = datetime.now(timezone.utc)
-                        else:
-                            current_app.logger.debug(f"No changes detected for event: {item.get('id')} - {item.get('summary')}")
+                # Check if event exists using the pre-fetched data
+                existing_goal = existing_events.get(event_id)
+                
+                if existing_goal:
+                    # Update existing goal
+                    start_raw = item["start"].get("dateTime") or item["start"].get("date")
+                    end_raw = item["end"].get("dateTime") or item["end"].get("date")
+                    
+                    # Parse new times for comparison
+                    if "T" in end_raw:
+                        new_due_date = isoparse(end_raw).astimezone(timezone.utc)
+                    else:
+                        new_due_date = isoparse(end_raw + "T00:00:00Z").astimezone(timezone.utc)
+                    
+                    if "T" in start_raw:
+                        new_start_time = isoparse(start_raw).astimezone(timezone.utc)
+                    else:
+                        new_start_time = isoparse(start_raw + "T00:00:00Z").astimezone(timezone.utc)
+                    
+                    if "T" in end_raw:
+                        new_end_time = isoparse(end_raw).astimezone(timezone.utc)
+                    else:
+                        new_end_time = isoparse(end_raw + "T00:00:00Z").astimezone(timezone.utc)
+                    
+                    new_task_descr = item.get("description", "")
+                    new_goal_descr = f"Imported from {cal_name}"
+                    
+                    # Check if any fields have actually changed
+                    has_changes = (
+                        existing_goal.goal_descr != new_goal_descr or
+                        existing_goal.task_descr != new_task_descr or
+                        existing_goal.due_date != new_due_date or
+                        existing_goal.start_time != new_start_time or
+                        existing_goal.end_time != new_end_time
+                    )
+                    
+                    if has_changes:
+                        current_app.logger.info(f"Updating existing goal for event: {event_id} - {item.get('summary')}")
+                        # Update fields if needed
+                        existing_goal.goal_descr = new_goal_descr
+                        existing_goal.task_descr = new_task_descr
+                        existing_goal.due_date = new_due_date
+                        existing_goal.start_time = new_start_time
+                        existing_goal.end_time = new_end_time
+                        existing_goal.updated_at = datetime.now(timezone.utc)
+                        calendar_events_updated += 1
+                        total_events_updated += 1
+                    else:
+                        current_app.logger.debug(f"No changes detected for event: {event_id} - {item.get('summary')}")
                 else:
                     # Create new goal
-                    current_app.logger.info(f"Creating new goal for event: {item.get('id')} - {item.get('summary')}")
+                    current_app.logger.info(f"Creating new goal for event: {event_id} - {item.get('summary')}")
                     goal = convert_google_event_to_goal(user.id, course_id, event=item, calendar_name=cal_name, calendar_color=cal_color)
                     db.session.add(goal)
+                    calendar_events_created += 1
+                    total_events_created += 1
+            
+            # Commit all changes for this batch at once (faster with index)
             db.session.commit()
             
             page_token = feed.get("nextPageToken")
@@ -310,9 +364,11 @@ def sync_google_events(user: User, full_sync: bool = True):
                 user.google_sync_tokens = token_map
                 db.session.commit()
             break
-        # Commit all changes for this calendar at once (faster for incremental sync)
-        db.session.commit()
-    # RECOMMENDATION: Ensure an index exists on Goal.google_event_id for optimal sync performance.
+        
+        current_app.logger.info(f"Calendar {cal_name}: {calendar_events_processed} processed, {calendar_events_created} created, {calendar_events_updated} updated, {calendar_events_deleted} deleted")
+    
+    current_app.logger.info(f"Sync completed: {processed_calendars} calendars processed, {total_events_processed} total events ({total_events_created} created, {total_events_updated} updated, {total_events_deleted} deleted)")
+    # Index on Goal.google_event_id provides optimal sync performance for lookups.
     
 
 
@@ -751,25 +807,37 @@ def check_google_auth_status():
 @calendar_bp.route("/api/calendar/sync", methods=["POST"])
 @jwt_required()
 def trigger_google_calendar_sync():
-    """Trigger Google Calendar sync with full_sync=False (incremental sync)"""
     try:
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
-        
         if not user:
             return jsonify({"error": "User not found"}), 404
-        
         if not user.google_access_token:
             return jsonify({"error": "Google Calendar not connected"}), 400
-        
-        # Trigger incremental sync
-        sync_google_events(user, full_sync=False)
-        
+
+        user.calendar_sync_in_progress = True
+        db.session.commit()
+        try:
+            sync_google_events(user, full_sync=False)
+        finally:
+            user.calendar_sync_in_progress = False
+            db.session.commit()
+
         return jsonify({"message": "Google Calendar sync completed successfully"}), 200
-        
     except Exception as e:
+        user.calendar_sync_in_progress = False
+        db.session.commit()
         current_app.logger.exception("Error during Google Calendar sync: %s", str(e))
         return jsonify({"error": f"Sync failed: {str(e)}"}), 500
+
+@calendar_bp.route("/api/calendar/sync-status", methods=["GET"])
+@jwt_required()
+def get_sync_status():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"calendar_sync_in_progress": user.calendar_sync_in_progress}), 200
 
 def cleanup_orphaned_google_calendar_events():
     """Clean up Google Calendar events that reference non-existent courses"""

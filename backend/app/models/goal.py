@@ -12,6 +12,11 @@ class Goal(db.Model):
     Each row contains all fields (goal, task, subtask) and represents a specific subtask.
     Multiple rows can share the same goal_id and task_id."""
     __tablename__ = 'users_courses_goal'
+    
+    # Add index for google_event_id to optimize sync performance
+    __table_args__ = (
+        db.Index('ix_goal_google_event_id', 'google_event_id'),
+    )
 
     id = Column(String, primary_key=True)  # Primary key for the row
     user_id = Column(String, ForeignKey('users.id'), nullable=False)

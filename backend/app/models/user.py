@@ -40,9 +40,14 @@ class User(db.Model):
     goals = db.relationship("Goal", back_populates="user", lazy=True)
     document_embeddings = db.relationship("DocumentEmbedding", back_populates="user")
     
+    # In app/models/user.py
+    calendar_sync_in_progress = db.Column(db.Boolean, default=False)
+    
     # Friend relationships
     sent_friend_requests = relationship('Friend', foreign_keys='Friend.requester_id', back_populates='requester', lazy='dynamic')
     received_friend_requests = relationship('Friend', foreign_keys='Friend.receiver_id', back_populates='receiver', lazy='dynamic')
+    
+
 
     def generate_token(self, token_type='email_verification'):
         s = Serializer(current_app.config['SECRET_KEY'])

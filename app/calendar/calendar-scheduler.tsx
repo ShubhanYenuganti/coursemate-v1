@@ -96,80 +96,30 @@ export function CalendarScheduler() {
   const [sortedGoalsByDate, setSortedGoalsByDate] = useState<GoalsByDate>({});
   const [courses, setCourses] = useState<Course[]>([]);
 
-  // SYNC BUTTON HANDLER
-  const handleSyncAll = async () => {
-    setSyncing(true);
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Not authenticated");
-      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-
-      // Call the new Google Calendar sync endpoint
-      const response = await fetch(`${api}/api/calendar/sync`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-      toast.success(result.message || "Google Calendar sync completed successfully");
-
-      // Refresh the goals data to show any new events from Google Calendar
-      const fetchGoals = async () => {
-        try {
-          const goalsRes = await fetch(`${api}/api/goals/subtasks`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!goalsRes.ok) throw new Error(`Request failed ${goalsRes.status}`);
-          const grouped = await goalsRes.json() as Record<string, Goal[]>;
-          // Filter out placeholder tasks from each date group
-          const filteredGrouped: Record<string, Goal[]> = {};
-          Object.keys(grouped).forEach(key => {
-            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-          });
-          setGoalsByDate(filteredGrouped);
-          const ordered = Object.keys(filteredGrouped)
-            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
-            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
-          setSortedGoalsByDate(ordered);
-          const all: Goal[] = ([] as Goal[]).concat(...Object.values(grouped));
-          const courses: Course[] = [];
-          const courseIds = [...new Set(all.map(g => g.course_id))];
-          courseIds.forEach(courseId => {
-            const courseGoals = all.filter(goal => goal.course_id === courseId);
-            const firstGoal = courseGoals[0];
-            const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
-            courses.push({
-              goals: courseGoals,
-              course_title: courseId,
-              course_description: '',
-              course_id: courseId,
-              color: color
-            });
-          });
-          setCourses(courses);
-          updateCourseTitles(courseIds, token, courses).then(setCourses);
-        } catch (err) {
-          console.error("fetchGoals error", err);
-        }
-      };
-
-      // Refresh the goals data
-      fetchGoals();
-
-    } catch (err: any) {
-      toast.error("Sync failed: " + (err.message || err));
-    } finally {
-      setSyncing(false);
-    }
-  };
+  // Poll backend for sync status every 2 seconds
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    let isUnmounted = false;
+    const pollSyncStatus = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const res = await fetch(`${api}/api/calendar/sync-status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isUnmounted) setSyncing(!!data.calendar_sync_in_progress);
+      } catch {}
+    };
+    pollSyncStatus();
+    interval = setInterval(pollSyncStatus, 2000);
+    return () => {
+      isUnmounted = true;
+      if (interval) clearInterval(interval);
+    };
+  }, []);
 
   /** Current selected date -- initialised to today */
   const [currentDate, setCurrentDate] = useState<Date>(() => startOfToday())
@@ -2432,6 +2382,91 @@ export function CalendarScheduler() {
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
 
+  const handleSyncAll = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not authenticated");
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+  
+      // Call the new Google Calendar sync endpoint
+      const response = await fetch(`${api}/api/calendar/sync`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+  
+      // Poll until backend reports sync is done
+      let done = false;
+      while (!done) {
+        try {
+          const res = await fetch(`${api}/api/calendar/sync-status`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (!data.calendar_sync_in_progress) done = true;
+          }
+        } catch {}
+        if (!done) await new Promise(r => setTimeout(r, 1000));
+      }
+  
+      toast.success("Google Calendar sync completed successfully");
+  
+      // Refresh the goals data to show any new events from Google Calendar
+      const fetchGoals = async () => {
+        try {
+          const goalsRes = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!goalsRes.ok) throw new Error(`Request failed ${goalsRes.status}`);
+          const grouped = await goalsRes.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+          const all: Goal[] = ([] as Goal[]).concat(...Object.values(grouped));
+          const courses: Course[] = [];
+          const courseIds = [...new Set(all.map(g => g.course_id))];
+          courseIds.forEach(courseId => {
+            const courseGoals = all.filter(goal => goal.course_id === courseId);
+            const firstGoal = courseGoals[0];
+            const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
+            courses.push({
+              goals: courseGoals,
+              course_title: courseId,
+              course_description: '',
+              course_id: courseId,
+              color: color
+            });
+          });
+          setCourses(courses);
+          updateCourseTitles(courseIds, token, courses).then(setCourses);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+  
+      // Refresh the goals data
+      fetchGoals();
+  
+    } catch (err: any) {
+      toast.error("Sync failed: " + (err.message || err));
+    }
+  };
+  
   // Fetch user courses for add task modal
   const fetchUserCourses = async () => {
     try {
