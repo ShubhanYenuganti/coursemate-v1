@@ -178,6 +178,7 @@ export function CalendarScheduler() {
   /** UI State */
   const [showSettings, setShowSettings] = useState(false)
   const [showAddTask, setShowAddTask] = useState(false)
+  const [newTaskDueDateError, setNewTaskDueDateError] = useState('');
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
   const [sidebarTab, setSidebarTab] = useState<"courses" | "tasks">("tasks");
   const [goalDisplayPosition, setGoalDisplayPosition] = useState<{ x: number; y: number } | null>(null)
@@ -2508,32 +2509,37 @@ export function CalendarScheduler() {
       alert('Please fill in all required fields.');
       return;
     }
+
+    // Validate due date against selected goal's due date
+    const goal = courseGoals.find(g => g.goal_id === selectedGoalId) || selectedGoal;
+    if (goal && goal.due_date) {
+      const taskDate = newTaskDueDate.split('T')[0];
+      const goalDate = goal.due_date.split('T')[0];
+      if (taskDate > goalDate) {
+        setNewTaskDueDateError(`Task due date must be on or before: ${formatDate(goal.due_date)}`);
+        return;
+      }
+    }
+
     try {
       const token = localStorage.getItem('token');
       if (!token) throw new Error('Not authenticated');
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const payload = {
+      const tasksData = [{
         task_title: newTaskName,
         task_descr: newTaskDescription,
-        task_due_date: newTaskDueDate,
-        subtasks: newSubtasks.map((sub: { subtask_descr: string; subtask_type: string; estimatedTimeMinutes: number }, index: number) => ({
-          subtask_descr: sub.subtask_descr,
-          subtask_type: sub.subtask_type,
-          subtask_completed: false,
-          subtask_order: index,
-          estimatedTimeMinutes: sub.estimatedTimeMinutes
-        }))
-      };
-      const res = await fetch(`${api}/api/goals/${selectedGoalId}/create-task`, {
+        scheduledDate: newTaskDueDate,
+        completed: false
+      }];
+      const res = await fetch(`${api}/api/goals/${selectedGoalId}/save-tasks`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({tasks: tasksData})
       });
       if (!res.ok) throw new Error(`Failed to create task: ${res.status}`);
-      alert('Task created successfully!');
 
       // Refresh goals data to show the newly created task
       const fetchGoals = async () => {
@@ -3676,12 +3682,6 @@ export function CalendarScheduler() {
                 </div>
                 <DialogTitle className="text-xl font-semibold">CourseHelper</DialogTitle>
               </div>
-              <div className="flex items-center gap-4 text-sm text-[#71717a]">
-                <span>Track Progress</span>
-                <span>Docs</span>
-                <span>My Tasks</span>
-                <span>Calendar</span>
-              </div>
             </div>
           </DialogHeader>
 
@@ -3689,7 +3689,6 @@ export function CalendarScheduler() {
             <div className="p-6">
               <div className="mb-6">
                 <h2 className="text-2xl font-semibold text-[#18181b] mb-2">Settings</h2>
-                <p className="text-[#71717a]">Manage your account and preferences</p>
               </div>
 
               <Tabs defaultValue="integrations" className="w-full">
@@ -3821,7 +3820,12 @@ export function CalendarScheduler() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       value={newTaskDueDate}
                       onChange={e => setNewTaskDueDate(e.target.value)}
+                      // Optionally restrict calendar selection
+                      max={selectedGoal?.due_date ? selectedGoal.due_date.split('T')[0] : undefined}
                     />
+                    {newTaskDueDateError && (
+                      <p className="mt-1 text-sm text-red-600">{newTaskDueDateError}</p>
+                    )}
                   </div>
                 </div>
 
@@ -3889,101 +3893,6 @@ export function CalendarScheduler() {
                     value={newTaskDescription}
                     onChange={e => setNewTaskDescription(e.target.value)}
                   />
-                </div>
-
-                {/* Subtasks */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-medium text-gray-900">Subtasks</h3>
-                    <button
-                      type="button"
-                      className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-2"
-                      onClick={() => setNewSubtasks([...newSubtasks, { subtask_descr: '', subtask_type: 'other', estimatedTimeMinutes: 15 }])}
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Subtask
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {newSubtasks.map((subtask, index) => (
-                      <div key={index} className="bg-gray-50 rounded-lg p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                          <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Subtask {index + 1} *
-                            </label>
-                            <input
-                              type="text"
-                              value={subtask.subtask_descr}
-                              onChange={e => {
-                                const updated = [...newSubtasks];
-                                updated[index].subtask_descr = e.target.value;
-                                setNewSubtasks(updated);
-                              }}
-                              placeholder={`Enter subtask ${index + 1} name`}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Type
-                            </label>
-                            <select
-                              value={subtask.subtask_type}
-                              onChange={e => {
-                                const updated = [...newSubtasks];
-                                updated[index].subtask_type = e.target.value;
-                                setNewSubtasks(updated);
-                              }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                              <option value="reading">Reading</option>
-                              <option value="flashcard">Flashcard</option>
-                              <option value="quiz">Quiz</option>
-                              <option value="practice">Practice</option>
-                              <option value="review">Review</option>
-                              <option value="other">Other</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Time (min)
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={subtask.estimatedTimeMinutes || 15}
-                                onChange={e => {
-                                  const updated = [...newSubtasks];
-                                  updated[index].estimatedTimeMinutes = parseInt(e.target.value) || 0;
-                                  setNewSubtasks(updated);
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                min="5"
-                                max="120"
-                              />
-                              <button
-                                onClick={() => setNewSubtasks(newSubtasks.filter((_, i) => i !== index))}
-                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Remove subtask"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {newSubtasks.length === 0 && (
-                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                      <p>No subtasks yet. Add your first subtask to get started.</p>
-                    </div>
-                  )}
                 </div>
 
                 {/* Footer */}
@@ -5035,6 +4944,36 @@ export function CalendarScheduler() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {showSettings && (
+        <div className="fixed inset-0 z-[9999] bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-8 relative">
+            <button
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setShowSettings(false)}
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-2xl font-semibold mb-6 text-center">Settings</h2>
+            <Tabs defaultValue="calendar" className="w-full">
+              <TabsList className="w-full flex justify-center mb-6">
+                <TabsTrigger value="calendar" className="text-lg">Calendar Integrations</TabsTrigger>
+              </TabsList>
+              <TabsContent value="calendar">
+                <div className="flex flex-col items-center gap-6">
+                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg w-full max-w-md">
+                    <img src="/google-calendar-icon.svg" alt="Google Calendar" className="w-10 h-10" />
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900">Google Calendar</div>
+                      <div className="text-sm text-gray-600">Sync your events and tasks with Google Calendar.</div>
+                    </div>
+                    <Button onClick={handleConnectCalendar} className="bg-blue-600 text-white hover:bg-blue-700">Connect</Button>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       )}
