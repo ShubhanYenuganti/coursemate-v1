@@ -50,31 +50,36 @@ function formatDate(dateString: string) {
 
 // Refactor updateCourseTitles to accept courses array and return new array
 async function updateCourseTitles(courseIds: string[], token: string, courses: Course[]): Promise<Course[]> {
+  function getBaseCourseId(courseId: string) {
+    return courseId.split('+')[0];
+  }
   const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
   const coursePromises = courseIds.map(async courseId => {
+    const realCourseId = getBaseCourseId(courseId);
     try {
-      const course = await fetch(`${api}/api/courses/${courseId}`, {
+      const course = await fetch(`${api}/api/courses/${realCourseId}`, {
         headers: { Authorization: `Bearer ${token}` },
         method: "GET"
       });
       if (!course.ok) throw new Error(`Request failed ${course.status}`);
       const courseDetails = await course.json();
       return {
-        course_id: courseId,
+        course_id: realCourseId,
         course_title: courseDetails.title,
         course_description: courseDetails.description
       };
     } catch (error) {
       return {
-        course_id: courseId,
-        course_title: courseId,
+        course_id: realCourseId,
+        course_title: realCourseId,
         course_description: ''
       };
     }
   });
   const courseDetails = await Promise.all(coursePromises);
   const newCourses = courses.map((course: Course) => {
-    const details = courseDetails.find(d => d.course_id === course.course_id);
+    const realCourseId = getBaseCourseId(course.course_id);
+    const details = courseDetails.find(d => d.course_id === realCourseId);
     return details ? {
       ...course,
       course_title: details.course_title,
