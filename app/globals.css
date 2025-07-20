@@ -304,3 +304,32 @@
   --border: 239 15% 20%;
   --input: 239 15% 20%;
 }
+
+/* 3D Card Flip Utilities for Flashcards */
+@layer utilities {
+  .transform-style-preserve-3d {
+    transform-style: preserve-3d;
+  }
+  
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+  
+  .rotate-y-180 {
+    transform: rotateY(180deg);
+  }
+  
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  
+  /* Smooth hover effects for flashcards */
+  .flashcard-hover {
+    transition: all 0.3s ease;
+  }
+  
+  .flashcard-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  }
+}

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from 'react';
-import { BookOpen, Brain, FileText, Download, Loader2, Sparkles } from 'lucide-react';
+import { BookOpen, Brain, FileText, Download, Loader2, Sparkles, ChevronLeft, ChevronRight, RotateCcw, Grid, Play } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import jsPDF from 'jspdf';
 
 interface Quiz {
   questions: QuizQuestion[];
@@ -47,6 +48,16 @@ export default function MaterialGenerationInterface() {
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
 
+  // Quiz interaction state
+  const [userAnswers, setUserAnswers] = useState<{[key: number]: string}>({});
+  const [submittedAnswers, setSubmittedAnswers] = useState<{[key: number]: boolean}>({});
+  const [showResults, setShowResults] = useState<{[key: number]: boolean}>({});
+
+  // Flashcard interaction state
+  const [flippedCards, setFlippedCards] = useState<{[key: number]: boolean}>({});
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [studyMode, setStudyMode] = useState<'grid' | 'study'>('grid');
+
   // Quiz generation
   const [quizTopic, setQuizTopic] = useState('');
   const [quizCount, setQuizCount] = useState(5);
@@ -76,11 +87,64 @@ export default function MaterialGenerationInterface() {
       
       const data = await response.json();
       setQuiz(data);
+      
+      // Reset quiz interaction state
+      setUserAnswers({});
+      setSubmittedAnswers({});
+      setShowResults({});
     } catch (error) {
       console.error('Error generating quiz:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAnswerSelect = (questionIndex: number, answer: string) => {
+    setUserAnswers(prev => ({
+      ...prev,
+      [questionIndex]: answer
+    }));
+  };
+
+  const handleSubmitAnswer = (questionIndex: number) => {
+    setSubmittedAnswers(prev => ({
+      ...prev,
+      [questionIndex]: true
+    }));
+    setShowResults(prev => ({
+      ...prev,
+      [questionIndex]: true
+    }));
+  };
+
+  const resetQuiz = () => {
+    setUserAnswers({});
+    setSubmittedAnswers({});
+    setShowResults({});
+  };
+
+  const flipCard = (cardIndex: number) => {
+    setFlippedCards(prev => ({
+      ...prev,
+      [cardIndex]: !prev[cardIndex]
+    }));
+  };
+
+  const nextCard = () => {
+    if (currentCardIndex < flashcards.length - 1) {
+      setCurrentCardIndex(prev => prev + 1);
+    }
+  };
+
+  const prevCard = () => {
+    if (currentCardIndex > 0) {
+      setCurrentCardIndex(prev => prev - 1);
+    }
+  };
+
+  const resetFlashcards = () => {
+    setFlippedCards({});
+    setCurrentCardIndex(0);
   };
 
   const generateFlashcards = async () => {
@@ -99,6 +163,11 @@ export default function MaterialGenerationInterface() {
       
       const data = await response.json();
       setFlashcards(data.flashcards || []);
+      
+      // Reset flashcard interaction state
+      setFlippedCards({});
+      setCurrentCardIndex(0);
+      setStudyMode('grid');
     } catch (error) {
       console.error('Error generating flashcards:', error);
     } finally {
@@ -129,15 +198,146 @@ export default function MaterialGenerationInterface() {
   };
 
   const exportContent = (content: any, filename: string) => {
-    const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (filename.includes('quiz')) {
+      exportQuizAsPDF(content, filename.replace('.json', '.pdf'));
+    } else if (filename.includes('flashcards')) {
+      exportFlashcardsAsPDF(content, filename.replace('.json', '.pdf'));
+    } else if (filename.includes('summary')) {
+      exportSummaryAsPDF(content, filename.replace('.json', '.pdf'));
+    }
+  };
+
+  const exportQuizAsPDF = (quiz: Quiz, filename: string) => {
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(20);
+    doc.text(`Quiz: ${quiz.topic}`, 20, 30);
+    
+    // Quiz info
+    doc.setFontSize(12);
+    doc.text(`Type: ${quiz.type.replace('_', ' ')}`, 20, 45);
+    doc.text(`Number of Questions: ${quiz.questions.length}`, 20, 55);
+    
+    let yPosition = 75;
+    
+    quiz.questions.forEach((question, index) => {
+      // Check if we need a new page
+      if (yPosition > 250) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      
+      // Question number and text
+      doc.setFontSize(14);
+      doc.text(`${index + 1}. ${question.question}`, 20, yPosition);
+      yPosition += 15;
+      
+      // Options for multiple choice
+      if (question.options) {
+        doc.setFontSize(10);
+        question.options.forEach((option) => {
+          doc.text(option, 25, yPosition);
+          yPosition += 8;
+        });
+        yPosition += 5;
+      }
+      
+      // Answer
+      doc.setFontSize(11);
+      doc.text(`Answer: ${question.correct_answer}`, 25, yPosition);
+      yPosition += 10;
+      
+      // Explanation
+      if (question.explanation) {
+        doc.setFontSize(9);
+        const explanationLines = doc.splitTextToSize(`Explanation: ${question.explanation}`, 160);
+        doc.text(explanationLines, 25, yPosition);
+        yPosition += explanationLines.length * 5 + 10;
+      }
+      
+      yPosition += 10; // Space between questions
+    });
+    
+    doc.save(filename);
+  };
+
+  const exportFlashcardsAsPDF = (flashcards: any[], filename: string) => {
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(20);
+    doc.text('Flashcards', 20, 30);
+    
+    let yPosition = 50;
+    
+    flashcards.forEach((card, index) => {
+      // Check if we need a new page
+      if (yPosition > 240) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      
+      // Card number
+      doc.setFontSize(14);
+      doc.text(`Card ${index + 1}`, 20, yPosition);
+      yPosition += 15;
+      
+      // Front (Question)
+      doc.setFontSize(12);
+      doc.text('Front:', 20, yPosition);
+      yPosition += 8;
+      const frontLines = doc.splitTextToSize(card.front, 160);
+      doc.text(frontLines, 25, yPosition);
+      yPosition += frontLines.length * 6 + 10;
+      
+      // Back (Answer)
+      doc.text('Back:', 20, yPosition);
+      yPosition += 8;
+      const backLines = doc.splitTextToSize(card.back, 160);
+      doc.text(backLines, 25, yPosition);
+      yPosition += backLines.length * 6 + 15;
+    });
+    
+    doc.save(filename);
+  };
+
+  const exportSummaryAsPDF = (summary: any, filename: string) => {
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(20);
+    doc.text(`Summary: ${summary.topic}`, 20, 30);
+    
+    let yPosition = 50;
+    
+    // Main summary
+    doc.setFontSize(12);
+    doc.text('Summary:', 20, yPosition);
+    yPosition += 10;
+    
+    const summaryLines = doc.splitTextToSize(summary.summary, 160);
+    doc.text(summaryLines, 20, yPosition);
+    yPosition += summaryLines.length * 6 + 20;
+    
+    // Key points
+    if (summary.key_points && summary.key_points.length > 0) {
+      doc.setFontSize(14);
+      doc.text('Key Points:', 20, yPosition);
+      yPosition += 15;
+      
+      doc.setFontSize(10);
+      summary.key_points.forEach((point: string, index: number) => {
+        if (yPosition > 270) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        doc.text(`• ${point}`, 25, yPosition);
+        yPosition += 8;
+      });
+    }
+    
+    doc.save(filename);
   };
 
   return (
@@ -219,7 +419,7 @@ export default function MaterialGenerationInterface() {
                 <CardTitle>Generated Quiz</CardTitle>
                 <Button
                   variant="outline"
-                  onClick={() => exportContent(quiz, `quiz-${quiz.topic}.json`)}
+                  onClick={() => exportContent(quiz, `quiz-${quiz.topic}.pdf`)}
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export
@@ -227,26 +427,143 @@ export default function MaterialGenerationInterface() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Badge variant="secondary">{quiz.type.replace('_', ' ')}</Badge>
-                    <Badge>{quiz.questions.length} questions</Badge>
-                  </div>
-                  {quiz.questions.map((question, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <p className="font-medium mb-2">{index + 1}. {question.question}</p>
-                      {question.options && (
-                        <div className="space-y-1 mb-2">
-                          {question.options.map((option, optIndex) => (
-                            <p key={optIndex} className="text-sm text-gray-600">{option}</p>
-                          ))}
-                        </div>
-                      )}
-                      <p className="text-sm text-green-600 font-medium">
-                        Answer: {question.correct_answer.toString()}
-                      </p>
-                      <p className="text-sm text-gray-500 mt-1">{question.explanation}</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{quiz.type.replace('_', ' ')}</Badge>
+                      <Badge>{quiz.questions.length} questions</Badge>
                     </div>
-                  ))}
+                    <Button variant="outline" size="sm" onClick={resetQuiz}>
+                      Reset Quiz
+                    </Button>
+                  </div>
+                  {quiz.questions.map((question, index) => {
+                    const userAnswer = userAnswers[index];
+                    const isSubmitted = submittedAnswers[index];
+                    const showResult = showResults[index];
+                    const isCorrect = userAnswer === question.correct_answer;
+
+                    return (
+                      <div key={index} className="border rounded-lg p-4">
+                        <p className="font-medium mb-4">{index + 1}. {question.question}</p>
+                        
+                        {question.options && quiz.type === 'multiple_choice' && (
+                          <div className="space-y-2 mb-4">
+                            {question.options.map((option, optIndex) => {
+                              const optionLetter = option.charAt(0);
+                              const isSelected = userAnswer === optionLetter;
+                              const isCorrectOption = question.correct_answer === optionLetter;
+                              
+                              let buttonClass = "w-full text-left p-3 border rounded-lg transition-colors ";
+                              if (showResult) {
+                                if (isCorrectOption) {
+                                  buttonClass += "bg-green-100 border-green-500 text-green-800";
+                                } else if (isSelected && !isCorrect) {
+                                  buttonClass += "bg-red-100 border-red-500 text-red-800";
+                                } else {
+                                  buttonClass += "bg-gray-50 border-gray-200";
+                                }
+                              } else if (isSelected) {
+                                buttonClass += "bg-blue-100 border-blue-500 text-blue-800";
+                              } else {
+                                buttonClass += "hover:bg-gray-50 border-gray-200";
+                              }
+                              
+                              return (
+                                <button
+                                  key={optIndex}
+                                  className={buttonClass}
+                                  onClick={() => !isSubmitted && handleAnswerSelect(index, optionLetter)}
+                                  disabled={isSubmitted}
+                                >
+                                  {option}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        {question.options && quiz.type === 'true_false' && (
+                          <div className="space-y-2 mb-4">
+                            {['True', 'False'].map((option) => {
+                              const isSelected = userAnswer === option.toLowerCase();
+                              const isCorrectOption = question.correct_answer.toString().toLowerCase() === option.toLowerCase();
+                              
+                              let buttonClass = "w-full text-left p-3 border rounded-lg transition-colors ";
+                              if (showResult) {
+                                if (isCorrectOption) {
+                                  buttonClass += "bg-green-100 border-green-500 text-green-800";
+                                } else if (isSelected && !isCorrect) {
+                                  buttonClass += "bg-red-100 border-red-500 text-red-800";
+                                } else {
+                                  buttonClass += "bg-gray-50 border-gray-200";
+                                }
+                              } else if (isSelected) {
+                                buttonClass += "bg-blue-100 border-blue-500 text-blue-800";
+                              } else {
+                                buttonClass += "hover:bg-gray-50 border-gray-200";
+                              }
+                              
+                              return (
+                                <button
+                                  key={option}
+                                  className={buttonClass}
+                                  onClick={() => !isSubmitted && handleAnswerSelect(index, option.toLowerCase())}
+                                  disabled={isSubmitted}
+                                >
+                                  {option}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        {quiz.type === 'open_ended' && (
+                          <div className="mb-4">
+                            <textarea
+                              className="w-full p-3 border rounded-lg"
+                              rows={3}
+                              placeholder="Type your answer here..."
+                              value={userAnswer || ''}
+                              onChange={(e) => handleAnswerSelect(index, e.target.value)}
+                              disabled={isSubmitted}
+                            />
+                          </div>
+                        )}
+                        
+                        {!isSubmitted && userAnswer && (
+                          <Button 
+                            onClick={() => handleSubmitAnswer(index)}
+                            className="mb-3"
+                          >
+                            Submit Answer
+                          </Button>
+                        )}
+                        
+                        {showResult && (
+                          <div className={`p-3 rounded-lg ${isCorrect && quiz.type !== 'open_ended' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                            {quiz.type !== 'open_ended' && (
+                              <p className={`font-medium ${isCorrect ? 'text-green-800' : 'text-red-800'}`}>
+                                {isCorrect ? '✅ Correct!' : '❌ Incorrect'}
+                              </p>
+                            )}
+                            <p className="text-sm text-gray-700 mt-1">
+                              <strong>Correct Answer:</strong> {question.correct_answer}
+                            </p>
+                            {question.explanation && (
+                              <p className="text-sm text-gray-600 mt-2">
+                                <strong>Explanation:</strong> {question.explanation}
+                              </p>
+                            )}
+                            {quiz.type === 'open_ended' && question.sample_answer && (
+                              <p className="text-sm text-gray-600 mt-2">
+                                <strong>Sample Answer:</strong> {question.sample_answer}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -295,7 +612,7 @@ export default function MaterialGenerationInterface() {
                 <CardTitle>Generated Flashcards</CardTitle>
                 <Button
                   variant="outline"
-                  onClick={() => exportContent(flashcards, `flashcards-${flashcardTopic || 'general'}.json`)}
+                  onClick={() => exportContent(flashcards, `flashcards-${flashcardTopic || 'general'}.pdf`)}
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export
@@ -353,7 +670,7 @@ export default function MaterialGenerationInterface() {
                 <CardTitle>Generated Summary</CardTitle>
                 <Button
                   variant="outline"
-                  onClick={() => exportContent(summary, `summary-${summary.topic}.json`)}
+                  onClick={() => exportContent(summary, `summary-${summary.topic}.pdf`)}
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export
