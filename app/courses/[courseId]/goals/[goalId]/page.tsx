@@ -11,14 +11,19 @@ import {
   Plus, 
   Trash2,
   CheckCircle,
-  CheckSquare
+  CheckSquare,
+  List,
+  CalendarDays,
+  Circle,
+  MessageCircle
 } from 'lucide-react';
 import { Toaster, toast } from 'react-hot-toast';
 import { GoalWithProgress, Task, TaskWithProgress, Subtask } from '../../../components/studyplan/types';
 import TaskCard from '../../../components/studyplan/TaskCard';
-import SubtaskList from '../../../components/studyplan/SubtaskList';
+import { SubtaskList } from '../../../components/studyplan/SubtaskList';
 import TaskEditorModal from '../../../components/studyplan/TaskEditorModal';
 import { format, parseISO } from 'date-fns';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 const GoalDetailPage = () => {
   // Use the useParams hook to get the route parameters
@@ -39,6 +44,9 @@ const GoalDetailPage = () => {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskWithProgress | null>(null);
+  const [viewMode, setViewMode] = useState<'tasks' | 'subtasks'>('tasks');
+  const [timeDataModal, setTimeDataModal] = useState<{ subtask: Subtask; timeData: any } | null>(null);
+  const [analyticsMode, setAnalyticsMode] = useState<'today' | 'week'>('today');
 
   useEffect(() => {
     const fetchGoalDetails = async () => {
@@ -737,6 +745,274 @@ const GoalDetailPage = () => {
     });
   };
 
+  // Helper function to get all subtasks from all tasks
+  const getAllSubtasks = () => {
+    const allSubtasks: Array<Subtask & { taskName: string; taskDueDate: string }> = [];
+    tasks.forEach(task => {
+      task.subtasks.forEach(subtask => {
+        allSubtasks.push({
+          ...subtask,
+          taskName: task.name,
+          taskDueDate: task.scheduledDate
+        });
+      });
+    });
+    return allSubtasks;
+  };
+
+  // Helper function to check if a subtask is overdue
+  const isSubtaskOverdue = (subtask: Subtask) => {
+    // If subtask is completed, it's not overdue
+    if (subtask.completed) {
+      return false;
+    }
+    
+    // Get the subtask's due date - prioritize subtask's own end_time
+    let dueDate: Date | null = null;
+    
+    if (subtask.end_time) {
+      // Use subtask's own due date
+      dueDate = new Date(subtask.end_time);
+    } else if (subtask.task_due_date) {
+      // Fall back to task's due date if subtask doesn't have its own
+      dueDate = new Date(subtask.task_due_date);
+    }
+    
+    // If no due date at all, it's not overdue
+    if (!dueDate) {
+      return false;
+    }
+    
+    // Compare with current time
+    const now = new Date();
+    
+    // For date-only comparison (without time), reset time to start of day
+    const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+    const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    return dueDateOnly < todayOnly;
+  };
+
+  // Helper function to organize subtasks by due date
+  const getSubtasksByDate = () => {
+    const allSubtasks = getAllSubtasks();
+    const subtasksByDate = new Map<string, Array<Subtask & { taskName: string; taskDueDate: string; isOverdue: boolean }>>();
+    
+    allSubtasks.forEach(subtask => {
+      // Get the subtask's due date - prioritize subtask's own end_time
+      let dueDate: string;
+      
+      if (subtask.end_time) {
+        // Use subtask's own due date
+        dueDate = new Date(subtask.end_time).toISOString().split('T')[0];
+      } else if (subtask.task_due_date) {
+        // Fall back to task's due date if subtask doesn't have its own
+        dueDate = new Date(subtask.task_due_date).toISOString().split('T')[0];
+      } else {
+        // If no due date, use task's due date as fallback
+        dueDate = subtask.taskDueDate.split('T')[0];
+      }
+      
+      const overdue = isSubtaskOverdue(subtask);
+      
+      if (!subtasksByDate.has(dueDate)) {
+        subtasksByDate.set(dueDate, []);
+      }
+      
+      subtasksByDate.get(dueDate)!.push({
+        ...subtask,
+        isOverdue: overdue
+      });
+    });
+    
+    // Sort dates and subtasks within each date
+    const sortedDates = Array.from(subtasksByDate.keys()).sort();
+    const result = new Map<string, Array<Subtask & { taskName: string; taskDueDate: string; isOverdue: boolean }>>();
+    
+    sortedDates.forEach(date => {
+      const subtasks = subtasksByDate.get(date)!;
+      // Sort subtasks: overdue first, then by completion status
+      subtasks.sort((a, b) => {
+        if (a.isOverdue && !b.isOverdue) return -1;
+        if (!a.isOverdue && b.isOverdue) return 1;
+        if (a.completed && !b.completed) return 1;
+        if (!a.completed && b.completed) return -1;
+        return 0;
+      });
+      result.set(date, subtasks);
+    });
+    
+    return result;
+  };
+
+  // Helper function to get time data for a subtask
+  const getTimeData = async (subtaskId: string) => {
+    try {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return null;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/subtasks/${subtaskId}/time-data`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+      });
+
+      if (response.ok) {
+        const timeData = await response.json();
+        return timeData;
+      } else {
+        console.error('Failed to get time data');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error getting time data:', error);
+      return null;
+    }
+  };
+
+  // Helper function to toggle subtask completion
+  const handleToggleSubtask = async (subtaskId: string, completed: boolean) => {
+    try {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      const response = await fetch(`${api}/api/goals/tasks/subtasks/${subtaskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          completed: completed
+        }),
+      });
+
+      if (response.ok) {
+        // Update local state instead of reloading
+        setTasks(prevTasks => 
+          prevTasks.map(task => {
+            const updatedSubtasks = task.subtasks.map(subtask => 
+              subtask.id === subtaskId ? { ...subtask, completed } : subtask
+            );
+            
+            const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+            const totalSubtasksCount = updatedSubtasks.length;
+            
+            return {
+              ...task,
+              subtasks: updatedSubtasks,
+              completedSubtasks: completedSubtasksCount,
+              totalSubtasks: totalSubtasksCount,
+              completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0,
+              progress: totalSubtasksCount > 0 
+                ? Math.round((completedSubtasksCount / totalSubtasksCount) * 100) 
+                : 0
+            };
+          })
+        );
+        
+        // Update goal progress
+        if (goal) {
+          const updatedTasks = tasks.map(task => {
+            const updatedSubtasks = task.subtasks.map(subtask => 
+              subtask.id === subtaskId ? { ...subtask, completed } : subtask
+            );
+            
+            const completedSubtasksCount = updatedSubtasks.filter(s => s.completed).length;
+            const totalSubtasksCount = updatedSubtasks.length;
+            
+            return {
+              ...task,
+              subtasks: updatedSubtasks,
+              completedSubtasks: completedSubtasksCount,
+              totalSubtasks: totalSubtasksCount,
+              completed: completedSubtasksCount === totalSubtasksCount && totalSubtasksCount > 0,
+              progress: totalSubtasksCount > 0 
+                ? Math.round((completedSubtasksCount / totalSubtasksCount) * 100) 
+                : 0
+            };
+          });
+          
+          const totalSubtasks = updatedTasks.reduce((sum, task) => sum + task.totalSubtasks, 0);
+          const completedSubtasks = updatedTasks.reduce((sum, task) => sum + task.completedSubtasks, 0);
+          const newProgress = totalSubtasks > 0 
+            ? Math.round((completedSubtasks / totalSubtasks) * 100)
+            : 0;
+          
+          const allTasksCompleted = updatedTasks.length > 0 && updatedTasks.every(t => t.completed);
+          
+          setGoal({
+            ...goal,
+            progress: newProgress,
+            totalTasks: updatedTasks.length,
+            completedTasks: updatedTasks.filter(t => t.progress === 100).length,
+            completed: allTasksCompleted
+          });
+        }
+        
+        toast.success(completed ? 'Subtask completed!' : 'Subtask marked as incomplete');
+      } else {
+        toast.error('Failed to update subtask');
+      }
+    } catch (error) {
+      console.error('Error updating subtask:', error);
+      toast.error('Failed to update subtask');
+    }
+  };
+
+  // Analytics data aggregation
+  const getAnalyticsData = () => {
+    const allSubtasks = getAllSubtasks();
+    if (analyticsMode === 'today') {
+      // Sum all subtask time for today
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      let totalMinutes = 0;
+      allSubtasks.forEach(subtask => {
+        // Use subtask_engagement_end or updatedAt as completion date
+        const dateStr = (subtask.subtask_engagement_end || subtask.updatedAt || '').split('T')[0];
+        if (dateStr === todayStr && subtask.subtask_total_active_minutes) {
+          totalMinutes += subtask.subtask_total_active_minutes;
+        }
+      });
+      return [{ name: 'Today', minutes: totalMinutes }];
+    } else {
+      // This week: Sunday to Saturday
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay()); // Sunday
+      const week: { [key: string]: number } = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+      allSubtasks.forEach(subtask => {
+        const dateStr = (subtask.subtask_engagement_end || subtask.updatedAt || '').split('T')[0];
+        if (!dateStr) return;
+        const date = new Date(dateStr);
+        if (date >= weekStart && date <= now && subtask.subtask_total_active_minutes) {
+          const day = date.toLocaleDateString(undefined, { weekday: 'short' });
+          if (week[day] !== undefined) {
+            week[day] += subtask.subtask_total_active_minutes;
+          }
+        }
+      });
+      return [
+        { name: 'Sun', minutes: week['Sun'] },
+        { name: 'Mon', minutes: week['Mon'] },
+        { name: 'Tue', minutes: week['Tue'] },
+        { name: 'Wed', minutes: week['Wed'] },
+        { name: 'Thu', minutes: week['Thu'] },
+        { name: 'Fri', minutes: week['Fri'] },
+        { name: 'Sat', minutes: week['Sat'] },
+      ];
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <Toaster position="top-right" />
@@ -855,77 +1131,119 @@ const GoalDetailPage = () => {
         )}
       </div>
       
-      {/* Tasks Section */}
+      {/* View Toggle and Content Section */}
       <div className="mb-6">
+        {/* View Toggle */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 bg-gray-600 rounded-lg flex items-center justify-center">
-              <CheckSquare className="w-4 h-4 text-white" />
+              {viewMode === 'tasks' ? (
+                <CheckSquare className="w-4 h-4 text-white" />
+              ) : (
+                <CalendarDays className="w-4 h-4 text-white" />
+              )}
             </div>
-            <h3 className="text-xl font-bold text-gray-900">Tasks</h3>
+            <h3 className="text-xl font-bold text-gray-900">
+              {viewMode === 'tasks' ? 'Tasks' : 'Subtasks by Due Date'}
+            </h3>
           </div>
-          <button
-            onClick={() => setIsAddingTask(!isAddingTask)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Task</span>
-          </button>
+          
+          <div className="flex items-center gap-3">
+            {/* View Toggle Button */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('tasks')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'tasks'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                <span>Tasks</span>
+              </button>
+              <button
+                onClick={() => setViewMode('subtasks')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'subtasks'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <CalendarDays className="w-4 h-4" />
+                <span>Subtasks</span>
+              </button>
+            </div>
+            
+            {/* Add Task Button - only show in tasks view */}
+            {viewMode === 'tasks' && (
+              <button
+                onClick={() => setIsAddingTask(!isAddingTask)}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Task</span>
+              </button>
+            )}
+          </div>
         </div>
         
-        {/* Add Task Form */}
-        {isAddingTask && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Task Name</label>
-                <input
-                  type="text"
-                  value={newTaskName}
-                  onChange={(e) => setNewTaskName(e.target.value)}
-                  placeholder="Enter task name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+        {/* Conditional Content Based on View Mode */}
+        {viewMode === 'tasks' ? (
+          <>
+            {/* Add Task Form */}
+            {isAddingTask && (
+              <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Task Name</label>
+                    <input
+                      type="text"
+                      value={newTaskName}
+                      onChange={(e) => setNewTaskName(e.target.value)}
+                      placeholder="Enter task name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                    <input
+                      type="date"
+                      value={newTaskDate}
+                      onChange={(e) => setNewTaskDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setIsAddingTask(false)}
+                      className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddTask}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Add Task
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                <input
-                  type="date"
-                  value={newTaskDate}
-                  onChange={(e) => setNewTaskDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div className="flex justify-end gap-2">
+            )}
+            
+            {/* Tasks List */}
+            {tasks.length === 0 ? (
+              <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                <p className="text-gray-500">No tasks created yet.</p>
                 <button
-                  onClick={() => setIsAddingTask(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                  onClick={() => setIsAddingTask(true)}
+                  className="mt-2 text-blue-600 hover:text-blue-800"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddTask}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Add Task
+                  Add your first task
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Tasks List */}
-        {tasks.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-            <p className="text-gray-500">No tasks created yet.</p>
-            <button
-              onClick={() => setIsAddingTask(true)}
-              className="mt-2 text-blue-600 hover:text-blue-800"
-            >
-              Add your first task
-            </button>
-          </div>
-        ) : (
+            ) : (
           <div className="space-y-4">
             {tasks
               .slice() // create a shallow copy to avoid mutating state
@@ -1125,6 +1443,111 @@ const GoalDetailPage = () => {
             ))}
           </div>
         )}
+          </>
+        ) : (
+          /* Subtasks by Due Date View */
+          <div className="space-y-6">
+            {(() => {
+              const subtasksByDate = getSubtasksByDate();
+              const allSubtasks = getAllSubtasks();
+              
+              if (allSubtasks.length === 0) {
+                return (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                    <p className="text-gray-500">No subtasks found.</p>
+                    <p className="text-sm text-gray-400 mt-1">Create tasks and subtasks to see them organized by due date.</p>
+                  </div>
+                );
+              }
+              
+              return Array.from(subtasksByDate.entries()).map(([date, subtasks]) => {
+                // Check if any subtasks in this date group are overdue
+                const hasOverdueSubtasks = subtasks.some(subtask => subtask.isOverdue);
+                
+                return (
+                <div key={date} className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className={`px-4 py-3 border-b ${
+                    hasOverdueSubtasks ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <h4 className={`font-semibold ${
+                        hasOverdueSubtasks ? 'text-red-700' : 'text-gray-700'
+                      }`}>
+                        {formatDate(date)}
+                        {hasOverdueSubtasks && (
+                          <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
+                            Overdue
+                          </span>
+                        )}
+                      </h4>
+                      <span className="text-sm text-gray-500">
+                        {subtasks.filter(s => !s.completed).length} remaining
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 space-y-3">
+                    {subtasks.map((subtask) => (
+                      <div
+                        key={subtask.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          subtask.isOverdue && !subtask.completed
+                            ? 'bg-red-50 border-red-200'
+                            : 'bg-gray-50 border-gray-200'
+                        }`}
+                      >
+                        <button
+                          onClick={() => handleToggleSubtask(subtask.id, !subtask.completed)}
+                          className="flex-shrink-0"
+                        >
+                          {subtask.completed ? (
+                            <CheckCircle size={20} className="text-green-500" />
+                          ) : (
+                            <Circle size={20} className={`${
+                              subtask.isOverdue ? 'text-red-400' : 'text-gray-400'
+                            } hover:text-gray-600`} />
+                          )}
+                        </button>
+                        
+                        <div className="flex-1">
+                          <p className={`text-sm ${
+                            subtask.completed 
+                              ? 'text-gray-500 line-through' 
+                              : subtask.isOverdue 
+                                ? 'text-red-700 font-medium' 
+                                : 'text-gray-800'
+                          }`}>
+                            {subtask.name}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            From: {subtask.taskName}
+                          </p>
+                        </div>
+                        
+                        <div className="flex items-center gap-1">
+                          {/* Feedback button for time data - only show when subtask is completed */}
+                          {subtask.completed && (
+                            <button
+                              onClick={async () => {
+                                const timeData = await getTimeData(subtask.id);
+                                setTimeDataModal({ subtask, timeData });
+                              }}
+                              className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
+                              title="View time data"
+                            >
+                              <MessageCircle size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                );
+              });
+            })()}
+          </div>
+        )}
       </div>
       
       {/* Delete Goal Confirmation Dialog */}
@@ -1145,6 +1568,40 @@ const GoalDetailPage = () => {
                 className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
               >
                 Delete Goal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Time Data Modal */}
+      {timeDataModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]" onClick={() => setTimeDataModal(null)}>
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+            <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600" onClick={() => setTimeDataModal(null)}>
+              <span className="text-xl">&times;</span>
+            </button>
+            <h3 className="text-lg font-semibold mb-4 text-center">Time Data</h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="font-medium">Started:</span>
+                <span>{timeDataModal.timeData?.started ? new Date(timeDataModal.timeData.started).toLocaleString() : 'Not started'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium">Last Changed:</span>
+                <span>{timeDataModal.timeData?.last_changed ? new Date(timeDataModal.timeData.last_changed).toLocaleString() : 'No interactions'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium">Total Time:</span>
+                <span>{timeDataModal.timeData?.total_time_minutes ? `${timeDataModal.timeData.total_time_minutes.toFixed(1)} minutes` : '0 minutes'}</span>
+              </div>
+            </div>
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => setTimeDataModal(null)}
+                className="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>

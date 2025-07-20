@@ -1,5 +1,5 @@
-import eventlet
-eventlet.monkey_patch()
+#import eventlet
+#eventlet.monkey_patch()
 
 from app.config import Config
 from dotenv import load_dotenv
@@ -23,4 +23,5 @@ def make_shell_context():
     return {'db': db, 'User': User}  # Add other models as needed
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=5173, debug=True)
+    #socketio.run(app, host="0.0.0.0", port=5173, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5173, debug=True, allow_unsafe_werkzeug=True)

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Target, Calendar, Clock, Repeat } from 'lucide-react';
+import { X, Target, Calendar, Clock, Repeat, Brain } from 'lucide-react';
 import { Goal, GoalWithProgress } from './types';
 import { Portal } from '../../../../components/Portal';
 
@@ -17,10 +17,12 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
     targetDate: '',
     workMinutesPerDay: 60,
     frequency: 'daily' as 'daily' | 'weekly' | 'custom',
-    customScheduleDays: [] as number[]
+    customScheduleDays: [] as number[],
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'critical'
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showAIGenerator, setShowAIGenerator] = useState(false);
 
   // Reset form when modal is closed or opened
   useEffect(() => {
@@ -100,6 +102,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
       workMinutesPerDay: formData.workMinutesPerDay,
       frequency: formData.frequency,
       customScheduleDays: formData.frequency === 'custom' ? formData.customScheduleDays : undefined,
+      priority: formData.priority,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -173,6 +176,31 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
               {errors.title && (
                 <p className="text-red-500 text-sm mt-1">{errors.title}</p>
               )}
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+              <div className="flex gap-2">
+                {[
+                  { value: 'low', color: 'bg-gray-300', border: 'border-gray-400', label: 'Low' },
+                  { value: 'medium', color: 'bg-blue-400', border: 'border-blue-500', label: 'Medium' },
+                  { value: 'high', color: 'bg-orange-400', border: 'border-orange-500', label: 'High' },
+                  { value: 'critical', color: 'bg-red-500', border: 'border-red-600', label: 'Critical' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleInputChange('priority', opt.value)}
+                    className={`flex items-center gap-1 px-3 py-1 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-${opt.color.split('-')[1]}-400
+                      ${formData.priority === opt.value ? `${opt.color} text-white ${opt.border}` : 'bg-white text-gray-700 border-gray-300'}`}
+                    aria-label={opt.label}
+                  >
+                    <span className={`inline-block w-3 h-3 rounded-full mr-1 ${opt.color}`}></span>
+                    <span className="text-xs font-semibold">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Target Date */}

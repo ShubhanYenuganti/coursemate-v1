@@ -57,7 +57,13 @@ const AIGenerateStudyPlan: React.FC<AIGenerateStudyPlanProps> = ({
       try {
         setIsLoadingMaterials(true);
         const token = localStorage.getItem('token');
-        const response = await fetch(`/api/courses/${courseId}/materials`, {
+        if (!token) {
+          toast.error('Not authenticated');
+          setIsLoadingMaterials(false);
+          return;
+        }
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const response = await fetch(`${api}/api/courses/${courseId}/materials`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

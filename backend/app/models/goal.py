@@ -68,6 +68,12 @@ class Goal(db.Model):
     task_has_ever_been_completed = Column(Boolean, default=False)
     subtask_order = Column(db.Integer, nullable=True)
     
+    # Canvas-style time tracking fields
+    subtask_engagement_start = Column(DateTime(timezone=True), nullable=True)
+    subtask_engagement_end = Column(DateTime(timezone=True), nullable=True)
+    subtask_total_active_minutes = Column(db.Float, nullable=True)  # Total time questions were on-screen
+    subtask_last_interaction = Column(DateTime(timezone=True), nullable=True)
+    
     workMinutesPerDay = Column(db.Integer, nullable=True)
     frequency = Column(db.JSON, default=dict)
     
@@ -80,7 +86,10 @@ class Goal(db.Model):
                  task_due_date=None, task_engagement_start=None, task_engagement_end=None, 
                  task_estimated_time_minutes=None, task_actual_time_minutes=None, 
                  task_is_being_tracked=False, task_actual_time_seconds=None, started_by_subtask=None,
-                 task_has_ever_been_completed=False, subtask_order=None, workMinutesPerDay = None, frequency = None):
+                 task_has_ever_been_completed=False, subtask_order=None, 
+                 subtask_engagement_start=None, subtask_engagement_end=None, 
+                 subtask_total_active_minutes=None, subtask_last_interaction=None,
+                 workMinutesPerDay = None, frequency = None):
         self.id = str(uuid.uuid4())
         self.user_id = user_id
         self.course_id = course_id
@@ -127,6 +136,12 @@ class Goal(db.Model):
         self.started_by_subtask = started_by_subtask
         self.task_has_ever_been_completed = task_has_ever_been_completed
         self.subtask_order = subtask_order
+        
+        # Canvas-style time tracking fields
+        self.subtask_engagement_start = subtask_engagement_start
+        self.subtask_engagement_end = subtask_engagement_end
+        self.subtask_total_active_minutes = subtask_total_active_minutes
+        self.subtask_last_interaction = subtask_last_interaction
         
         self.workMinutesPerDay = workMinutesPerDay
         self.frequency = frequency
@@ -198,9 +213,14 @@ class Goal(db.Model):
             'task_actual_time_minutes': self.task_actual_time_minutes,
             'task_is_being_tracked': self.task_is_being_tracked,
             'task_actual_time_seconds': self.task_actual_time_seconds,
+            'time_spent_seconds': self.task_actual_time_seconds,
             'started_by_subtask': self.started_by_subtask,
             'task_has_ever_been_completed': self.task_has_ever_been_completed,
             'subtask_order': self.subtask_order,
+            'subtask_engagement_start': self._fmt(self.subtask_engagement_start),
+            'subtask_engagement_end': self._fmt(self.subtask_engagement_end),
+            'subtask_total_active_minutes': self.subtask_total_active_minutes,
+            'subtask_last_interaction': self._fmt(self.subtask_last_interaction),
             'workMinutesPerDay': self.workMinutesPerDay,
             'frequency': self.frequency
         } 

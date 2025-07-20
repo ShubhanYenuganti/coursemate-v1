@@ -90,7 +90,8 @@ const TaskList: React.FC<TaskListProps> = ({ goalId, onTaskUpdated, courseId }) 
           createdAt: item.created_at,
           updatedAt: item.updated_at,
           task_due_date: item.task_due_date,
-          subtask_order: item.subtask_order
+          subtask_order: item.subtask_order,
+          timeSpentSeconds: item.time_spent_seconds // <-- Add this line
         });
       });
       

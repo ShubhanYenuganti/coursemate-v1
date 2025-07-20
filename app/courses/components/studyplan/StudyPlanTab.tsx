@@ -53,7 +53,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
         }
 
         const data = await response.json();
-
+        
         // Transform backend data to match frontend types
         const transformedGoals: GoalWithProgress[] = data.map((goal: any) => {
           console.log('Processing goal from API:', goal);
@@ -73,9 +73,9 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
             customScheduledDays: goal.customScheduleDays // Assuming backend sends this
           };
         });
-
+        
         setGoals(transformedGoals);
-      } catch (error) {
+          } catch (error) {
         console.error('Error fetching goals:', error);
         // Fallback to mock data if API fails
         setGoals(getGoalsWithProgress(courseId));
@@ -372,19 +372,19 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
     setShowAIGenerator(true);
   };
 
-  return (
+    return (
     <div className="space-y-6">
       <Toaster position="top-right" />
       {/* Header */}
       <div className="flex items-center justify-between">
-          <div>
+        <div>
           <h2 className="text-2xl font-bold text-gray-900">Study Plan</h2>
           <p className="text-gray-600 mt-1">
             Track your learning goals and progress for this course
           </p>
         </div>
         <div className="flex gap-2">
-          <button
+        <button
             onClick={() => setShowAIGenerator(true)}
             className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
           >
@@ -393,18 +393,18 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           </button>
         <button
           onClick={() => setIsAddGoalModalOpen(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
-            Add Goal
+          Add Goal
         </button>
-        </div>
       </div>
+        </div>
 
       {isAIGenerating && (
         <div className="flex items-center justify-center py-8">
           <span className="text-lg text-blue-600 font-semibold animate-pulse">AI is generating your study plan...</span>
-            </div>
+                        </div>
       )}
 
       {showAIGenerator && (
@@ -420,25 +420,25 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                     <Brain className="w-4 h-4 text-green-600" />
-            </div>
+                    </div>
                   <h2 className="text-xl font-semibold text-gray-800">AI Study Plan Generator</h2>
-          </div>
-                <button
+                  </div>
+                        <button
                   onClick={() => setShowAIGenerator(false)}
                   className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
+                        >
                   <X className="w-5 h-5" />
-                </button>
-            </div>
+                        </button>
+                      </div>
               <div className="p-6">
                 <AIGenerateStudyPlan
                   courseId={courseId}
                   onStudyPlanGenerated={handleStudyPlanGenerated}
                   onStartGenerating={handleAIGenerateStart}
                 />
-              </div>
-            </div>
-          </div>
+                        </div>
+                                    </div>
+                                  </div>
         </Portal>
       )}
 
@@ -450,8 +450,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
             <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
             <div className="h-3 bg-gray-200 rounded w-1/3 mb-6"></div>
             <div className="h-8 bg-gray-200 rounded w-1/6"></div>
-          </div>
-        </div>
+                                  </div>
+                                </div>
       ) : goals.length === 0 ? (
         <div className="text-center py-12">
           <Target className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -459,15 +459,15 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
           <p className="text-gray-600 mb-6">
             Create your first study goal to start tracking your progress
           </p>
-          <button
+                                    <button
             onClick={() => setIsAddGoalModalOpen(true)}
             className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
-          >
+                                    >
             <Plus className="w-4 h-4" />
             Create Your First Goal
-          </button>
-        </div>
-      ) : (
+                                    </button>
+                                      </div>
+                                    ) : (
         <div className="space-y-4">
           {goals.map(goal => (
             <GoalCard
