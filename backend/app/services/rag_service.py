@@ -17,11 +17,22 @@ class RAGService:
             relevant_chunks = self.document_processor.similarity_search(question, top_k)
             
             if not relevant_chunks:
-                return {
-                    "answer": "I don't have any relevant information to answer your question. Please upload some materials first.",
-                    "source_files": [],
-                    "confidence": 0.0
-                }
+                # Handle conversational messages even without materials
+                greeting_words = ['hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']
+                question_lower = question.lower().strip()
+                
+                if any(greeting in question_lower for greeting in greeting_words):
+                    return {
+                        "answer": "Hello! I'm your AI study assistant, and I'm here to help you with your coursework. Right now, I don't see any materials uploaded to work with. To get started, please upload some documents, PDFs, or text files using the Materials tab, and then I'll be able to answer questions about your content, help explain concepts, and even generate study materials like quizzes and flashcards for you. What would you like to study today?",
+                        "source_files": [],
+                        "confidence": 1.0
+                    }
+                else:
+                    return {
+                        "answer": "I'd love to help you with that question! However, I don't currently have any materials uploaded to reference. To provide you with accurate, helpful answers based on your specific coursework, please upload some documents or files using the Materials tab first. Once you do that, I'll be able to dive deep into your content and give you detailed explanations, examples, and answers tailored to your studies.",
+                        "source_files": [],
+                        "confidence": 0.0
+                    }
             
             # Step 2: Prepare context from retrieved chunks
             context_parts = []
@@ -34,23 +45,35 @@ class RAGService:
             context = "\n\n".join(context_parts)
             
             # Step 3: Generate answer using GPT
-            prompt = f"""Based on the following context, please answer the question. Provide a clear, comprehensive answer without mentioning sources in your response - the sources will be listed separately.
+            prompt = f"""You are a knowledgeable and friendly study assistant having a conversation with a student. You have access to their uploaded course materials and documents. Your goal is to help them understand concepts, answer questions, and provide helpful explanations.
 
-Context:
+Here are the relevant materials from their uploaded documents:
+
 {context}
 
-Question: {question}
+Student's question or message: {question}
 
-Please provide a direct, helpful answer based on the information provided."""
+Instructions for your response:
+- Be conversational and engaging, as if you're a helpful tutor sitting with the student
+- If they greet you (like "hello", "hi"), respond warmly and ask how you can help with their studies
+- For academic questions, provide thorough explanations that help them truly understand the concept
+- Use examples from their materials when helpful
+- Break down complex topics into digestible parts
+- If the question is unclear, ask clarifying questions to better help them
+- Always base your answers on the provided materials, but present the information in a natural, conversational way
+- If the materials don't contain enough information to fully answer their question, acknowledge this and explain what you can tell them from the available content
+- Use a warm, encouraging tone that makes learning feel approachable
+
+Please respond to their message now:"""
 
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that answers questions based on provided context. Give direct, clear answers without mentioning sources or saying 'according to the context'. Just provide the information naturally."},
+                    {"role": "system", "content": "You are a warm, knowledgeable study assistant who helps students understand their course materials. You're having a natural conversation with them, always basing your responses on their uploaded documents. Be encouraging, thorough in explanations, and conversational in tone. Never mention 'sources' or 'context' - just naturally incorporate the information into your helpful responses."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=500,
-                temperature=0.1
+                max_tokens=800,
+                temperature=0.3
             )
             
             answer = response.choices[0].message.content
@@ -91,7 +114,7 @@ Please provide a direct, helpful answer based on the information provided."""
             
             if not relevant_chunks:
                 return {
-                    "quiz": [],
+                    "questions": [],
                     "message": "No materials available to generate quiz from. Please upload some materials first."
                 }
             
@@ -175,7 +198,7 @@ Generate {num_questions} thought-provoking open-ended questions."""
             quiz_data = json.loads(response.choices[0].message.content)
             
             return {
-                "quiz": quiz_data["questions"],
+                "questions": quiz_data["questions"],
                 "type": question_type,
                 "topic": topic or "General",
                 "generated_from": len(relevant_chunks)
@@ -184,7 +207,7 @@ Generate {num_questions} thought-provoking open-ended questions."""
         except Exception as e:
             print(f"Error generating quiz: {str(e)}")
             return {
-                "quiz": [],
+                "questions": [],
                 "message": f"Error generating quiz: {str(e)}"
             }
     
@@ -211,7 +234,7 @@ Generate {num_questions} thought-provoking open-ended questions."""
             
             # Prepare context
             context_parts = []
-            for chunk, _ in relevant_chunks:
+            for chunk, _, _ in relevant_chunks:
                 context_parts.append(chunk.chunk_text)
             
             context = "\n\n".join(context_parts)
@@ -269,7 +292,7 @@ Generate {num_cards} high-quality flashcards covering the most important concept
             else:
                 from ..models.material_chunk import MaterialChunk
                 chunks = MaterialChunk.query.limit(10).all()
-                relevant_chunks = [(chunk, 0.0) for chunk in chunks]
+                relevant_chunks = [(chunk, 0.0, "General") for chunk in chunks]
             
             if not relevant_chunks:
                 return {
@@ -280,7 +303,7 @@ Generate {num_cards} high-quality flashcards covering the most important concept
             
             # Prepare context
             context_parts = []
-            for chunk, _ in relevant_chunks:
+            for chunk, _, filename in relevant_chunks:
                 context_parts.append(chunk.chunk_text)
             
             context = "\n\n".join(context_parts)
