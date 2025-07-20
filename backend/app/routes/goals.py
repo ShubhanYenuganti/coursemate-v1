@@ -591,45 +591,34 @@ def get_goal_tasks(goal_id):
         current_app.logger.error(f"Error getting tasks: {str(e)}")
         return jsonify({'error': 'An error occurred while getting tasks'}), 500
 
-# also check if changing due date creates conflicts with start time of subtask
-# if so send json of metadata on subtasks -- if bypass is set to false
-# frontend receives warning with subtasks, suggesting users to reschedule subtasks or adjust task due date
-# user can choose to bypass warnings if so itll change due date regardless
 @goals_bp.route('/api/goals/<goal_id>/tasks', methods=['PUT'])
 @jwt_required()
 def update_goal_tasks(goal_id):
-    """Update tasks for a goal"""
+    print("Entered update_goal_tasks for goal_id:", goal_id)
     try:
-        # Get current user from JWT
         user_id = get_jwt_identity()
-        
-        # Get all rows for this goal
+
         goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
-        
         if not goals:
+            print("No goals found for goal_id:", goal_id)
             return jsonify({'error': 'Goal not found or you do not have access'}), 404
-        
+
         data = request.get_json()
         if not data or 'tasks' not in data:
+            print("No tasks in data for goal_id:", goal_id, "data:", data)
             return jsonify({'error': 'Tasks are required'}), 400
-        
-        # Get existing task IDs
+
         existing_task_ids = {goal.task_id for goal in goals}
-        
-        # Track which tasks are in the update
         updated_task_ids = set()
-        
-        # Track which subtasks have date conflicts
         conflicting_subtasks = set()
-        
         bypass = data.get('bypass')
+
         if not bypass:
-            # Check for subtasks whose start_time date is after the task_due_date
             for task_data in data['tasks']:
                 task_id = task_data.get('task_id')
-                # Find the corresponding task rows in the DB
                 task_rows = [g for g in goals if g.task_id == task_id]
-                # Get the task_due_date from the update payload if present, else from DB
+                task_due_date = None
+
                 if 'task_due_date' in task_data and task_data['task_due_date']:
                     try:
                         if isinstance(task_data['task_due_date'], str):
@@ -643,103 +632,80 @@ def update_goal_tasks(goal_id):
                         current_app.logger.error(f"Error parsing task_due_date: {task_data['task_due_date']}, error: {e}")
                         task_due_date = None
                 else:
-                    # Fallback to DB value
                     task_due_date = task_rows[0].task_due_date if task_rows and hasattr(task_rows[0], 'task_due_date') else None
-                # Only check if we have a due date
+
                 if task_due_date:
                     for subtask_row in task_rows:
-                        # Skip placeholder rows
                         if getattr(subtask_row, 'task_id', None) == 'placeholder' or getattr(subtask_row, 'subtask_id', None) == 'placeholder':
                             continue
                         start_time = getattr(subtask_row, 'start_time', None)
                         subtask_id = getattr(subtask_row, 'subtask_id', None)
-                        if start_time and subtask_id:
-                            if start_time.date() > task_due_date.date():
-                                conflicting_subtasks.add(subtask_id)
-            # If there are any conflicting subtasks, return them and short-circuit
+                        if start_time and subtask_id and start_time.date() > task_due_date.date():
+                            conflicting_subtasks.add(subtask_id)
+
             if conflicting_subtasks:
                 return jsonify({
                     'conflicting_subtasks': list(conflicting_subtasks),
                     'message': 'Some subtasks have a start_time after the task due date.'
                 }), 409
 
-        
         for task_data in data['tasks']:
             task_id = task_data.get('task_id')
-            
+            print('Received task_due_date:', task_data.get('task_due_date'))
+
             if task_id and task_id in existing_task_ids:
-                # Update existing task
                 updated_task_ids.add(task_id)
                 task_rows = [g for g in goals if g.task_id == task_id]
-                
-                # Update task fields
+
                 for task_row in task_rows:
-                    if 'task_title' in task_data:
-                        task_row.task_title = task_data['task_title']
-                    if 'task_descr' in task_data:
-                        task_row.task_descr = task_data['task_descr']
-                    if 'task_completed' in task_data:
-                        task_row.task_completed = task_data['task_completed']
+                    for field in ['task_title', 'task_descr', 'task_completed']:
+                        if field in task_data:
+                            setattr(task_row, field, task_data[field])
+
                     if 'task_due_date' in task_data:
                         if task_data['task_due_date']:
                             try:
                                 if isinstance(task_data['task_due_date'], str):
-                                    # Handle different date formats
                                     if 'T' in task_data['task_due_date']:
                                         task_due_date = datetime.fromisoformat(task_data['task_due_date'].replace('Z', '+00:00'))
                                     else:
-                                        # Assume YYYY-MM-DD format
                                         task_due_date = datetime.fromisoformat(task_data['task_due_date'] + 'T00:00:00')
                                 else:
                                     task_due_date = task_data['task_due_date']
                                 task_row.task_due_date = task_due_date
                             except Exception as e:
                                 current_app.logger.error(f"Error parsing task_due_date: {task_data['task_due_date']}, error: {e}")
-                                # Keep existing value if parsing fails
                         else:
                             task_row.task_due_date = None
                             print(f"Set task_due_date to None for task {task_id}")
-                        # Update all subtasks for this task with the new task_due_date
+
                         subtasks = Goal.query.filter_by(task_id=task_id, user_id=user_id).all()
                         for subtask in subtasks:
                             subtask.task_due_date = task_row.task_due_date
                             subtask.updated_at = datetime.utcnow()
-                        
-                        # Now that all subtasks are updated, queue Google Calendar sync
+
                         for subtask in subtasks:
                             if subtask.start_time and subtask.end_time:
                                 queue_google_calendar_sync("sync", user_id, subtask.task_id, subtask.course_id)
                                 print(f"🔄 Queued Google Calendar sync for subtask {subtask.subtask_id}")
                             else:
                                 print(f"⚠️  Skipping Google Calendar sync for subtask {subtask.subtask_id}: No start/end times")
-                        
-                        print(f"🔄 Queued Google Calendar sync for {len([s for s in subtasks if s.start_time and s.end_time])} subtasks")
-                    if 'task_descr' in task_data:
-                        task_row.task_descr = task_data['task_descr']
-                
-                # Handle subtask updates
+
                 if 'subtasks' in task_data:
-                    # Get existing subtask IDs for this task
                     existing_subtask_ids = {g.subtask_id for g in task_rows}
                     updated_subtask_ids = set()
-                    
+
                     for subtask_data in task_data['subtasks']:
                         subtask_id = subtask_data.get('subtask_id')
-                        
+
                         if subtask_id and subtask_id in existing_subtask_ids:
-                            # Update existing subtask
                             updated_subtask_ids.add(subtask_id)
                             subtask_row = next((g for g in task_rows if g.subtask_id == subtask_id), None)
-                            
                             if subtask_row:
-                                if 'subtask_descr' in subtask_data:
-                                    subtask_row.subtask_descr = subtask_data['subtask_descr']
-                                if 'subtask_type' in subtask_data:
-                                    subtask_row.subtask_type = subtask_data['subtask_type']
-                                if 'subtask_completed' in subtask_data:
-                                    subtask_row.subtask_completed = subtask_data['subtask_completed']
+                                for field in ['subtask_descr', 'subtask_type', 'subtask_completed']:
+                                    if field in subtask_data:
+                                        setattr(subtask_row, field, subtask_data[field])
                         else:
-                            # Create new subtask
                             new_subtask = Goal(
                                 user_id=user_id,
                                 course_id=goals[0].course_id,
@@ -758,19 +724,17 @@ def update_goal_tasks(goal_id):
                                 subtask_completed=subtask_data.get('subtask_completed', False),
                                 subtask_order=subtask_data.get('subtask_order', None)
                             )
-                            print(f"Created new subtask with task_due_date: {task_rows[0].task_due_date}")
                             db.session.add(new_subtask)
-                    
-                    # Delete subtasks that weren't in the update
+
                     for g in task_rows:
                         if g.subtask_id not in updated_subtask_ids:
                             db.session.delete(g)
             else:
-                # Create new task with subtasks
-                new_task_id = task_data.get('task_id', str(uuid.uuid4()))
-                
-                if 'subtasks' in task_data and task_data['subtasks']:
-                    for subtask_data in task_data['subtasks']:
+                new_task_id = task_id or str(uuid.uuid4())
+                subtasks = task_data.get('subtasks', [])
+
+                if subtasks:
+                    for subtask_data in subtasks:
                         new_subtask = Goal(
                             user_id=user_id,
                             course_id=goals[0].course_id,
@@ -791,8 +755,7 @@ def update_goal_tasks(goal_id):
                         )
                         db.session.add(new_subtask)
                 else:
-                    # Create task with default subtask
-                    new_subtask = Goal(
+                    default_subtask = Goal(
                         user_id=user_id,
                         course_id=goals[0].course_id,
                         goal_id=goal_id,
@@ -810,41 +773,24 @@ def update_goal_tasks(goal_id):
                         subtask_completed=False,
                         subtask_order=0
                     )
-                    db.session.add(new_subtask)
-                
-                # Instead of deleting tasks that weren't in the update, we'll keep them
-                # This allows for incremental additions without losing existing data
-                
-                # After all updates, check if ALL tasks for the goal are completed (excluding placeholders)
-                all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
-                all_tasks_completed = True if all_task_ids else False
-                for tid in all_task_ids:
-                    task_rows = [g for g in goals if g.task_id == tid]
-                    if not all(g.task_completed for g in task_rows):
-                        all_tasks_completed = False
-                        break
-                for g in goals:
-                    g.goal_completed = all_tasks_completed
-                
-                db.session.commit()
-                
-                # Queue Google Calendar sync for all updated tasks
-                updated_task_ids = set()
-                for task_data in data['tasks']:
-                    task_id = task_data.get('task_id')
-                    if task_id and task_id in existing_task_ids:
-                        updated_task_ids.add(task_id)
-                
-                # Sync all updated tasks to Google Calendar
-                for task_id in updated_task_ids:
-                    queue_google_calendar_sync("sync", user_id, task_id, goals[0].course_id)
-                
-                # Get the updated rows
-                updated_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
-                result = [goal.to_dict() for goal in updated_goals]
-                
-                return jsonify(result), 200
-        
+                    db.session.add(default_subtask)
+
+        all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
+        all_tasks_completed = bool(all_task_ids) and all(
+            all(g.task_completed for g in goals if g.task_id == tid)
+            for tid in all_task_ids
+        )
+        for g in goals:
+            g.goal_completed = all_tasks_completed
+
+        db.session.commit()
+
+        for task_id in updated_task_ids:
+            queue_google_calendar_sync("sync", user_id, task_id, goals[0].course_id)
+
+        updated_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
+        return jsonify([goal.to_dict() for goal in updated_goals]), 200
+
     except SQLAlchemyError as e:
         db.session.rollback()
         current_app.logger.error(f"Database error: {str(e)}")
@@ -853,6 +799,8 @@ def update_goal_tasks(goal_id):
         db.session.rollback()
         current_app.logger.error(f"Error updating tasks: {str(e)}")
         return jsonify({'error': 'An error occurred while updating tasks'}), 500
+
+
 
 
 @goals_bp.route('/api/goals/<goal_id>/save-tasks', methods=['POST'])

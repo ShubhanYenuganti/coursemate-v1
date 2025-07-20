@@ -1167,6 +1167,7 @@ export function CalendarScheduler() {
         }],
         bypass: false
       };
+      console.log('Sending to backend:', payload); // <-- Added log
       const res = await fetch(`${api}/api/goals/${goalId}/tasks`, {
         method: 'PUT',
         headers: {
