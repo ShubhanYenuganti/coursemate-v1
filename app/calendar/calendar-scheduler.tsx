@@ -3848,11 +3848,13 @@ export function CalendarScheduler() {
                     {isLoadingCourses ? (
                       <option value="" disabled>Loading courses...</option>
                     ) : (
-                      userCourses.map((course) => (
-                        <option key={course.id} value={course.id}>
-                          {course.title || course.id}
-                        </option>
-                      ))
+                      userCourses
+                        .filter(course => course.title !== 'Google Calendar' && course.id !== 'Google Calendar')
+                        .map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.title || course.id}
+                          </option>
+                        ))
                     )}
                   </select>
                 </div>

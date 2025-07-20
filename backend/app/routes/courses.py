@@ -127,7 +127,9 @@ def get_course(course_id):
     
     course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
     if not course:
-        return jsonify({'error': 'Course not found'}), 404
+        course = Course.query.filter_by(combo_id=course_id, user_id=current_user_id).first()
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
     
     # Update last accessed time
     course.update_last_accessed()
