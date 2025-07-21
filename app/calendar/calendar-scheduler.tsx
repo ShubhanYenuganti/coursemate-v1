@@ -1760,7 +1760,8 @@ export function CalendarScheduler() {
         subtask_completed: deletedSubtask.subtask_completed || false,
         task_due_date: deletedSubtask.task_due_date || deletedSubtask.due_date,
         subtask_start_time: deletedSubtask.start_time,
-        subtask_end_time: deletedSubtask.end_time
+        subtask_end_time: deletedSubtask.end_time,
+        bypass_due_date: deletedSubtask.is_conflicting || false
       };
 
       const res = await fetch(`${api}/api/goals/tasks/${deletedSubtask.task_id}/subtasks`, {

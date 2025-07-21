@@ -969,6 +969,7 @@ def delete_subtask(subtask_id):
         # Store goal_id and task_id for reference
         goal_id = subtask.goal_id
         task_id = subtask.task_id
+        was_completed = subtask.subtask_completed
         
         # Get all rows for this task
         task_rows = Goal.query.filter_by(goal_id=goal_id, task_id=task_id, user_id=user_id).all()
@@ -980,6 +981,16 @@ def delete_subtask(subtask_id):
         # Reindex subtask_order for all remaining subtasks of this task
         reindex_subtasks(task_id, user_id)
         db.session.commit()
+        
+        # If the deleted subtask was completed, check if the task should now be incomplete
+        if was_completed:
+            remaining_subtasks = Goal.query.filter_by(task_id=task_id, user_id=user_id).all()
+            real_subtasks = [s for s in remaining_subtasks if s.subtask_id != 'placeholder']
+            if not real_subtasks or any(not s.subtask_completed for s in real_subtasks):
+                for row in remaining_subtasks:
+                    row.task_completed = False
+                    row.updated_at = datetime.utcnow()
+                db.session.commit()
         
         # Queue the specific subtask event deletion from Google Calendar
         if subtask.google_event_id and subtask.sync_status == "Synced":
@@ -1247,6 +1258,15 @@ def create_subtask(task_id):
         )
         
         db.session.add(new_subtask)
+        db.session.commit()
+        
+        # After commit, update parent task completion if needed
+        task_rows = Goal.query.filter_by(task_id=task_id, user_id=user_id).all()
+        real_subtasks = [row for row in task_rows if row.subtask_id != 'placeholder']
+        all_real_subtasks_completed = bool(real_subtasks) and all(row.subtask_completed for row in real_subtasks)
+        for row in task_rows:
+            row.task_completed = all_real_subtasks_completed
+            row.updated_at = datetime.utcnow()
         db.session.commit()
         
         # Now that the subtask is saved, queue Google Calendar sync
@@ -1598,6 +1618,15 @@ def create_task(goal_id):
             db.session.add(new_row)
             created_rows.append(new_row)
 
+        db.session.commit()
+        
+        # After commit, update parent task completion if needed
+        task_rows = Goal.query.filter_by(task_id=task_id, user_id=user_id).all()
+        real_subtasks = [row for row in task_rows if row.subtask_id != 'placeholder']
+        all_real_subtasks_completed = bool(real_subtasks) and all(row.subtask_completed for row in real_subtasks)
+        for row in task_rows:
+            row.task_completed = all_real_subtasks_completed
+            row.updated_at = datetime.utcnow()
         db.session.commit()
         
         # Now that all subtasks are saved, queue Google Calendar sync
