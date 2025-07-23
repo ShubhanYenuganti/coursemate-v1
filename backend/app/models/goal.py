@@ -12,6 +12,11 @@ class Goal(db.Model):
     Each row contains all fields (goal, task, subtask) and represents a specific subtask.
     Multiple rows can share the same goal_id and task_id."""
     __tablename__ = 'users_courses_goal'
+    
+    # Add index for google_event_id to optimize sync performance
+    __table_args__ = (
+        db.Index('ix_goal_google_event_id', 'google_event_id'),
+    )
 
     id = Column(String, primary_key=True)  # Primary key for the row
     user_id = Column(String, ForeignKey('users.id'), nullable=False)
@@ -71,6 +76,9 @@ class Goal(db.Model):
     workMinutesPerDay = Column(db.Integer, nullable=True)
     frequency = Column(db.JSON, default=dict)
     
+    # field that is true if the start time of a subtask is after the due date of a task
+    is_conflicting = Column(Boolean, default = False)
+    
     def __init__(self, user_id, course_id, goal_id, goal_descr, task_id, task_title, 
                  subtask_id, subtask_descr, due_date=None, goal_completed=False, 
                  task_descr=None, task_completed=False, subtask_type="other", 
@@ -80,7 +88,8 @@ class Goal(db.Model):
                  task_due_date=None, task_engagement_start=None, task_engagement_end=None, 
                  task_estimated_time_minutes=None, task_actual_time_minutes=None, 
                  task_is_being_tracked=False, task_actual_time_seconds=None, started_by_subtask=None,
-                 task_has_ever_been_completed=False, subtask_order=None, workMinutesPerDay = None, frequency = None):
+                 task_has_ever_been_completed=False, subtask_order=None, workMinutesPerDay = None, frequency = None,
+                 is_conflicting=False):
         self.id = str(uuid.uuid4())
         self.user_id = user_id
         self.course_id = course_id
@@ -130,6 +139,8 @@ class Goal(db.Model):
         
         self.workMinutesPerDay = workMinutesPerDay
         self.frequency = frequency
+        
+        self.is_conflicting = is_conflicting
         
     @classmethod
     def create_for_goal(cls, user_id, course_id, goal_descr, due_date=None):
@@ -202,5 +213,6 @@ class Goal(db.Model):
             'task_has_ever_been_completed': self.task_has_ever_been_completed,
             'subtask_order': self.subtask_order,
             'workMinutesPerDay': self.workMinutesPerDay,
-            'frequency': self.frequency
+            'frequency': self.frequency,
+            'is_conflicting': self.is_conflicting
         } 

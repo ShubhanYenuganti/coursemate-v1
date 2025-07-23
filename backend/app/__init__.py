@@ -129,6 +129,10 @@ def create_app(config_class=Config):
     # Create tables if they don't exist
     with app.app_context():
         db.create_all()
+        # Reset calendar_sync_in_progress for all users on startup
+        from .models.user import User
+        db.session.query(User).update({User.calendar_sync_in_progress: False})
+        db.session.commit()
 
     # Log the current storage backend being used
     storage_backend = app.config.get('FILE_STORAGE', 'LOCAL').upper()
