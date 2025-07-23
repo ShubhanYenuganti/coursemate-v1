@@ -36,6 +36,9 @@ export interface Subtask {
   updatedAt: string;
   task_due_date?: string;
   subtask_order?: number;
+  start_time: string;
+  end_time: string;
+  has_conflict?: boolean;
 }
 
 export interface StudyPlanStats {

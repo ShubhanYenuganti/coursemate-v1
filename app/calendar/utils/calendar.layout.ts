@@ -55,7 +55,6 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
             const eventStartInHour = Math.max(goalStart, hourStart.getTime());
             const heightMinutes = (goalEnd - eventStartInHour) / (1000 * 60);
             height = (heightMinutes / 60) * 100 - 4; // Subtract 4% for gaps
-            // Ensure it extends beyond the hour boundary
             height = Math.max(height, 116); // Extend 16% beyond the hour (120% - 4% gaps)
         } else {
             // Event is contained within this hour
@@ -75,13 +74,8 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
                 const existingEnd = new Date(existingGoal.end_time ?? existingGoal.due_date!);
                 const existingStartTime = existingStart.getTime();
                 const existingEndTime = existingEnd.getTime();
-
-                const overlaps = !(goalEnd <= existingStartTime || goalStart >= existingEndTime);
-
-
-                return overlaps;
+                return !(goalEnd <= existingStartTime || goalStart >= existingEndTime);
             });
-
             if (!hasOverlap) {
                 break;
             }
@@ -96,14 +90,10 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
 
         // Calculate position
         const totalColumns = Math.max(columns.length, 1);
-        const left = (columnIndex / totalColumns) * 100;
-        const width = (1 / totalColumns) * 100;
-
-        // Increase width for overlapped events but ensure they stay within column boundaries
-        const columnWidth = 100 / totalColumns;
-        const maxWidth = columnWidth * 0.9; // Use 90% of column width to leave some margin
-        const adjustedWidth = Math.min(width * 1.2, maxWidth); // Make events 20% wider, but respect column boundaries
-        const adjustedLeft = left + (columnWidth - adjustedWidth) / 2; // Center within the column
+        const minWidth = 20; // percent
+        const evenWidth = 100 / totalColumns;
+        const width = Math.max(evenWidth, minWidth);
+        const left = evenWidth * columnIndex;
 
         // Shorter events get higher z-index (appear on top)
         const duration = goalEnd - goalStart;
@@ -111,8 +101,8 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
 
         positions.push({
             goal,
-            left: adjustedLeft,
-            width: adjustedWidth,
+            left,
+            width: Math.min(width, 100 - left), // Prevent overflow
             top,
             height,
             zIndex,
@@ -120,5 +110,124 @@ export const calculateEventPositions = (goals: Goal[], currentHour: number, curr
         });
     }
 
+    return positions;
+};
+
+/**
+ * Calculate absolute positions for all events in a day (0:00-24:00), for continuous block rendering.
+ * Returns: [{ goal, top, height, left, width, zIndex, showTitle }]
+ */
+export const calculateDayEventPositions = (goals: Goal[], currentDate: Date) => {
+    if (goals.length === 0) return [];
+
+    // Sort by start time
+    const sortedGoals = [...goals].sort((a, b) => {
+        const aStart = new Date(a.start_time ?? a.due_date!);
+        const bStart = new Date(b.start_time ?? b.due_date!);
+        return aStart.getTime() - bStart.getTime();
+    });
+
+    // Helper: find all overlap groups
+    const overlapGroups: Goal[][] = [];
+    const assigned = new Set<string>();
+    for (let i = 0; i < sortedGoals.length; i++) {
+        const goal = sortedGoals[i];
+        if (assigned.has(goal.subtask_id || goal.goal_id)) continue;
+        // Find all events that overlap with this one
+        const group = [goal];
+        assigned.add(goal.subtask_id || goal.goal_id);
+        const startA = new Date(goal.start_time ?? goal.due_date!).getTime();
+        const endA = new Date(goal.end_time ?? goal.due_date!).getTime();
+        for (let j = i + 1; j < sortedGoals.length; j++) {
+            const other = sortedGoals[j];
+            if (assigned.has(other.subtask_id || other.goal_id)) continue;
+            const startB = new Date(other.start_time ?? other.due_date!).getTime();
+            const endB = new Date(other.end_time ?? other.due_date!).getTime();
+            if (startA < endB && endA > startB) {
+                group.push(other);
+                assigned.add(other.subtask_id || other.goal_id);
+            }
+        }
+        overlapGroups.push(group);
+    }
+
+    const positions: Array<{
+        goal: Goal;
+        left: number;
+        width: number;
+        top: number;
+        height: number;
+        zIndex: number;
+        showTitle: boolean;
+    }> = [];
+
+    // For each group, assign columns only within the group
+    for (const group of overlapGroups) {
+        // Sort by start time within group
+        const groupSorted = [...group].sort((a, b) => {
+            const aStart = new Date(a.start_time ?? a.due_date!).getTime();
+            const bStart = new Date(b.start_time ?? b.due_date!).getTime();
+            return aStart - bStart;
+        });
+        // Assign columns within group
+        const columns: Goal[][] = [];
+        for (const goal of groupSorted) {
+            const start = new Date(goal.start_time ?? goal.due_date!).getTime();
+            const end = new Date(goal.end_time ?? goal.due_date!).getTime();
+            // Day boundaries
+            const dayStart = new Date(currentDate);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(currentDate);
+            dayEnd.setHours(24, 0, 0, 0);
+            // Clamp event to day
+            const eventStart = Math.max(start, dayStart.getTime());
+            const eventEnd = Math.min(end, dayEnd.getTime());
+            // Calculate top/height as % of day
+            const totalDayMs = 24 * 60 * 60 * 1000;
+            const top = ((eventStart - dayStart.getTime()) / totalDayMs) * 100;
+            const height = Math.max(2, ((eventEnd - eventStart) / totalDayMs) * 100);
+            // Find column
+            let columnIndex = 0;
+            while (columnIndex < columns.length) {
+                const column = columns[columnIndex];
+                const hasOverlap = column.some(existingGoal => {
+                    const existingStart = new Date(existingGoal.start_time ?? existingGoal.due_date!).getTime();
+                    const existingEnd = new Date(existingGoal.end_time ?? existingGoal.due_date!).getTime();
+                    return !(end <= existingStart || start >= existingEnd);
+                });
+                if (!hasOverlap) break;
+                columnIndex++;
+            }
+            if (columnIndex >= columns.length) columns.push([]);
+            columns[columnIndex].push(goal);
+            const totalColumns = Math.max(columns.length, 1);
+            const minWidth = 20; // percent
+            const evenWidth = 100 / totalColumns;
+            const width = Math.max(evenWidth, minWidth);
+            const left = evenWidth * columnIndex;
+            // Show title if event starts today
+            const showTitle = new Date(goal.start_time ?? goal.due_date!).getDate() === currentDate.getDate();
+            // Calculate zIndex: smaller width = higher zIndex
+            // If widths are equal, use shorter duration, then earlier start time
+            let zIndex = 1000 - Math.round(width * 10); // smaller width = higher zIndex
+            if (width === 100) zIndex = 1; // full-width events always at the bottom
+            // Tie-breaker: shorter duration = higher zIndex
+            if (width === 100 / totalColumns) {
+                const duration = end - start;
+                zIndex += Math.max(0, 500 - Math.floor(duration / (1000 * 60)));
+            }
+            // Final tie-breaker: earlier start time = lower zIndex
+            zIndex += Math.floor(top);
+            positions.push({
+                goal,
+                left,
+                width: Math.min(width, 100 - left),
+                top,
+                height,
+                zIndex,
+                showTitle
+            });
+        }
+    }
     return positions;
 };
