@@ -415,6 +415,7 @@ def upload_material(course_id):
     
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
+    
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
@@ -422,140 +423,103 @@ def upload_material(course_id):
     filename = secure_filename(file.filename)
     file_extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
     
-    # Check if file type is supported for vector processing
+    # Check if file type is supported for processing
     supported_types = ['pdf', 'docx', 'doc', 'txt']
-    should_process_vectors = file_extension in supported_types
-    from app.utils.llama_index_service import LlamaIndexService
+    should_process = file_extension in supported_types
+    
     try:
-        llama_service = LlamaIndexService()
+        # Use the course-specific RAG service for processing
+        from app.services.course_rag_service import CourseDocumentProcessor
+        course_processor = CourseDocumentProcessor()
+        
         if current_app.config['FILE_STORAGE'] == 'S3':
             s3_path = f"courses/{course_id}/{filename}"
-            # Insert placeholder row after upload (upload_file_to_s3 will be called in the correct place below)
-            insert_placeholder_embedding(
-                user_id=current_user_id,
-                course_id=course_id,
-                document_name=filename,
-                file_path=s3_path,
-                document_type=file_extension
-            )
-            if should_process_vectors:
+            
+            if should_process:
+                # Save file to temp location first for processing
+                import tempfile
+                temp_file_path = None
                 try:
-                    # Save file to temp location first for processing
-                    import tempfile
-                    temp_file_path = None
-                    try:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as temp_file:
-                            file.save(temp_file.name)
-                            temp_file_path = temp_file.name
-                        # Process the document after the file is saved and closed
-                        result = llama_service.process_document(
-                            file_path=temp_file_path,
-                            user_id=current_user_id,
-                            course_id=course_id,
-                            document_name=filename,
-                            document_type=file_extension
-                        )
-                        # Now upload the processed file to S3
-                        with open(temp_file_path, 'rb') as temp_file:
-                            upload_file_to_s3(temp_file, s3_path)
-                    except Exception as e:
-                        raise
-                    finally:
-                        # Clean up temp file after processing
-                        if temp_file_path and os.path.exists(temp_file_path):
-                            os.unlink(temp_file_path)
-                    if result['success']:
-                        return jsonify({
-                            'url': s3_path, 
-                            'filename': filename,
-                            'vector_processed': True,
-                            'chunks_processed': result.get('chunks_processed', 0),
-                            'message': result.get('message', 'Document uploaded and processed')
-                        }), 201
-                    else:
-                        return jsonify({
-                            'url': s3_path, 
-                            'filename': filename,
-                            'vector_processed': False,
-                            'warning': f'Document uploaded but vector processing failed: {result.get("error", "Unknown error")}'
-                        }), 201
-                except Exception as e:
-                    print(f"Vector processing error: {str(e)}")
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as temp_file:
+                        file.save(temp_file.name)
+                        temp_file_path = temp_file.name
+                    
+                    # Process the document with course-specific processor
+                    uploaded_file = course_processor.process_and_store_course_file(
+                        file_path=temp_file_path,
+                        filename=filename,
+                        course_id=course_id,
+                        user_id=current_user_id
+                    )
+                    
+                    # Upload to S3 after processing
+                    with open(temp_file_path, 'rb') as temp_file:
+                        upload_file_to_s3(temp_file, s3_path)
+                    
                     return jsonify({
                         'url': s3_path, 
                         'filename': filename,
-                        'vector_processed': False,
-                        'warning': 'Document uploaded but vector processing failed'
+                        'processed': True,
+                        'chunks_processed': uploaded_file.chunk_count if hasattr(uploaded_file, 'chunk_count') else len(uploaded_file.chunks),
+                        'message': f'Document uploaded and processed with {len(uploaded_file.chunks)} chunks'
                     }), 201
+                    
+                except Exception as e:
+                    print(f"Processing error: {str(e)}")
+                    # If processing fails, still upload the file
+                    upload_file_to_s3(file, s3_path)
+                    return jsonify({
+                        'url': s3_path, 
+                        'filename': filename,
+                        'processed': False,
+                        'warning': f'Document uploaded but processing failed: {str(e)}'
+                    }), 201
+                finally:
+                    # Clean up temp file
+                    if temp_file_path and os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
             else:
-                # If not processing vectors, upload directly to S3
+                # If not processing, upload directly to S3
                 upload_file_to_s3(file, s3_path)
-                return jsonify({'url': s3_path, 'filename': filename}), 201
-            # After vector processing (or direct upload), update embeddings
-            llama_service.process_and_update_embeddings(
-                file_path=s3_path,
-                user_id=current_user_id,
-                course_id=course_id,
-                document_name=filename,
-                document_type=file_extension
-            )
-        else: # Local storage
+                return jsonify({'url': s3_path, 'filename': filename, 'processed': False}), 201
+                
+        else:  # Local storage
             course_dir = os.path.join(UPLOAD_FOLDER, 'courses', course_id)
             os.makedirs(course_dir, exist_ok=True)
             file_path = os.path.join(course_dir, filename)
             file.save(file_path)
             file_url = f'/uploads/courses/{course_id}/{filename}'
-            insert_placeholder_embedding(
-                user_id=current_user_id,
-                course_id=course_id,
-                document_name=filename,
-                file_path=file_path,
-                document_type=file_extension
-            )
-            if should_process_vectors:
+            
+            if should_process:
                 try:
-                    result = llama_service.process_document(
+                    uploaded_file = course_processor.process_and_store_course_file(
                         file_path=file_path,
-                        user_id=current_user_id,
+                        filename=filename,
                         course_id=course_id,
-                        document_name=filename,
-                        document_type=file_extension
+                        user_id=current_user_id
                     )
-                    if result['success']:
-                        return jsonify({
-                            'url': file_url, 
-                            'filename': filename,
-                            'vector_processed': True,
-                            'chunks_processed': result.get('chunks_processed', 0),
-                            'message': result.get('message', 'Document uploaded and processed')
-                        }), 201
-                    else:
-                        return jsonify({
-                            'url': file_url, 
-                            'filename': filename,
-                            'vector_processed': False,
-                            'warning': f'Document uploaded but vector processing failed: {result.get("error", "Unknown error")}'
-                        }), 201
-                except Exception as e:
-                    print(f"Vector processing error: {str(e)}")
+                    
                     return jsonify({
                         'url': file_url, 
                         'filename': filename,
-                        'vector_processed': False,
-                        'warning': 'Document uploaded but vector processing failed'
+                        'processed': True,
+                        'chunks_processed': len(uploaded_file.chunks),
+                        'message': f'Document uploaded and processed with {len(uploaded_file.chunks)} chunks'
                     }), 201
-            # After vector processing (or direct upload), update embeddings
-            llama_service.process_and_update_embeddings(
-                file_path=file_path,
-                user_id=current_user_id,
-                course_id=course_id,
-                document_name=filename,
-                document_type=file_extension
-            )
-        return jsonify({'url': file_url, 'filename': filename}), 201
+                    
+                except Exception as e:
+                    print(f"Processing error: {str(e)}")
+                    return jsonify({
+                        'url': file_url, 
+                        'filename': filename,
+                        'processed': False,
+                        'warning': f'Document uploaded but processing failed: {str(e)}'
+                    }), 201
+            else:
+                return jsonify({'url': file_url, 'filename': filename, 'processed': False}), 201
+                
     except Exception as e:
         print("Exception in upload_material:", e)
-        traceback.print_exc()
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 @courses_bp.route('/<course_id>/materials', methods=['GET'])

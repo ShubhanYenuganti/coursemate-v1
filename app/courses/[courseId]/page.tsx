@@ -7,10 +7,9 @@ import { courseService, CourseData } from "../../../lib/api/courseService";
 import { Code, Beaker, Calculator, Globe, Palette, Music } from 'lucide-react';
 import PinnedResources from "../components/PinnedResources";
 import ShareInviteFeature from "../components/ShareInviteFeature";
-import MaterialsList from "../components/MaterialsList";
-import UploadMaterials from "../components/UploadMaterials";
+import MaterialsManagerCourse from "../components/ai-chat/MaterialsManagerCourse";
 import RecommendedResources from "../components/RecommendedResources";
-import AIChatInterface from "../components/AIChatInterface";
+import NewAIChatInterface from "../components/ai-chat/NewAIChatInterface";
 import { StudyPlanTab } from "../components/studyplan";
 import EnrolledUsersList from '../components/EnrolledUsersList';
 import LeaveCourseButton from '../components/LeaveCourseButton';
@@ -143,13 +142,11 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
       </div>
     ),
     materials: (
-      <div>
-        <MaterialsList courseId={course.dbId} refreshTrigger={refreshTrigger} onFileDeleted={() => setRefreshTrigger(r => r + 1)} />
-        {/* <RecommendedResources course={course} /> */}
-        <UploadMaterials courseId={course.dbId} onUploadComplete={() => setRefreshTrigger(r => r + 1)} />
+      <div className="h-full">
+        <MaterialsManagerCourse courseId={course.dbId} />
       </div>
     ),
-    ai: <AIChatInterface courseId={course.dbId} />,
+    ai: <NewAIChatInterface courseId={course.dbId} />,
     study: <StudyPlanTab courseId={course.dbId} />,
     community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
     progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
@@ -166,17 +163,19 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
   }[activeTab] || '';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative">
+    <div className={`${activeTab === 'ai' ? 'h-full flex flex-col' : 'h-full overflow-y-auto'} bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative`}>
       {/* Banner Header as horizontal bar extending sidebar's top border */}
-      <div className="bg-white border-b border-gray-200 flex items-center px-8 py-4 sticky top-0 z-10 mb-6">
+      <div className="bg-white border-b border-gray-200 flex items-center px-8 py-4 sticky top-0 z-10 flex-shrink-0">
         <h2 className="text-3xl font-bold text-gray-800 truncate mr-4">{course.title}</h2>
         <span className="text-xl text-gray-500 font-medium">- {tabLabel}</span>
       </div>
-      <div className={`mx-auto p-8 pb-24 ${activeTab === 'ai' ? 'max-w-7xl' : 'max-w-5xl'}`}>
-        <CourseDetailTabs activeTab={activeTab} setActiveTab={handleTabChange} />
-        <div className="relative overflow-hidden min-h-[400px]">
+      <div className={`${activeTab === 'ai' ? 'flex-1 flex flex-col min-h-0' : 'mx-auto p-8 pb-24'} ${activeTab === 'ai' ? 'max-w-7xl mx-auto' : 'max-w-5xl'}`}>
+        <div className={activeTab === 'ai' ? 'p-8 pb-4 flex-shrink-0' : ''}>
+          <CourseDetailTabs activeTab={activeTab} setActiveTab={handleTabChange} />
+        </div>
+        <div className={`relative ${activeTab === 'ai' ? 'flex-1 px-8 pb-8 min-h-0' : 'overflow-hidden min-h-[400px]'}`}>
           <div 
-            className="transition-all duration-500 ease-out"
+            className={`transition-all duration-500 ease-out ${activeTab === 'ai' ? 'h-full' : ''}`}
             style={{
               transform: isAnimating 
                 ? animationDirection === 'left' 
