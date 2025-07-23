@@ -111,7 +111,7 @@ export function CalendarScheduler() {
         if (!res.ok) return;
         const data = await res.json();
         if (!isUnmounted) setSyncing(!!data.calendar_sync_in_progress);
-      } catch {}
+      } catch { }
     };
     pollSyncStatus();
     interval = setInterval(pollSyncStatus, 2000);
@@ -137,6 +137,7 @@ export function CalendarScheduler() {
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [courseVisibility, setCourseVisibility] = useState<Record<string, boolean>>({});
+  const [goalVisibility, setGoalVisibility] = useState<Record<string, boolean>>({});
   const [filteredGoals, setFilteredGoals] = useState<Goal[]>([]);
 
   // Add task modal state
@@ -183,13 +184,6 @@ export function CalendarScheduler() {
   const [subtasksModal, setSubtasksModal] = useState<{
     isOpen: boolean;
     task: any;
-    position: { x: number; y: number };
-  } | null>(null);
-
-  /** Delete confirmation modal state */
-  const [deleteModal, setDeleteModal] = useState<{
-    isOpen: boolean;
-    task: Goal | null;
     position: { x: number; y: number };
   } | null>(null);
 
@@ -283,6 +277,10 @@ export function CalendarScheduler() {
   /** Edit Subtask Modal */
   const [showEditSubtaskModal, setShowEditSubtaskModal] = useState(false);
   const [editSubtaskData, setEditSubtaskData] = useState<any>(null);
+
+  /** Expanded Courses States */
+  const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
+  const [goalsByCourse, setGoalsByCourse] = useState<Record<string, Goal[]>>({});
   /** Helpers */
   const weekDates = getWeekDates(currentDate) // Sunday‑based week
 
@@ -767,7 +765,7 @@ export function CalendarScheduler() {
   };
 
   const performSubtaskDrop = async (subtask: Goal, targetDate: Date, targetHour: number, targetMinute: number = 0, bypass = false) => {
-    try {      
+    try {
       // Save original subtask
       setRescheduledSubtask(subtask)
       setShowRescheduleSubtaskToast(true)
@@ -818,7 +816,7 @@ export function CalendarScheduler() {
         setRescheduledSubtask(null)
         throw new Error(`Failed to update subtask: ${res.status}`);
       }
-      
+
       // Refresh the goals data to show the updated subtask
       const fetchGoals = async () => {
         try {
@@ -1736,7 +1734,7 @@ export function CalendarScheduler() {
     }
   }
 
-  const handleUndoSubtaskSchedule = async() => {
+  const handleUndoSubtaskSchedule = async () => {
     if (!rescheduledSubtask) return
 
     // reupdate subtask back to its original start and end times
@@ -1767,7 +1765,7 @@ export function CalendarScheduler() {
       if (!res.ok) {
         throw new Error(`Failed to update subtask: ${res.status}`);
       }
-      
+
       // Refresh the goals data to show the updated subtask
       const fetchGoals = async () => {
         try {
@@ -1873,40 +1871,45 @@ export function CalendarScheduler() {
     }
   }, [addSubtaskModal, preselectedTaskId]);
 
-  // Global keyboard event listener for delete confirmation
-  useEffect(() => {
-    const handleGlobalKeyDown = (event: KeyboardEvent) => {
-      if ((event.key === 'Delete' || event.key === 'Backspace') && hoveredTask && hoveredTask.goal_id !== "Google Calendar") {
-        event.preventDefault();
-        // For subtask events, use subtask deletion modal instead of task deletion
-        if (hoveredTask.subtask_id && hoveredTask.subtask_id !== 'placeholder') {
-          setDeleteSubtaskModal({
-            isOpen: true,
-            subtask: hoveredTask,
-            position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-          });
-        } else {
-          // For task events (without subtask_id), use task deletion modal
-          setDeleteModal({
-            isOpen: true,
-            task: hoveredTask,
-            position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-          });
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleGlobalKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleGlobalKeyDown);
-    };
-  }, [hoveredTask]);
-
   const toggleCourseVisibility = (courseId: string) => {
     setCourseVisibility(prev => ({
       ...prev,
       [courseId]: !prev[courseId]
     }));
+  }
+
+  const toggleGoalVisibility = (goalId: string) => {
+    setGoalVisibility(prev => ({
+      ...prev,
+      [goalId]: !prev[goalId]
+    }));
+  }
+
+  const handleLoadCourseGoals = async (courseId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const encodedCourseId = encodeURIComponent(courseId);
+      console.log("Fetching course goals for:", encodedCourseId);
+
+
+      const res = await fetch(`${api}/api/courses/${encodedCourseId}/goals`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error(`Failed to load course goals: ${res.status}`);
+
+      const courseGoals = await res.json();
+      console.log(`Loaded goals for course ${courseId}:`, courseGoals);
+      return courseGoals;
+
+    } catch (error) {
+      console.error("Error loading course goals:", error);
+    }
   }
 
   const handleSubtaskToggle = async (sub: Goal) => {
@@ -2102,11 +2105,20 @@ export function CalendarScheduler() {
           console.log('Courses set with colors:', courses);
 
           // Initialize all courses as visible by default
-          const initialVisibility: Record<string, boolean> = {};
+          const initialVisibilityCourse: Record<string, boolean> = {};
           courseIds.forEach(courseId => {
-            initialVisibility[courseId] = true;
+            initialVisibilityCourse[courseId] = true;
           });
-          setCourseVisibility(initialVisibility);
+
+          setCourseVisibility(initialVisibilityCourse);
+
+          const initialVisibilityGoal: Record<string, boolean> = {};
+          // Set all goals as visible by default
+          Object.values(grouped).flat().forEach(goal => {
+            initialVisibilityGoal[goal.goal_id] = true;
+          });
+
+          setGoalVisibility(initialVisibilityGoal);
         } catch (err) {
           console.error("fetchGoals error", err);
         }
@@ -2283,7 +2295,7 @@ export function CalendarScheduler() {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Not authenticated");
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-  
+
       // Call the new Google Calendar sync endpoint
       const response = await fetch(`${api}/api/calendar/sync`, {
         method: "POST",
@@ -2292,12 +2304,12 @@ export function CalendarScheduler() {
           "Content-Type": "application/json"
         }
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
-  
+
       // Poll until backend reports sync is done
       let done = false;
       while (!done) {
@@ -2309,12 +2321,12 @@ export function CalendarScheduler() {
             const data = await res.json();
             if (!data.calendar_sync_in_progress) done = true;
           }
-        } catch {}
+        } catch { }
         if (!done) await new Promise(r => setTimeout(r, 1000));
       }
-  
+
       toast.success("Google Calendar sync completed successfully");
-  
+
       // Refresh the goals data to show any new events from Google Calendar
       const fetchGoals = async () => {
         try {
@@ -2354,15 +2366,15 @@ export function CalendarScheduler() {
           console.error("fetchGoals error", err);
         }
       };
-  
+
       // Refresh the goals data
       fetchGoals();
-  
+
     } catch (err: any) {
       toast.error("Sync failed: " + (err.message || err));
     }
   };
-  
+
   // Fetch user courses for add task modal
   const fetchUserCourses = async () => {
     try {
@@ -2468,7 +2480,7 @@ export function CalendarScheduler() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({tasks: tasksData})
+        body: JSON.stringify({ tasks: tasksData })
       });
       if (!res.ok) throw new Error(`Failed to create task: ${res.status}`);
 
@@ -2678,6 +2690,15 @@ export function CalendarScheduler() {
           initialVisibility[courseId] = true;
         });
         setCourseVisibility(initialVisibility);
+
+        const initialVisibilityGoal: Record<string, boolean> = {};
+        // Set all goals as visible by default
+        Object.values(grouped).flat().forEach(goal => {
+          initialVisibilityGoal[goal.goal_id] = true;
+        });
+
+        setGoalVisibility(initialVisibilityGoal);
+
       } catch (err) {
         console.error("fetchGoals error", err);
       }
@@ -2823,6 +2844,7 @@ export function CalendarScheduler() {
   }, [overflowEvents, selectedGoal, goalDisplayPosition]);
 
   console.log(sortedGoalsByDate)
+
   // Filter goals based on course visibility
   useEffect(() => {
     const allGoals = Object.values(goalsByDate).flat();
@@ -2830,12 +2852,19 @@ export function CalendarScheduler() {
     setFilteredGoals(filtered);
   }, [goalsByDate, courseVisibility]);
 
+  // Filter goals based on goal visibility
+  useEffect(() => {
+    const allGoals = Object.values(goalsByDate).flat();
+    const filtered = allGoals.filter(goal => goalVisibility[goal.goal_id] !== false);
+    setFilteredGoals(filtered);
+  }, [goalsByDate, goalVisibility]);
+
   /** Return the list of subtasks whose start_time and end_time fall on that calendar day (local time) */
   const getGoalsForDate = (date: Date): Goal[] => {
     // Always check all events, regardless of backend grouping
     const allGoals = Object.values(goalsByDate).flat();
     return allGoals.filter(goal => {
-      if (!goal.start_time || !goal.end_time || courseVisibility[goal.course_id] === false) return false;
+      if (!goal.start_time || !goal.end_time || courseVisibility[goal.course_id] === false || goalVisibility[goal.goal_id] === false) return false;
       // Convert UTC start_time to local time
       const start = new Date(goal.start_time);
       return (
@@ -3341,31 +3370,80 @@ export function CalendarScheduler() {
                     const isVisible = courseVisibility[course.course_id] !== false;
 
                     return (
-                      <div key={course.course_id} className="flex items-center justify-between p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] transition-colors">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: course.color }} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-[#18181b] truncate">
-                              {course.course_title === course.course_id ? (
-                                <span className="text-gray-400">Loading...</span>
-                              ) : (
-                                course.course_title
-                              )}
-                            </div>
-                            <div className="text-xs text-[#71717a] mt-1">
-                              {courseEventCount} event{courseEventCount !== 1 ? 's' : ''}
+                      <div
+                        key={course.course_id}
+                        className="rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] transition-colors"
+                      >
+                        <div
+                          className="flex items-center justify-between p-3 cursor-pointer"
+                          onClick={async () => {
+                            const alreadyExpanded = expandedCourses[course.course_id];
+
+                            setExpandedCourses(prev => ({
+                              ...prev,
+                              [course.course_id]: !alreadyExpanded
+                            }));
+
+                            if (!alreadyExpanded && !courseGoals[course.course_id]) {
+                              const goals = await handleLoadCourseGoals(course.course_id);
+                              setCourseGoals(prev => ({ ...prev, [course.course_id]: goals }));
+                            }
+                          }}
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-[#18181b] truncate">
+                                {course.course_title === course.course_id ? (
+                                  <span className="text-gray-400">Loading...</span>
+                                ) : (
+                                  course.course_title
+                                )}
+                              </div>
+                              <div className="text-xs text-[#71717a] mt-1">
+                                {courseEventCount} event{courseEventCount !== 1 ? 's' : ''}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center gap-2 prevent-course-click">
+                            <Switch
+                              checked={isVisible}
+                              onCheckedChange={() => toggleCourseVisibility(course.course_id)}
+                              className="ml-2"
+                            />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={isVisible}
-                            onCheckedChange={() => toggleCourseVisibility(course.course_id)}
-                            className="ml-2"
-                          />
-                          <Eye className={`w-4 h-4 ${isVisible ? 'text-blue-600' : 'text-gray-400'}`} />
-                        </div>
+
+                        {/* ⬇️ Goals dropdown */}
+                        {expandedCourses[course.course_id] && (
+                          <div className="px-6 pb-3 space-y-2">
+                            {courseGoals[course.course_id]?.length ? (
+                              courseGoals[course.course_id].map(goal => {
+                                const isGoalVisible = goalVisibility[goal.goal_id] !== false;
+
+                                return (
+                                  <div
+                                    key={goal.goal_id}
+                                    className="flex items-center justify-between text-sm text-[#333] bg-white p-2 rounded-md shadow-sm hover:bg-gray-50"
+                                  >
+                                    <div className="truncate">
+                                      {goal.task_title || goal.goal_descr || "Untitled Goal"}
+                                    </div>
+                                    <Switch
+                                      checked={isGoalVisible}
+                                      onCheckedChange={() => toggleGoalVisibility(goal.goal_id)}
+                                      className="ml-2"
+                                    />
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="text-sm text-gray-500 italic">Loading goals ... </div>
+                            )}
+
+                          </div>
+                        )}
                       </div>
+
                     );
                   })}
                 </div>
@@ -3964,76 +4042,6 @@ export function CalendarScheduler() {
               </div>
             </CardContent>
           </Card>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteModal?.isOpen && deleteModal?.task && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                    <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Delete Task</h2>
-                </div>
-                <button
-                  onClick={handleDeleteCancel}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                <div className="text-center">
-                  <p className="text-gray-700 text-lg mb-4">
-                    Are you sure you want to delete this task?
-                  </p>
-                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getEventColor(deleteModal.task) }}></div>
-                      <div className="flex-1 text-left">
-                        <h3 className="font-semibold text-gray-900">{deleteModal.task.task_title || '(untitled)'}</h3>
-                        {deleteModal.task.task_descr && (
-                          <p className="text-sm text-gray-600 mt-1">{deleteModal.task.task_descr}</p>
-                        )}
-                        {deleteModal.task.task_due_date && (
-                          <p className="text-sm text-gray-500 mt-1">
-                            Due: {new Date(deleteModal.task.task_due_date).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="flex gap-3 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={handleDeleteCancel}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteConfirm}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    Delete Task
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
