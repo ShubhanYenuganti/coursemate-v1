@@ -1,8 +1,13 @@
 import os
 import openai
+from openai import OpenAI
 from typing import List, Dict, Optional
 import json
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class ChatGPTWrapper:
     def __init__(self):
@@ -10,7 +15,8 @@ class ChatGPTWrapper:
         if not self.api_key:
             raise ValueError("OPENAI_KEY not found in environment variables")
         
-        openai.api_key = self.api_key
+        # Initialize the OpenAI client (v1.0+ API)
+        self.client = OpenAI(api_key=self.api_key)
         self.model = "gpt-3.5-turbo"
         
     def generate_response(
@@ -48,8 +54,8 @@ class ChatGPTWrapper:
             # Add current message
             messages.append({"role": "user", "content": message})
             
-            # Make API call
-            response = openai.ChatCompletion.create(
+            # Make API call using the new client
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=1000,
@@ -77,19 +83,19 @@ class ChatGPTWrapper:
                 "timestamp": datetime.now().isoformat()
             }
             
-        except openai.error.RateLimitError:
+        except openai.RateLimitError:
             return {
                 "success": False,
                 "error": "Rate limit exceeded. Please try again in a moment.",
                 "error_type": "rate_limit"
             }
-        except openai.error.AuthenticationError:
+        except openai.AuthenticationError:
             return {
                 "success": False,
                 "error": "Authentication failed. Please check your API key.",
                 "error_type": "auth_error"
             }
-        except openai.error.InvalidRequestError as e:
+        except openai.BadRequestError as e:
             return {
                 "success": False,
                 "error": f"Invalid request: {str(e)}",
@@ -184,5 +190,15 @@ Key behaviors:
         except Exception as e:
             return f"Summary generation failed: {str(e)}"
 
-# Initialize the wrapper
-chat_wrapper = ChatGPTWrapper() 
+# Initialize the wrapper lazily
+chat_wrapper = None
+
+def get_chat_wrapper():
+    global chat_wrapper
+    if chat_wrapper is None:
+        try:
+            chat_wrapper = ChatGPTWrapper()
+        except Exception as e:
+            print(f"Failed to initialize ChatGPTWrapper: {e}")
+            return None
+    return chat_wrapper 

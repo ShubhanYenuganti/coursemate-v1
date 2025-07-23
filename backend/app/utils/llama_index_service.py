@@ -312,6 +312,55 @@ class LlamaIndexService:
             logger.error(f"Error getting document summary: {str(e)}")
             return {'error': str(e)} 
 
+    def search_course_materials(self, query: str, course_id: str, user_id: str, 
+                               limit: int = 5) -> Dict[str, Any]:
+        """Search for relevant content in course materials"""
+        try:
+            results = self.search_documents(
+                query=query,
+                user_id=user_id,
+                course_id=course_id,
+                limit=limit
+            )
+            
+            # Format results for chat context
+            formatted_results = []
+            for result in results:
+                formatted_results.append({
+                    'content': result['content'],
+                    'source': result['document_name'],
+                    'score': result['similarity'],
+                    'metadata': result.get('metadata', {})
+                })
+            
+            return {
+                'success': True,
+                'results': formatted_results,
+                'count': len(formatted_results)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error searching course materials: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'results': []
+            }
+
+    def _clean_text(self, text: str) -> str:
+        """Clean text by removing null characters and other problematic characters"""
+        if not text:
+            return ""
+        
+        # Remove null characters and other control characters
+        cleaned_text = text.replace('\x00', '')  # Remove NUL characters
+        cleaned_text = ''.join(char for char in cleaned_text if ord(char) >= 32 or char in '\n\r\t')
+        
+        # Remove excessive whitespace
+        cleaned_text = ' '.join(cleaned_text.split())
+        
+        return cleaned_text
+
 def insert_placeholder_embedding(user_id, course_id, document_name, file_path, document_type, chunk_index=0, content_chunk="Placeholder content."):
     db_url = os.getenv('DATABASE_URL')
     try:
@@ -440,4 +489,4 @@ def process_and_update_embeddings(self, file_path, user_id, course_id, document_
             embedding=embedding,
             content_chunk=doc.text,
             doc_metadata=json.dumps(doc.metadata)
-        ) 
+        )

@@ -12,10 +12,10 @@ backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'
 sys.path.insert(0, backend_dir)
 
 try:
-    from chat import chat_wrapper
+    from chat import get_chat_wrapper
 except ImportError as e:
     print(f"Warning: Could not import chat wrapper: {e}")
-    chat_wrapper = None
+    get_chat_wrapper = None
 
 chat_bp = Blueprint('chat', __name__, url_prefix='/api/chat')
 
@@ -23,6 +23,13 @@ chat_bp = Blueprint('chat', __name__, url_prefix='/api/chat')
 @jwt_required()
 def send_message():
     """Send a message to the AI assistant and get a response"""
+    if not get_chat_wrapper:
+        return jsonify({
+            'success': False,
+            'error': 'AI chat service import failed. Please check server configuration.'
+        }), 503
+    
+    chat_wrapper = get_chat_wrapper()
     if not chat_wrapper:
         return jsonify({
             'success': False,
@@ -57,9 +64,42 @@ Semester: {course.semester}
 Professor: {course.professor or 'Not specified'}
 Description: {course.description}
 """
-                # TODO: You can enhance this to actually fetch and process course materials
-                # For now, we'll use a placeholder
-                materials_context = "Course materials context would be extracted here based on uploaded files."
+                # Use the course-specific RAG service to get materials context
+                try:
+                    from app.services.course_rag_service import CourseRAGService
+                    course_rag_service = CourseRAGService()
+                    
+                    # Get answer from course-specific materials
+                    rag_result = course_rag_service.answer_question_for_course(
+                        question=message,
+                        course_id=course_id,
+                        user_id=current_user_id,
+                        top_k=5
+                    )
+                    
+                    if rag_result.get('context_used', 0) > 0:
+                        # Use the RAG answer directly since it includes context
+                        return jsonify({
+                            'success': True,
+                            'message': {
+                                'id': str(int(datetime.now().timestamp() * 1000)),
+                                'type': 'ai',
+                                'content': rag_result['answer'],
+                                'timestamp': datetime.now().isoformat(),
+                                'sources': [{'title': filename} for filename in rag_result.get('source_files', [])]
+                            },
+                            'confidence': rag_result.get('confidence', 0.0),
+                            'materials_used': rag_result.get('context_used', 0)
+                        })
+                    else:
+                        # No course materials found, use basic course context
+                        materials_context = "No course materials have been uploaded yet for this course."
+                        
+                except Exception as e:
+                    current_app.logger.warning(f"Failed to use course RAG service: {str(e)}")
+                    materials_context = "Course materials search temporarily unavailable."
+        
+        
         
         # Generate AI response
         result = chat_wrapper.generate_response(
@@ -95,6 +135,13 @@ Description: {course.description}
 @jwt_required()
 def summarize_conversation():
     """Generate a summary of the conversation for saving to memory"""
+    if not get_chat_wrapper:
+        return jsonify({
+            'success': False,
+            'error': 'AI chat service import failed.'
+        }), 503
+    
+    chat_wrapper = get_chat_wrapper()
     if not chat_wrapper:
         return jsonify({
             'success': False,
@@ -129,12 +176,19 @@ def summarize_conversation():
 @chat_bp.route('/health', methods=['GET'])
 def health_check():
     """Check if the AI chat service is available"""
+    if not get_chat_wrapper:
+        return jsonify({
+            'status': 'unavailable',
+            'message': 'AI chat service import failed'
+        }), 503
+    
+    chat_wrapper = get_chat_wrapper()
     if not chat_wrapper:
         return jsonify({
             'status': 'unavailable',
             'message': 'AI chat service is not configured'
         }), 503
-    
+
     # Test if OpenAI API key is working (you might want to make this more sophisticated)
     try:
         # Just check if the wrapper is initialized properly
