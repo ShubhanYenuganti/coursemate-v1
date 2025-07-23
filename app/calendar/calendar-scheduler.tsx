@@ -1871,19 +1871,62 @@ export function CalendarScheduler() {
     }
   }, [addSubtaskModal, preselectedTaskId]);
 
-  const toggleCourseVisibility = (courseId: string) => {
-    setCourseVisibility(prev => ({
-      ...prev,
-      [courseId]: !prev[courseId]
-    }));
-  }
+const toggleCourseVisibility = (courseId: string) => {
+  const newVisibility = !(courseVisibility[courseId] ?? true);
 
-  const toggleGoalVisibility = (goalId: string) => {
-    setGoalVisibility(prev => ({
-      ...prev,
-      [goalId]: !prev[goalId]
-    }));
+  setCourseVisibility(prev => ({
+    ...prev,
+    [courseId]: newVisibility
+  }));
+
+  // Apply same toggle state to all goals
+  const goals = courseGoals[courseId];
+  if (goals) {
+    const newGoalVisibility = { ...goalVisibility };
+    for (const goal of goals) {
+      newGoalVisibility[goal.goal_id] = newVisibility;
+    }
+    setGoalVisibility(newGoalVisibility);
   }
+};
+
+
+const toggleGoalVisibility = (goalId: string) => {
+  setGoalVisibility(prev => {
+    const newValue = !(prev[goalId] ?? true); // toggle current goal
+    const updated = { ...prev, [goalId]: newValue };
+
+    // Find the course that this goal belongs to
+    let parentCourseId: string | undefined;
+    for (const [courseId, goals] of Object.entries(courseGoals)) {
+      if (goals.some(goal => goal.goal_id === goalId)) {
+        parentCourseId = courseId;
+        break;
+      }
+    }
+
+    if (!parentCourseId) return updated;
+
+    // Get all goals for the parent course
+    const courseGoalList = courseGoals[parentCourseId];
+    if (!courseGoalList) return updated;
+
+    const goalIds = courseGoalList.map(goal => goal.goal_id);
+
+    // Evaluate resulting visibility for the course based on updated goals
+    const anyVisible = goalIds.some(id => updated[id] !== false);
+    const allHidden = goalIds.every(id => updated[id] === false);
+
+    // Sync course visibility
+    setCourseVisibility(prevCourses => ({
+      ...prevCourses,
+      [parentCourseId!]: anyVisible // ON if any goal is on, OFF if all are off
+    }));
+
+    return updated;
+  });
+};
+
 
   const handleLoadCourseGoals = async (courseId: string) => {
     try {
@@ -2104,21 +2147,24 @@ export function CalendarScheduler() {
           updateCourseTitles(courseIds, token, courses).then(setCourses);
           console.log('Courses set with colors:', courses);
 
-          // Initialize all courses as visible by default
-          const initialVisibilityCourse: Record<string, boolean> = {};
-          courseIds.forEach(courseId => {
-            initialVisibilityCourse[courseId] = true;
-          });
+          // Only set all visible if not already present in localStorage
+          const storedCourseVis = localStorage.getItem('courseVisibility');
+          if (!storedCourseVis) {
+            const initialVisibilityCourse: Record<string, boolean> = {};
+            courseIds.forEach(courseId => {
+              initialVisibilityCourse[courseId] = true;
+            });
+            setCourseVisibility(initialVisibilityCourse);
+          }
 
-          setCourseVisibility(initialVisibilityCourse);
-
-          const initialVisibilityGoal: Record<string, boolean> = {};
-          // Set all goals as visible by default
-          Object.values(grouped).flat().forEach(goal => {
-            initialVisibilityGoal[goal.goal_id] = true;
-          });
-
-          setGoalVisibility(initialVisibilityGoal);
+          const storedGoalVis = localStorage.getItem('goalVisibility');
+          if (!storedGoalVis) {
+            const initialVisibilityGoal: Record<string, boolean> = {};
+            Object.values(grouped).flat().forEach(goal => {
+              initialVisibilityGoal[goal.goal_id] = true;
+            });
+            setGoalVisibility(initialVisibilityGoal);
+          }
         } catch (err) {
           console.error("fetchGoals error", err);
         }
@@ -2684,21 +2730,24 @@ export function CalendarScheduler() {
         updateCourseTitles(courseIds, token, courses).then(setCourses);
         console.log('Courses set with colors:', courses);
 
-        // Initialize all courses as visible by default
-        const initialVisibility: Record<string, boolean> = {};
-        courseIds.forEach(courseId => {
-          initialVisibility[courseId] = true;
-        });
-        setCourseVisibility(initialVisibility);
+        // Only set all visible if not already present in localStorage
+        const storedCourseVis = localStorage.getItem('courseVisibility');
+        if (!storedCourseVis) {
+          const initialVisibilityCourse: Record<string, boolean> = {};
+          courseIds.forEach(courseId => {
+            initialVisibilityCourse[courseId] = true;
+          });
+          setCourseVisibility(initialVisibilityCourse);
+        }
 
-        const initialVisibilityGoal: Record<string, boolean> = {};
-        // Set all goals as visible by default
-        Object.values(grouped).flat().forEach(goal => {
-          initialVisibilityGoal[goal.goal_id] = true;
-        });
-
-        setGoalVisibility(initialVisibilityGoal);
-
+        const storedGoalVis = localStorage.getItem('goalVisibility');
+        if (!storedGoalVis) {
+          const initialVisibilityGoal: Record<string, boolean> = {};
+          Object.values(grouped).flat().forEach(goal => {
+            initialVisibilityGoal[goal.goal_id] = true;
+          });
+          setGoalVisibility(initialVisibilityGoal);
+        }
       } catch (err) {
         console.error("fetchGoals error", err);
       }
@@ -2845,15 +2894,45 @@ export function CalendarScheduler() {
 
   console.log(sortedGoalsByDate)
 
-  // Filter goals based on course visibility
+  // Restore courseVisibility and goalVisibility from localStorage on mount
   useEffect(() => {
+    try {
+      const storedCourseVis = localStorage.getItem('courseVisibility');
+      if (storedCourseVis) {
+        setCourseVisibility(JSON.parse(storedCourseVis));
+      }
+    } catch (err) {
+      console.error('Failed to restore courseVisibility:', err);
+    }
+    try {
+      const storedGoalVis = localStorage.getItem('goalVisibility');
+      if (storedGoalVis) {
+        setGoalVisibility(JSON.parse(storedGoalVis));
+      }
+    } catch (err) {
+      console.error('Failed to restore goalVisibility:', err);
+    }
+  }, []);
+
+  // Persist courseVisibility to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('courseVisibility', JSON.stringify(courseVisibility));
+    } catch (err) {
+      console.error('Failed to persist courseVisibility:', err);
+    }
     const allGoals = Object.values(goalsByDate).flat();
     const filtered = allGoals.filter(goal => courseVisibility[goal.course_id] !== false);
     setFilteredGoals(filtered);
   }, [goalsByDate, courseVisibility]);
 
-  // Filter goals based on goal visibility
+  // Persist goalVisibility to localStorage whenever it changes
   useEffect(() => {
+    try {
+      localStorage.setItem('goalVisibility', JSON.stringify(goalVisibility));
+    } catch (err) {
+      console.error('Failed to persist goalVisibility:', err);
+    }
     const allGoals = Object.values(goalsByDate).flat();
     const filtered = allGoals.filter(goal => goalVisibility[goal.goal_id] !== false);
     setFilteredGoals(filtered);
@@ -3368,23 +3447,23 @@ export function CalendarScheduler() {
                   {courses.map((course) => {
                     const courseEventCount = filteredGoals.filter(goal => goal.course_id === course.course_id).length;
                     const isVisible = courseVisibility[course.course_id] !== false;
+                    const isExpanded = expandedCourses[course.course_id];
 
                     return (
                       <div
                         key={course.course_id}
                         className="rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] transition-colors"
                       >
+                        {/* Shared clickable container for course title + toggle */}
                         <div
                           className="flex items-center justify-between p-3 cursor-pointer"
                           onClick={async () => {
-                            const alreadyExpanded = expandedCourses[course.course_id];
-
                             setExpandedCourses(prev => ({
                               ...prev,
-                              [course.course_id]: !alreadyExpanded
+                              [course.course_id]: !isExpanded
                             }));
 
-                            if (!alreadyExpanded && !courseGoals[course.course_id]) {
+                            if (!isExpanded && !courseGoals[course.course_id]) {
                               const goals = await handleLoadCourseGoals(course.course_id);
                               setCourseGoals(prev => ({ ...prev, [course.course_id]: goals }));
                             }
@@ -3413,23 +3492,22 @@ export function CalendarScheduler() {
                           </div>
                         </div>
 
-                        {/* ⬇️ Goals dropdown */}
-                        {expandedCourses[course.course_id] && (
-                          <div className="px-6 pb-3 space-y-2">
+                        {/* Goal visibility dropdown - same width & styling as parent */}
+                        {isExpanded && (
+                          <div className="bg-white px-3 pb-3 mt-2 space-y-2 border-t border-gray-200 rounded-b-lg">
                             {courseGoals[course.course_id]?.length ? (
                               courseGoals[course.course_id].map(goal => {
-                                const isGoalVisible = goalVisibility[goal.goal_id] !== false;
 
                                 return (
                                   <div
                                     key={goal.goal_id}
-                                    className="flex items-center justify-between text-sm text-[#333] bg-white p-2 rounded-md shadow-sm hover:bg-gray-50"
+                                    className="flex items-center justify-between text-sm text-[#333] bg-[#fafafa] p-2 rounded-md shadow-sm hover:bg-gray-100"
                                   >
                                     <div className="truncate">
                                       {goal.task_title || goal.goal_descr || "Untitled Goal"}
                                     </div>
                                     <Switch
-                                      checked={isGoalVisible}
+                                      checked={goalVisibility[goal.goal_id] !== false}
                                       onCheckedChange={() => toggleGoalVisibility(goal.goal_id)}
                                       className="ml-2"
                                     />
@@ -3437,16 +3515,17 @@ export function CalendarScheduler() {
                                 );
                               })
                             ) : (
-                              <div className="text-sm text-gray-500 italic">Loading goals ... </div>
+                              <div className="text-sm text-gray-500 italic px-1">
+                                Loading goals...
+                              </div>
                             )}
-
                           </div>
                         )}
                       </div>
-
                     );
                   })}
                 </div>
+
               </>
             )}
           </>
