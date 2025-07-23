@@ -213,13 +213,13 @@ export function CalendarScheduler() {
     position: { x: number; y: number };
   } | null>(null);
 
-  /** Undo state for deleted tasks */
-  const [deletedTask, setDeletedTask] = useState<Goal | null>(null);
-  const [showUndoToast, setShowUndoToast] = useState(false);
-
   /** Undo state for deleted subtasks */
   const [deletedSubtask, setDeletedSubtask] = useState<Goal | null>(null);
   const [showUndoSubtaskToast, setShowUndoSubtaskToast] = useState(false);
+
+  /** Undo state for rescheduled subtasks */
+  const [rescheduledSubtask, setRescheduledSubtask] = useState<Goal | null>(null);
+  const [showRescheduleSubtaskToast, setShowRescheduleSubtaskToast] = useState(false);
 
   /** Drag target state for responsive shading */
   const [dragTargetHour, setDragTargetHour] = useState<number | null>(null);
@@ -767,7 +767,11 @@ export function CalendarScheduler() {
   };
 
   const performSubtaskDrop = async (subtask: Goal, targetDate: Date, targetHour: number, targetMinute: number = 0, bypass = false) => {
-    try {
+    try {      
+      // Save original subtask
+      setRescheduledSubtask(subtask)
+      setShowRescheduleSubtaskToast(true)
+
       // Calculate new start and end times based on drop location in local timezone
       const newStartTime = new Date(
         targetDate.getFullYear(),
@@ -791,6 +795,7 @@ export function CalendarScheduler() {
       const token = localStorage.getItem("token");
       if (!token) return alert("Please log in first.");
 
+
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
       let payload: any = {
         subtask_start_time: newStartTime.toISOString(),
@@ -810,9 +815,10 @@ export function CalendarScheduler() {
       });
 
       if (!res.ok) {
+        setRescheduledSubtask(null)
         throw new Error(`Failed to update subtask: ${res.status}`);
       }
-
+      
       // Refresh the goals data to show the updated subtask
       const fetchGoals = async () => {
         try {
@@ -841,6 +847,12 @@ export function CalendarScheduler() {
       };
 
       await fetchGoals();
+
+      // Auto-hide undo toast after 5 seconds
+      setTimeout(() => {
+        setShowRescheduleSubtaskToast(false);
+        setRescheduledSubtask(null);
+      }, 5000);
 
       toast.success(`Subtask moved to ${targetDate.toLocaleDateString()} at ${targetHour}:${targetMinute.toString().padStart(2, '0')}`);
 
@@ -1311,19 +1323,6 @@ export function CalendarScheduler() {
     setHoveredTask(null);
   }
 
-  const handleDeleteConfirm = async () => {
-    if (deleteModal?.task) {
-      // Close the modal immediately
-      setDeleteModal(null);
-      // Also close the overflow events modal if it's open
-      if (overflowEvents) {
-        setOverflowEvents(null);
-      }
-      // Then handle the deletion
-      await handleTaskDelete(deleteModal.task);
-    }
-  }
-
   const handleDeleteCancel = () => {
     setDeleteModal(null);
     // Also close the overflow events modal if it's open
@@ -1546,86 +1545,6 @@ export function CalendarScheduler() {
     }
   }
 
-  const handleUndoDelete = async () => {
-    if (!deletedTask) return;
-
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return alert("Please log in first.");
-
-      // Recreate the task using the create-task endpoint
-      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const payload = {
-        task_title: deletedTask.task_title,
-        task_descr: deletedTask.task_descr || '',
-        task_due_date: deletedTask.task_due_date || deletedTask.due_date,
-        subtasks: deletedTask.subtasks?.map((subtask: any, index: number) => ({
-          subtask_descr: subtask.subtask_descr,
-          subtask_type: subtask.subtask_type || 'other',
-          subtask_completed: subtask.subtask_completed || false,
-          subtask_order: index,
-          estimatedTimeMinutes: subtask.estimatedTimeMinutes
-        })) || [{
-          subtask_descr: 'Default Subtask',
-          subtask_type: 'other',
-          subtask_completed: false,
-          subtask_order: 0
-        }]
-      };
-
-      const res = await fetch(`${api}/api/goals/${deletedTask.goal_id}/create-task`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to restore task: ${res.status}`);
-      }
-
-      // Refresh the goals data to show the restored task
-      const fetchGoals = async () => {
-        try {
-          const token =
-            typeof window !== "undefined" ? localStorage.getItem("token") : null;
-          if (!token) return console.warn("No JWT in localStorage");
-
-          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-          const res = await fetch(`${api}/api/goals/subtasks`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) throw new Error(`Request failed ${res.status}`);
-
-          const grouped = await res.json() as Record<string, Goal[]>;
-          // Filter out placeholder tasks from each date group
-          const filteredGrouped: Record<string, Goal[]> = {};
-          Object.keys(grouped).forEach(key => {
-            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-          });
-          setGoalsByDate(filteredGrouped);
-          const ordered = Object.keys(filteredGrouped)
-            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
-            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
-          setSortedGoalsByDate(ordered);
-        } catch (err) {
-          console.error("fetchGoals error", err);
-        }
-      };
-
-      await fetchGoals();
-
-      setShowUndoToast(false);
-      setDeletedTask(null);
-      toast.success("Task restored successfully");
-    } catch (err) {
-      console.error("handleUndoDelete error", err);
-      toast.error("Failed to restore task");
-    }
-  }
-
   const handleSubtaskDelete = async (subtask: Goal) => {
     try {
       const token = localStorage.getItem("token");
@@ -1817,6 +1736,86 @@ export function CalendarScheduler() {
     }
   }
 
+  const handleUndoSubtaskSchedule = async() => {
+    if (!rescheduledSubtask) return
+
+    // reupdate subtask back to its original start and end times
+    try {
+      // Call the update_subtask endpoint
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      let payload: any = {
+        subtask_start_time: rescheduledSubtask.start_time,
+        subtask_end_time: rescheduledSubtask.end_time,
+        bypass_due_date: rescheduledSubtask.is_conflicting
+      };
+
+      console.log("Payload", payload)
+
+      const res = await fetch(`${api}/api/goals/tasks/subtasks/${rescheduledSubtask.subtask_id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to update subtask: ${res.status}`);
+      }
+      
+      // Refresh the goals data to show the updated subtask
+      const fetchGoals = async () => {
+        try {
+          const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+
+          const grouped = await res.json() as Record<string, Goal[]>;
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      await fetchGoals();
+
+      const start = new Date(rescheduledSubtask.start_time!);
+      toast.success(`Subtask restored to ${start.toLocaleDateString()} at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+
+      // Reset undo state
+      setShowRescheduleSubtaskToast(false);
+      setRescheduledSubtask(null)
+
+      // Close the overflow modal if it's open
+      if (overflowEvents) {
+        setOverflowEvents(null);
+      }
+    } catch (error) {
+      console.error('Failed to undo subtask move:', error);
+      toast.error('Failed to undo subtask move');
+    } finally {
+      setDragOverDate(null);
+    }
+  };
+
   const searchParams = useSearchParams();
 
   // On mount or when searchParams changes, check for addSubtaskForTask param
@@ -1909,110 +1908,6 @@ export function CalendarScheduler() {
       [courseId]: !prev[courseId]
     }));
   }
-
-  const handleTaskDelete = async (task: Goal) => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return alert("Please log in first.");
-
-      // Store the deleted task for undo functionality
-      setDeletedTask(task);
-      setShowUndoToast(true);
-
-      // Store original state for potential rollback
-      const originalSelectedGoal = selectedGoal;
-      const originalGoalsByDate = goalsByDate;
-      const originalSortedGoalsByDate = sortedGoalsByDate;
-
-      // Greedy optimistic update - immediately remove the task from UI
-      setSelectedGoal((prev) => {
-        if (!prev || prev.task_id !== task.task_id) return prev;
-        return null; // Close the task modal
-      });
-
-      // Remove all instances of this task from all date groups
-      setGoalsByDate((prev) => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach(dateKey => {
-          updated[dateKey] = updated[dateKey].filter(goal => goal.task_id !== task.task_id);
-        });
-        return updated;
-      });
-
-      setSortedGoalsByDate((prev) => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach(dateKey => {
-          updated[dateKey] = updated[dateKey].filter(goal => goal.task_id !== task.task_id);
-        });
-        return updated;
-      });
-
-      // Call the delete_task route
-      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const res = await fetch(`${api}/api/goals/${task.goal_id}/tasks/${task.task_id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-      });
-
-      if (!res.ok) {
-        // If API call fails, revert the optimistic updates
-        console.error("Task deletion failed, reverting changes");
-        setSelectedGoal(originalSelectedGoal);
-        setGoalsByDate(originalGoalsByDate);
-        setSortedGoalsByDate(originalSortedGoalsByDate);
-        setDeletedTask(null);
-        setShowUndoToast(false);
-        throw new Error(`Failed to delete task: ${res.status}`);
-      }
-
-      // If successful, refresh the data to ensure consistency with server
-      const fetchGoals = async () => {
-        try {
-          const token =
-            typeof window !== "undefined" ? localStorage.getItem("token") : null;
-          if (!token) return console.warn("No JWT in localStorage");
-
-          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-          const res = await fetch(`${api}/api/goals/subtasks`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) throw new Error(`Request failed ${res.status}`);
-
-          const grouped = await res.json() as Record<string, Goal[]>;
-          // Filter out placeholder tasks from each date group
-          const filteredGrouped: Record<string, Goal[]> = {};
-          Object.keys(grouped).forEach(key => {
-            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-          });
-          setGoalsByDate(filteredGrouped);
-          const ordered = Object.keys(filteredGrouped)
-            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
-            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
-          setSortedGoalsByDate(ordered);
-        } catch (err) {
-          console.error("fetchGoals error", err);
-        }
-      };
-
-      // Refresh the goals data to ensure consistency
-      await fetchGoals();
-
-      // Auto-hide undo toast after 5 seconds
-      setTimeout(() => {
-        setShowUndoToast(false);
-        setDeletedTask(null);
-      }, 5000);
-
-      toast.success("Task deleted successfully");
-    } catch (err) {
-      console.error("handleTaskDelete error", err);
-      toast.error("Failed to delete task");
-    }
-  }
-
 
   const handleSubtaskToggle = async (sub: Goal) => {
     try {
@@ -4316,35 +4211,6 @@ export function CalendarScheduler() {
         </div>
       )}
 
-      {/* Undo Toast */}
-      {showUndoToast && deletedTask && (
-        <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
-          <div className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900">
-                  Task deleted
-                </p>
-                <p className="text-xs text-gray-600 truncate">
-                  {deletedTask.task_title || '(untitled)'}
-                </p>
-              </div>
-              <button
-                onClick={handleUndoDelete}
-                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-              >
-                Undo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Undo Subtask Toast */}
       {showUndoSubtaskToast && deletedSubtask && (
         <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
@@ -4365,6 +4231,35 @@ export function CalendarScheduler() {
               </div>
               <button
                 onClick={handleUndoSubtaskDelete}
+                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+              >
+                Undo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Show Undo Rescheduling Subtask */}
+      {showRescheduleSubtaskToast && rescheduledSubtask && (
+        <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
+          <div className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">
+                  Undo scheduling
+                </p>
+                <p className="text-xs text-gray-600 truncate">
+                  {rescheduledSubtask.subtask_descr || '(untitled)'}
+                </p>
+              </div>
+              <button
+                onClick={handleUndoSubtaskSchedule}
                 className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
               >
                 Undo

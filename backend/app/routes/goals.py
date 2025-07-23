@@ -990,7 +990,7 @@ def delete_subtask(subtask_id):
                 for row in remaining_subtasks:
                     row.task_completed = False
                     row.updated_at = datetime.utcnow()
-                db.session.commit()
+        db.session.commit()
         
         # Queue the specific subtask event deletion from Google Calendar
         if subtask.google_event_id and subtask.sync_status == "Synced":
