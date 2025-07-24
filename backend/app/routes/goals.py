@@ -810,9 +810,28 @@ def update_goal_tasks(goal_id):
         db.session.rollback()
         current_app.logger.error(f"Error updating tasks: {str(e)}")
         return jsonify({'error': 'An error occurred while updating tasks'}), 500
-
-
-
+    
+@goals_bp.route('/api/goals/<task_id>', methods = ['GET'])
+@jwt_required()
+def get_task_by_id(task_id):
+    """Get a specific task by its ID"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Find the task
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
+        if not task:
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        return jsonify(task.to_dict()), 200
+        
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error getting task: {str(e)}")
+        return jsonify({'error': 'An error occurred while getting the task'}), 500
 
 @goals_bp.route('/api/goals/<goal_id>/save-tasks', methods=['POST'])
 @jwt_required()

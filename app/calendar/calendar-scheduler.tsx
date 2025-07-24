@@ -244,6 +244,18 @@ export function CalendarScheduler() {
   const [showCreateSubtaskModal, setShowCreateSubtaskModal] = useState(false);
   const [createSubtaskModalPosition, setCreateSubtaskModalPosition] = useState({ x: 0, y: 0 });
   const [availableTasks, setAvailableTasks] = useState<Record<string, string>>({});
+  const [sidebarTasks, setSidebarTasks] = useState<{
+    overdue: Record<string, Goal[]>;
+    upcoming: Record<string, Goal[]>;
+    future: Record<string, Goal[]>;
+    completed: Record<string, Goal[]>;
+  }>({
+    overdue: {},
+    upcoming: {},
+    future: {},
+    completed: {}
+  });
+
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [preselectedTaskId, setPreselectedTaskId] = useState<string | null>(null);
   const [showBanner, setShowBanner] = useState(false);
@@ -2490,64 +2502,64 @@ export function CalendarScheduler() {
     const apiBase = process.env.BACKEND_URL;
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
-  
-const handleDisconnectCalendar = async () => {
-  const token = localStorage.getItem("token");
-  if (!token) return alert("Please log in first.");
 
-  try {
-    setDisconnecting(true);
+  const handleDisconnectCalendar = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return alert("Please log in first.");
 
-    const res = await fetch(`${process.env.BACKEND_URL}/api/calendar/disconnect`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      }
-    });
+    try {
+      setDisconnecting(true);
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Disconnect failed");
+      const res = await fetch(`${process.env.BACKEND_URL}/api/calendar/disconnect`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        }
+      });
 
-    await fetchCalendarStatus(); // refresh status after disconnect
-    toast.success("Google Calendar disconnected successfully");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Disconnect failed");
 
-  // Refresh the goals data to show the updated subtask
-    const fetchGoals = async () => {
-      try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        if (!token) return console.warn("No JWT in localStorage");
+      await fetchCalendarStatus(); // refresh status after disconnect
+      toast.success("Google Calendar disconnected successfully");
 
-        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-        const res = await fetch(`${api}/api/goals/subtasks`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error(`Request failed ${res.status}`);
+      // Refresh the goals data to show the updated subtask
+      const fetchGoals = async () => {
+        try {
+          const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
 
-        const grouped = await res.json() as Record<string, Goal[]>;
-        const filteredGrouped: Record<string, Goal[]> = {};
-        Object.keys(grouped).forEach(key => {
-          filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-        });
-        setGoalsByDate(filteredGrouped);
-        const ordered = Object.keys(filteredGrouped)
-          .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
-          .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
-        setSortedGoalsByDate(ordered);
-      } catch (err) {
-        console.error("fetchGoals error", err);
-      }
-    };
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
 
-    await fetchGoals();
+          const grouped = await res.json() as Record<string, Goal[]>;
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
 
-  } catch (err) {
-    console.error("Disconnect error:", err);
-    alert("Failed to disconnect");
-  } finally {
-    setDisconnecting(false);
-  }
-};
+      await fetchGoals();
+
+    } catch (err) {
+      console.error("Disconnect error:", err);
+      alert("Failed to disconnect");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
 
 
   const handleSyncAll = async () => {
@@ -2742,7 +2754,20 @@ const handleDisconnectCalendar = async () => {
         },
         body: JSON.stringify({ tasks: tasksData })
       });
+
       if (!res.ok) throw new Error(`Failed to create task: ${res.status}`);
+      const result = await res.json();
+      const created = result[0]
+      console.log("Task created successfully", created);
+
+      if (created?.task_id) {
+        setAvailableTasks(prev => (
+          {
+            ...prev,
+            [created.task_title]: created.task_id
+          }
+        ))
+      }
 
       // Refresh goals data to show the newly created task
       const fetchGoals = async () => {
@@ -3253,74 +3278,123 @@ const handleDisconnectCalendar = async () => {
     return groupedByTaskDueDate;
   };
 
+  useEffect(() => {
+    fetchAvailableTasks();
+  }, []);
+
+  useEffect(() => {
+    const runCategorization = async () => {
+      if (!availableTasks || filteredGoals.length === 0) return;
+      await categorizeTasks();
+    };
+    runCategorization();
+  }, [availableTasks, filteredGoals]); // ← include filteredGoals here
+
   // Helper functions to categorize tasks
-  const categorizeTasks = () => {
+  const categorizeTasks = async () => {
     const today = startOfToday();
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay()); // Sunday
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6); // Saturday
 
-    const overdue: { [date: string]: Goal[] } = {};
-    const upcoming: { [date: string]: Goal[] } = {};
-    const future: { [date: string]: Goal[] } = {};
-    const completed: { [date: string]: Goal[] } = {};
+    const overdue: Record<string, Goal[]> = {};
+    const upcoming: Record<string, Goal[]> = {};
+    const future: Record<string, Goal[]> = {};
+    const completed: Record<string, Goal[]> = {};
 
-    console.log("=== SIDEBAR GROUPING DEBUG ===");
-    console.log("filteredGoals:", filteredGoals);
-    console.log("Today:", today.toISOString());
-    console.log("Week start:", weekStart.toISOString());
-    console.log("Week end:", weekEnd.toISOString());
+    // === Stage 1: Categorize filteredGoals ===
+    const grouped = groupTasksByTaskDueDate(filteredGoals);
+    console.log("🔍 Filtered Goals (raw):", grouped);
 
-    // Use the new helper function to group by task_due_date
-    const filteredGoalsByDate = groupTasksByTaskDueDate(filteredGoals);
-
-    Object.entries(filteredGoalsByDate).forEach(([date, goals]) => {
+    for (const [date, goals] of Object.entries(grouped)) {
       const taskDate = new Date(date + 'T00:00:00');
+      const completedGoals = goals.filter(g => g.task_completed);
+      const incompleteGoals = goals.filter(g => !g.task_completed);
 
-      console.log("Processing date group:", date, "with", goals.length, "goals");
-      console.log("  Task date:", taskDate.toISOString());
-      console.log("  Goals:", goals.map(g => ({
-        task_id: g.task_id,
-        subtask_id: g.subtask_id,
-        task_title: g.task_title,
-        task_completed: g.task_completed
-      })));
-
-      // Separate completed tasks
-      const completedGoals = goals.filter(goal => goal.task_completed);
-      const incompleteGoals = goals.filter(goal => !goal.task_completed);
-
-      console.log("  Completed goals:", completedGoals.length);
-      console.log("  Incomplete goals:", incompleteGoals.length);
-
-      if (completedGoals.length > 0) {
-        completed[date] = completedGoals;
-        console.log("  → Added to completed section");
-      }
-
+      if (completedGoals.length > 0) completed[date] = completedGoals;
       if (incompleteGoals.length > 0) {
-        if (taskDate < today) {
-          overdue[date] = incompleteGoals;
-          console.log("  → Added to overdue section");
-        } else if (taskDate >= today && taskDate <= weekEnd) {
-          upcoming[date] = incompleteGoals;
-          console.log("  → Added to upcoming section");
-        } else {
-          future[date] = incompleteGoals;
-          console.log("  → Added to future section");
-        }
+        if (taskDate < today) overdue[date] = incompleteGoals;
+        else if (taskDate <= weekEnd) upcoming[date] = incompleteGoals;
+        else future[date] = incompleteGoals;
       }
+    }
+
+    // === Stage 2: Detect uncategorized availableTasks and fetch them ===
+
+    // Build set of task_ids that are already categorized
+    const categorizedTaskIds = new Set<string>();
+    [overdue, upcoming, future, completed].forEach(section => {
+      Object.values(section).flat().forEach(task => {
+        if (task.task_id) categorizedTaskIds.add(task.task_id);
+      });
     });
 
-    console.log("Final categorization:");
-    console.log("  Overdue:", Object.keys(overdue));
-    console.log("  Upcoming:", Object.keys(upcoming));
-    console.log("  Future:", Object.keys(future));
-    console.log("  Completed:", Object.keys(completed));
+    // Only now use availableTasks
+    const missingTaskEntries = Object.entries(availableTasks).filter(
+      ([_, taskId]) => !categorizedTaskIds.has(taskId)
+    );
 
-    return { overdue, upcoming, future, completed };
+    console.log("🚨 Missing task IDs:", missingTaskEntries.map(([title]) => `${title}`));
+
+    for (const [title, taskId] of missingTaskEntries) {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) continue;
+
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const res = await fetch(`${api}/api/goals/${taskId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!res.ok) {
+          console.warn(`❌ Could not fetch metadata for task ${taskId}`);
+          continue;
+        }
+
+        const fullTask = await res.json();
+
+        const goal: Goal = {
+          ...fullTask,
+          task_id: fullTask.task_id || taskId,
+          task_title: fullTask.task_title || title,
+          subtask_id: null,             // explicitly no subtask
+          subtask_descr: null,
+          subtask_completed: false,
+          subtask_order: null,
+          created_at: fullTask.created_at || new Date().toISOString(),
+          has_substasks: false,
+        };
+
+
+        const dateStr = goal.task_due_date || goal.due_date;
+        const taskDate = dateStr ? new Date(dateStr + 'T00:00:00') : startOfToday();
+        const key = dateStr ? getDateKeyFromDateString(dateStr) : getLocalDateKey(new Date());
+
+        if (goal.task_completed) {
+          if (!completed[key]) completed[key] = [];
+          completed[key].push(goal);
+        } else if (taskDate < today) {
+          if (!overdue[key]) overdue[key] = [];
+          overdue[key].push(goal);
+        } else if (taskDate <= weekEnd) {
+          if (!upcoming[key]) upcoming[key] = [];
+          upcoming[key].push(goal);
+        } else {
+          if (!future[key]) future[key] = [];
+          future[key].push(goal);
+        }
+
+        console.log(`✅ Recovered and categorized '${title}' (${taskId})`);
+      } catch (err) {
+        console.error(`❌ Error resolving task ${taskId}:`, err);
+      }
+    }
+
+    // Update state
+    setSidebarTasks({ overdue, upcoming, future, completed });
   };
+
 
   const renderTaskSection = (title: string, tasks: { [date: string]: Goal[] }, sectionKey: string, color: string) => {
     const taskEntries = Object.entries(tasks);
@@ -3427,7 +3501,7 @@ const handleDisconnectCalendar = async () => {
                               </div>
 
                               {/* View Subtasks Button */}
-                              {group.totalSubtasks && group.totalSubtasks >= 1 && (
+                              {group.hasSubtasks && group.totalSubtasks >= 1 && (
                                 <div className="mt-2">
                                   <button
                                     onClick={(e) => {
@@ -3666,17 +3740,16 @@ const handleDisconnectCalendar = async () => {
           <>
             {/* Categorized Tasks */}
             <div className="space-y-4">
-              {(() => {
-                const { overdue, upcoming, future, completed } = categorizeTasks();
-                return (
-                  <>
-                    {renderTaskSection("Overdue", overdue, "overdue", "#ef4444")}
-                    {renderTaskSection("This Week", upcoming, "upcoming", "#10b981")}
-                    {renderTaskSection("Future", future, "future", "#3b82f6")}
-                    {renderTaskSection("Completed", completed, "completed", "#0a80ed")}
-                  </>
-                );
-              })()}
+              {!sidebarTasks ? (
+                <div className="text-sm text-gray-500">Loading tasks...</div>
+              ) : (
+                <>
+                  {renderTaskSection("Overdue", sidebarTasks.overdue, "overdue", "#ef4444")}
+                  {renderTaskSection("This Week", sidebarTasks.upcoming, "upcoming", "#10b981")}
+                  {renderTaskSection("Future", sidebarTasks.future, "future", "#3b82f6")}
+                  {renderTaskSection("Completed", sidebarTasks.completed, "completed", "#0a80ed")}
+                </>
+              )}
             </div>
           </>
         ) : (
@@ -4139,30 +4212,29 @@ const handleDisconnectCalendar = async () => {
                             </div>
                           </div>
                         </div>
-<Button
-  variant="outline"
-  disabled={disconnecting}
-  className={`${
-    googleCalendarStatus
-      ? 'border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
-      : 'border-[#0a80ed] text-[#0a80ed] hover:bg-[#0a80ed] hover:text-white'
-  } flex items-center gap-2`}
-  onClick={() => {
-    if (googleCalendarStatus) {
-      handleDisconnectCalendar();
-    } else {
-      handleConnectCalendar();
-    }
-  }}
->
-  {disconnecting && (
-    <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 11-8 8z" />
-    </svg>
-  )}
-  {disconnecting ? 'Disconnecting...' : (googleCalendarStatus ? 'Disconnect' : 'Connect')}
-</Button>
+                        <Button
+                          variant="outline"
+                          disabled={disconnecting}
+                          className={`${googleCalendarStatus
+                              ? 'border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
+                              : 'border-[#0a80ed] text-[#0a80ed] hover:bg-[#0a80ed] hover:text-white'
+                            } flex items-center gap-2`}
+                          onClick={() => {
+                            if (googleCalendarStatus) {
+                              handleDisconnectCalendar();
+                            } else {
+                              handleConnectCalendar();
+                            }
+                          }}
+                        >
+                          {disconnecting && (
+                            <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 11-8 8z" />
+                            </svg>
+                          )}
+                          {disconnecting ? 'Disconnecting...' : (googleCalendarStatus ? 'Disconnect' : 'Connect')}
+                        </Button>
 
                       </div>
 
