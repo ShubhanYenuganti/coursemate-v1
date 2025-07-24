@@ -138,6 +138,10 @@ export function CalendarScheduler() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [courseVisibility, setCourseVisibility] = useState<Record<string, boolean>>({});
   const [goalVisibility, setGoalVisibility] = useState<Record<string, boolean>>({});
+  const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
+  const [tasksByGoal, setTasksByGoal] = useState<Record<string, Goal[]>>({});
+  const [loadingTasks, setLoadingTasks] = useState<Record<string, boolean>>({});
+  const [taskVisibility, setTaskVisibility] = useState<Record<string, boolean>>({});
   const [filteredGoals, setFilteredGoals] = useState<Goal[]>([]);
 
   // Add task modal state
@@ -1871,61 +1875,130 @@ export function CalendarScheduler() {
     }
   }, [addSubtaskModal, preselectedTaskId]);
 
-const toggleCourseVisibility = (courseId: string) => {
-  const newVisibility = !(courseVisibility[courseId] ?? true);
+  const toggleCourseVisibility = (courseId: string) => {
+    const newVisibility = !(courseVisibility[courseId] ?? true);
 
-  setCourseVisibility(prev => ({
-    ...prev,
-    [courseId]: newVisibility
-  }));
-
-  // Apply same toggle state to all goals
-  const goals = courseGoals[courseId];
-  if (goals) {
-    const newGoalVisibility = { ...goalVisibility };
-    for (const goal of goals) {
-      newGoalVisibility[goal.goal_id] = newVisibility;
-    }
-    setGoalVisibility(newGoalVisibility);
-  }
-};
-
-
-const toggleGoalVisibility = (goalId: string) => {
-  setGoalVisibility(prev => {
-    const newValue = !(prev[goalId] ?? true); // toggle current goal
-    const updated = { ...prev, [goalId]: newValue };
-
-    // Find the course that this goal belongs to
-    let parentCourseId: string | undefined;
-    for (const [courseId, goals] of Object.entries(courseGoals)) {
-      if (goals.some(goal => goal.goal_id === goalId)) {
-        parentCourseId = courseId;
-        break;
-      }
-    }
-
-    if (!parentCourseId) return updated;
-
-    // Get all goals for the parent course
-    const courseGoalList = courseGoals[parentCourseId];
-    if (!courseGoalList) return updated;
-
-    const goalIds = courseGoalList.map(goal => goal.goal_id);
-
-    // Evaluate resulting visibility for the course based on updated goals
-    const anyVisible = goalIds.some(id => updated[id] !== false);
-    const allHidden = goalIds.every(id => updated[id] === false);
-
-    // Sync course visibility
-    setCourseVisibility(prevCourses => ({
-      ...prevCourses,
-      [parentCourseId!]: anyVisible // ON if any goal is on, OFF if all are off
+    setCourseVisibility(prev => ({
+      ...prev,
+      [courseId]: newVisibility
     }));
 
-    return updated;
-  });
-};
+    const goals = courseGoals[courseId];
+    if (goals) {
+      // Toggle goal visibility
+      const newGoalVisibility = { ...goalVisibility };
+      // To collect all task_ids across all goals
+      const taskIdsToUpdate: string[] = [];
+
+      for (const goal of goals) {
+        newGoalVisibility[goal.goal_id] = newVisibility;
+
+        // Grab all valid tasks for this goal
+        const tasks = tasksByGoal[goal.goal_id] || [];
+        for (const task of tasks) {
+          if (
+            task.task_id !== 'placeholder' &&
+            task.subtask_id !== 'placeholder'
+          ) {
+            taskIdsToUpdate.push(task.task_id);
+          }
+        }
+      }
+
+      setGoalVisibility(newGoalVisibility);
+
+      // Toggle associated task visibility
+      setTaskVisibility(prev => {
+        const updated = { ...prev };
+        for (const taskId of taskIdsToUpdate) {
+          updated[taskId] = newVisibility;
+        }
+        return updated;
+      });
+    }
+  };
+
+
+  const toggleGoalVisibility = (goalId: string) => {
+    setGoalVisibility(prev => {
+      const newValue = !(prev[goalId] ?? true); // toggle current goal
+      const updated = { ...prev, [goalId]: newValue };
+
+      // Set all associated tasks ON/OFF
+      const tasksForGoal = tasksByGoal[goalId] || [];
+      setTaskVisibility(prevTasks => {
+        const updatedTasks = { ...prevTasks };
+        for (const task of tasksForGoal) {
+          if (
+            task.task_id !== 'placeholder' &&
+            task.subtask_id !== 'placeholder'
+          ) {
+            updatedTasks[task.task_id] = newValue;
+          }
+        }
+        return updatedTasks;
+      });
+
+      // Find the course that this goal belongs to
+      let parentCourseId: string | undefined;
+      for (const [courseId, goals] of Object.entries(courseGoals)) {
+        if (goals.some(goal => goal.goal_id === goalId)) {
+          parentCourseId = courseId;
+          break;
+        }
+      }
+
+      if (!parentCourseId) return updated;
+
+      const courseGoalList = courseGoals[parentCourseId];
+      if (!courseGoalList) return updated;
+
+      const goalIds = courseGoalList.map(goal => goal.goal_id);
+      const anyVisible = goalIds.some(id => updated[id] !== false);
+
+      // Sync course visibility
+      setCourseVisibility(prevCourses => ({
+        ...prevCourses,
+        [parentCourseId!]: anyVisible
+      }));
+
+      return updated;
+    });
+  };
+
+
+
+  const toggleTaskVisibility = (taskId: string) => {
+    setTaskVisibility(prev => {
+      const newValue = !(prev[taskId] ?? true); // toggle current task
+
+      // Find the goal that contains this task
+      let updatedGoalVisibility = { ...goalVisibility };
+
+      for (const [goalId, tasks] of Object.entries(tasksByGoal)) {
+        const taskIds = tasks.map(t => t.task_id);
+        if (taskIds.includes(taskId)) {
+          if (newValue) {
+            // If this task is being turned on, make sure the goal is also visible
+            updatedGoalVisibility[goalId] = true;
+          } else {
+            // If this task is being turned off, check if all other tasks are off
+            const otherTasksOn = taskIds.some(
+              id => id !== taskId && (prev[id] ?? true)
+            );
+            if (!otherTasksOn) {
+              updatedGoalVisibility[goalId] = false;
+            }
+          }
+          break; // only one goal will match
+        }
+      }
+
+      setGoalVisibility(updatedGoalVisibility);
+
+      return { ...prev, [taskId]: newValue };
+    });
+  };
 
 
   const handleLoadCourseGoals = async (courseId: string) => {
@@ -1954,6 +2027,36 @@ const toggleGoalVisibility = (goalId: string) => {
       console.error("Error loading course goals:", error);
     }
   }
+
+  const fetchTasksForGoal = async (goalId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      setLoadingTasks(prev => ({ ...prev, [goalId]: true }));
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+
+      const res = await fetch(`${api}/api/goals/${goalId}/tasks`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch tasks: ${res.status}`);
+      }
+
+      const tasks = await res.json();
+      setTasksByGoal(prev => ({ ...prev, [goalId]: tasks }));
+    } catch (err) {
+      console.error("Error fetching tasks for goal:", err);
+      toast.error("Failed to load tasks for goal");
+    } finally {
+      setLoadingTasks(prev => ({ ...prev, [goalId]: false }));
+    }
+  };
+
 
   const handleSubtaskToggle = async (sub: Goal) => {
     try {
@@ -2164,6 +2267,19 @@ const toggleGoalVisibility = (goalId: string) => {
               initialVisibilityGoal[goal.goal_id] = true;
             });
             setGoalVisibility(initialVisibilityGoal);
+          }
+
+          const storedTaskVis = localStorage.getItem('taskVisibility');
+          if (!storedTaskVis) {
+            const initialVisibilityTask: Record<string, boolean> = {};
+            Object.values(grouped).flat().forEach(goal => {
+              goal.tasks?.forEach(task => {
+                if (task.task_id !== 'placeholder' && task.subtask_id !== 'placeholder') {
+                  initialVisibilityTask[task.task_id] = true;
+                }
+              });
+            });
+            setTaskVisibility(initialVisibilityTask);
           }
         } catch (err) {
           console.error("fetchGoals error", err);
@@ -2748,6 +2864,19 @@ const toggleGoalVisibility = (goalId: string) => {
           });
           setGoalVisibility(initialVisibilityGoal);
         }
+
+        const storedTaskVis = localStorage.getItem('taskVisibility');
+        if (!storedTaskVis) {
+          const initialVisibilityTask: Record<string, boolean> = {};
+          Object.values(grouped).flat().forEach(goal => {
+            goal.tasks?.forEach(task => {
+              if (task.task_id !== 'placeholder' && task.subtask_id !== 'placeholder') {
+                initialVisibilityTask[task.task_id] = true;
+              }
+            });
+          });
+          setTaskVisibility(initialVisibilityTask);
+        }
       } catch (err) {
         console.error("fetchGoals error", err);
       }
@@ -2912,38 +3041,45 @@ const toggleGoalVisibility = (goalId: string) => {
     } catch (err) {
       console.error('Failed to restore goalVisibility:', err);
     }
+    try {
+      const storedTaskVis = localStorage.getItem('taskVisibility');
+      if (storedTaskVis) {
+        setTaskVisibility(JSON.parse(storedTaskVis));
+      }
+    } catch (err) {
+      console.error('Failed to restore taskVisibility:', err);
+    }
   }, []);
 
-  // Persist courseVisibility to localStorage whenever it changes
+
+  // Persist courseVisibility, goalVisibility, and taskVisibility to localStorage whenever they change
   useEffect(() => {
     try {
       localStorage.setItem('courseVisibility', JSON.stringify(courseVisibility));
     } catch (err) {
       console.error('Failed to persist courseVisibility:', err);
     }
-    const allGoals = Object.values(goalsByDate).flat();
-    const filtered = allGoals.filter(goal => courseVisibility[goal.course_id] !== false);
-    setFilteredGoals(filtered);
-  }, [goalsByDate, courseVisibility]);
-
-  // Persist goalVisibility to localStorage whenever it changes
-  useEffect(() => {
     try {
       localStorage.setItem('goalVisibility', JSON.stringify(goalVisibility));
     } catch (err) {
       console.error('Failed to persist goalVisibility:', err);
     }
+    try {
+      localStorage.setItem('taskVisibility', JSON.stringify(taskVisibility));
+    } catch (err) {
+      console.error('Failed to persist taskVisibility:', err);
+    }
+    // Show all tasks regardless of visibility toggles
     const allGoals = Object.values(goalsByDate).flat();
-    const filtered = allGoals.filter(goal => goalVisibility[goal.goal_id] !== false);
-    setFilteredGoals(filtered);
-  }, [goalsByDate, goalVisibility]);
+    setFilteredGoals(allGoals);
+  }, [goalsByDate, courseVisibility, goalVisibility, taskVisibility]);
 
   /** Return the list of subtasks whose start_time and end_time fall on that calendar day (local time) */
   const getGoalsForDate = (date: Date): Goal[] => {
     // Always check all events, regardless of backend grouping
     const allGoals = Object.values(goalsByDate).flat();
     return allGoals.filter(goal => {
-      if (!goal.start_time || !goal.end_time || courseVisibility[goal.course_id] === false || goalVisibility[goal.goal_id] === false) return false;
+      if (!goal.start_time || !goal.end_time || courseVisibility[goal.course_id] === false || goalVisibility[goal.goal_id] === false || taskVisibility[goal.task_id] === false) return false;
       // Convert UTC start_time to local time
       const start = new Date(goal.start_time);
       return (
@@ -3497,20 +3633,72 @@ const toggleGoalVisibility = (goalId: string) => {
                           <div className="bg-white px-3 pb-3 mt-2 space-y-2 border-t border-gray-200 rounded-b-lg">
                             {courseGoals[course.course_id]?.length ? (
                               courseGoals[course.course_id].map(goal => {
-
+                                const isGoalExpanded = expandedGoalId === goal.goal_id;
+                                const handleGoalClick = async () => {
+                                  if (isGoalExpanded) {
+                                    setExpandedGoalId(null);
+                                  } else {
+                                    setExpandedGoalId(goal.goal_id);
+                                    if (!tasksByGoal[goal.goal_id]) {
+                                      await fetchTasksForGoal(goal.goal_id);
+                                    }
+                                  }
+                                };
                                 return (
-                                  <div
-                                    key={goal.goal_id}
-                                    className="flex items-center justify-between text-sm text-[#333] bg-[#fafafa] p-2 rounded-md shadow-sm hover:bg-gray-100"
-                                  >
-                                    <div className="truncate">
-                                      {goal.task_title || goal.goal_descr || "Untitled Goal"}
+                                  <div key={goal.goal_id} className="space-y-1">
+                                    <div
+                                      className="flex items-center justify-between text-sm text-[#333] bg-[#fafafa] p-2 rounded-md shadow-sm hover:bg-gray-100 cursor-pointer"
+                                      onClick={handleGoalClick}
+                                    >
+                                      <div className="truncate">
+                                        {goal.task_title || goal.goal_descr || "Untitled Goal"}
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <Switch
+                                          checked={goalVisibility[goal.goal_id] !== false}
+                                          onCheckedChange={() => toggleGoalVisibility(goal.goal_id)}
+                                        />
+                                        <ChevronDown className={`w-4 h-4 transition-transform ${isGoalExpanded ? "rotate-180" : ""}`} />
+                                      </div>
                                     </div>
-                                    <Switch
-                                      checked={goalVisibility[goal.goal_id] !== false}
-                                      onCheckedChange={() => toggleGoalVisibility(goal.goal_id)}
-                                      className="ml-2"
-                                    />
+
+                                    {/* Render Tasks under the Goal */}
+                                    {isGoalExpanded && (
+                                      <div className="ml-4 mt-2 space-y-1">
+                                        {loadingTasks[goal.goal_id] ? (
+                                          <div className="text-xs text-gray-500 italic">Loading tasks...</div>
+                                        ) : (() => {
+                                          const realTasks = tasksByGoal[goal.goal_id]?.filter(
+                                            task =>
+                                              task.task_id !== 'placeholder' &&
+                                              task.subtask_id !== 'placeholder'
+                                          ) || [];
+
+                                          console.log(`Rendering tasks for goal ${goal.goal_id}:`, realTasks.map(task => task.task_id));
+
+                                          return realTasks.length > 0 ? (
+                                            realTasks.map((task, index) => (
+                                              <div
+                                                key={`${goal.goal_id}-${task.task_id || index}`}
+                                                className="flex items-center justify-between text-xs text-gray-700 px-2 py-1 bg-gray-50 rounded hover:bg-gray-100"
+                                              >
+                                                <div className="truncate">
+                                                  {task.task_title || "Untitled Task"}
+                                                </div>
+                                                <Switch
+                                                  checked={taskVisibility[task.task_id] !== false}
+                                                  onCheckedChange={() => toggleTaskVisibility(task.task_id)}
+                                                  className="ml-2"
+                                                />
+                                              </div>
+                                            ))
+                                          ) : (
+                                            <div className="text-xs italic text-gray-500">No tasks yet</div>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+
                                   </div>
                                 );
                               })
