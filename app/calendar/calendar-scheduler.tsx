@@ -3668,30 +3668,65 @@ export function CalendarScheduler() {
                                         {loadingTasks[goal.goal_id] ? (
                                           <div className="text-xs text-gray-500 italic">Loading tasks...</div>
                                         ) : (() => {
-                                          const realTasks = tasksByGoal[goal.goal_id]?.filter(
+                                          const filteredTasks = tasksByGoal[goal.goal_id]?.filter(
                                             task =>
                                               task.task_id !== 'placeholder' &&
                                               task.subtask_id !== 'placeholder'
                                           ) || [];
 
-                                          console.log(`Rendering tasks for goal ${goal.goal_id}:`, realTasks.map(task => task.task_id));
+                                          // Group tasks by task_id
+                                          const groupedTasksMap = new Map<string, typeof filteredTasks>();
+                                          for (const task of filteredTasks) {
+                                            if (!groupedTasksMap.has(task.task_id)) {
+                                              groupedTasksMap.set(task.task_id, task); // store the first occurrence
+                                            }
+                                          }
 
-                                          return realTasks.length > 0 ? (
-                                            realTasks.map((task, index) => (
-                                              <div
-                                                key={`${goal.goal_id}-${task.task_id || index}`}
-                                                className="flex items-center justify-between text-xs text-gray-700 px-2 py-1 bg-gray-50 rounded hover:bg-gray-100"
-                                              >
-                                                <div className="truncate">
-                                                  {task.task_title || "Untitled Task"}
+                                          const groupedTasks = Array.from(groupedTasksMap.values());
+
+                                          console.log(`Rendering grouped tasks for goal ${goal.goal_id}:`, groupedTasks.map(task => task.task_id));
+
+                                          return groupedTasks.length > 0 ? (
+                                            groupedTasks.map((task, index) => {
+                                              const subtasks = filteredTasks.filter(t => t.task_id === task.task_id); // all rows for this task_id
+
+                                              const totalSubtasks = subtasks.length;
+                                              const completedSubtasks = subtasks.filter(t => t.status === "completed").length;
+
+                                              const representativeGoal = {
+                                                ...subtasks[0],
+                                                task_title: task.task_title,
+                                                task_descr: task.task_descr,
+                                                start_time: task.start_time,
+                                                end_time: task.end_time,
+                                                course_id: task.course_id,
+                                                google_calendar_color: task.google_calendar_color,
+                                                progress: task.progress,
+                                                totalSubtasks,
+                                                completedSubtasks,
+                                                subtasks,
+                                                status: calculateStatus(subtasks[0]) // or use a custom status aggregator
+                                              };
+
+                                              return (
+                                                <div
+                                                  key={`${goal.goal_id}-${task.task_id || index}`}
+                                                  className="flex items-center justify-between text-xs text-gray-700 px-2 py-1 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer"
+                                                  onClick={(e) => openSubtasksModal(representativeGoal, e)}
+                                                >
+                                                  <div className="truncate">
+                                                    {task.task_title || "Untitled Task"}
+                                                  </div>
+                                                  <Switch
+                                                    checked={taskVisibility[task.task_id] !== false}
+                                                    onClick={e => e.stopPropagation()}
+                                                    onCheckedChange={() => toggleTaskVisibility(task.task_id)}
+                                                    className="ml-2"
+                                                  />
                                                 </div>
-                                                <Switch
-                                                  checked={taskVisibility[task.task_id] !== false}
-                                                  onCheckedChange={() => toggleTaskVisibility(task.task_id)}
-                                                  className="ml-2"
-                                                />
-                                              </div>
-                                            ))
+                                              );
+                                            })
+
                                           ) : (
                                             <div className="text-xs italic text-gray-500">No tasks yet</div>
                                           );
