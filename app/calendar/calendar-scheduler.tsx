@@ -144,6 +144,10 @@ export function CalendarScheduler() {
   const [taskVisibility, setTaskVisibility] = useState<Record<string, boolean>>({});
   const [filteredGoals, setFilteredGoals] = useState<Goal[]>([]);
 
+  // User Calendar Sync State
+  const [googleCalendarStatus, setGoogleCalendarStatus] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
   // Add task modal state
   const [userCourses, setUserCourses] = useState<any[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
@@ -1325,14 +1329,6 @@ export function CalendarScheduler() {
     setHoveredTask(null);
   }
 
-  const handleDeleteCancel = () => {
-    setDeleteModal(null);
-    // Also close the overflow events modal if it's open
-    if (overflowEvents) {
-      setOverflowEvents(null);
-    }
-  }
-
   const handleSubtaskDeleteConfirm = async () => {
     if (deleteSubtaskModal?.subtask) {
       // Close the modal immediately
@@ -2057,6 +2053,28 @@ export function CalendarScheduler() {
     }
   };
 
+  const fetchCalendarStatus = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const res = await fetch(`${api}/api/users/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error(`Failed to fetch user info: ${res.status}`);
+      const userInfo = await res.json();
+      const status = userInfo.calendar_synced || false; // Default to disabled if not
+      setGoogleCalendarStatus(status);
+    } catch (error) {
+      console.error("Error fetching Google Calendar status:", error);
+      setGoogleCalendarStatus(false); // Default to false on error
+    }
+  }
+
 
   const handleSubtaskToggle = async (sub: Goal) => {
     try {
@@ -2451,6 +2469,65 @@ export function CalendarScheduler() {
     const apiBase = process.env.BACKEND_URL;
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
+  
+const handleDisconnectCalendar = async () => {
+  const token = localStorage.getItem("token");
+  if (!token) return alert("Please log in first.");
+
+  try {
+    setDisconnecting(true);
+
+    const res = await fetch(`${process.env.BACKEND_URL}/api/calendar/disconnect`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      }
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Disconnect failed");
+
+    await fetchCalendarStatus(); // refresh status after disconnect
+    toast.success("Google Calendar disconnected successfully");
+
+  // Refresh the goals data to show the updated subtask
+    const fetchGoals = async () => {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        if (!token) return console.warn("No JWT in localStorage");
+
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const res = await fetch(`${api}/api/goals/subtasks`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Request failed ${res.status}`);
+
+        const grouped = await res.json() as Record<string, Goal[]>;
+        const filteredGrouped: Record<string, Goal[]> = {};
+        Object.keys(grouped).forEach(key => {
+          filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+        });
+        setGoalsByDate(filteredGrouped);
+        const ordered = Object.keys(filteredGrouped)
+          .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+          .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+        setSortedGoalsByDate(ordered);
+      } catch (err) {
+        console.error("fetchGoals error", err);
+      }
+    };
+
+    await fetchGoals();
+
+  } catch (err) {
+    console.error("Disconnect error:", err);
+    alert("Failed to disconnect");
+  } finally {
+    setDisconnecting(false);
+  }
+};
+
 
   const handleSyncAll = async () => {
     try {
@@ -3073,6 +3150,13 @@ export function CalendarScheduler() {
     const allGoals = Object.values(goalsByDate).flat();
     setFilteredGoals(allGoals);
   }, [goalsByDate, courseVisibility, goalVisibility, taskVisibility]);
+
+  useEffect(() => {
+    if (showSettings) {
+      fetchCalendarStatus();
+    }
+  }, [showSettings]);
+
 
   /** Return the list of subtasks whose start_time and end_time fall on that calendar day (local time) */
   const getGoalsForDate = (date: Date): Goal[] => {
@@ -4034,13 +4118,31 @@ export function CalendarScheduler() {
                             </div>
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          className="border-[#0a80ed] text-[#0a80ed] hover:bg-[#0a80ed] hover:text-white"
-                          onClick={handleConnectCalendar}
-                        >
-                          Connect
-                        </Button>
+<Button
+  variant="outline"
+  disabled={disconnecting}
+  className={`${
+    googleCalendarStatus
+      ? 'border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
+      : 'border-[#0a80ed] text-[#0a80ed] hover:bg-[#0a80ed] hover:text-white'
+  } flex items-center gap-2`}
+  onClick={() => {
+    if (googleCalendarStatus) {
+      handleDisconnectCalendar();
+    } else {
+      handleConnectCalendar();
+    }
+  }}
+>
+  {disconnecting && (
+    <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 11-8 8z" />
+    </svg>
+  )}
+  {disconnecting ? 'Disconnecting...' : (googleCalendarStatus ? 'Disconnect' : 'Connect')}
+</Button>
+
                       </div>
 
                       <div className="flex items-center justify-between p-4 border border-[#e5e8eb] rounded-lg hover:bg-[#f8f9fa] transition-colors">
@@ -5223,4 +5325,5 @@ export function CalendarScheduler() {
     </div>
   )
 }
+
 
