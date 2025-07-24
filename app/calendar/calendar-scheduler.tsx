@@ -1871,6 +1871,27 @@ export function CalendarScheduler() {
     }
   }, [addSubtaskModal, preselectedTaskId]);
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      if ((event.key === 'Delete' || event.key === 'Backspace') && hoveredTask && hoveredTask.goal_id !== "Google Calendar") {
+        event.preventDefault();
+        // For subtask events, use subtask deletion modal instead of task deletion
+        if (hoveredTask.subtask_id && hoveredTask.subtask_id !== 'placeholder') {
+          setDeleteSubtaskModal({
+            isOpen: true,
+            subtask: hoveredTask,
+            position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+          });
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [hoveredTask]);
+
   const toggleCourseVisibility = (courseId: string) => {
     const newVisibility = !(courseVisibility[courseId] ?? true);
 
