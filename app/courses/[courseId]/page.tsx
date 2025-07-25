@@ -146,7 +146,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
         <MaterialsManagerCourse courseId={course.dbId} />
       </div>
     ),
-    ai: <NewAIChatInterface courseId={course.dbId} />,
+    ai: <NewAIChatInterface courseId={course.comboId} materialsDbId={course.dbId} />,
     study: <StudyPlanTab courseId={course.dbId} />,
     community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
     progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,

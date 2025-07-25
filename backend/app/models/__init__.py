@@ -6,5 +6,7 @@ from .friend import Friend
 from .document_embedding import DocumentEmbedding
 from .uploaded_file import UploadedFile
 from .material_chunk import MaterialChunk
+from .conversation import Conversation
+from .conversation_message import ConversationMessage
 
-__all__ = ['User', 'Course', 'Goal', 'Message', 'Friend', 'DocumentEmbedding', 'UploadedFile', 'MaterialChunk']
+__all__ = ['User', 'Course', 'Goal', 'Message', 'Friend', 'DocumentEmbedding', 'UploadedFile', 'MaterialChunk', 'Conversation', 'ConversationMessage']
