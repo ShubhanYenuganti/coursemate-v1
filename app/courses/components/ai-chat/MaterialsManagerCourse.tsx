@@ -117,7 +117,11 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
       }, 200);
 
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const response = await fetch(`${api}/api/courses/${courseId}/materials`, {
+      
+      console.log('Uploading file to:', `${api}/api/courses/${courseId}/materials/upload`);
+      console.log('File details:', { name: file.name, size: file.size, type: file.type });
+      console.log('Course ID:', courseId);
+      const response = await fetch(`${api}/api/courses/${courseId}/materials/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -129,8 +133,15 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
       setUploadProgress(100);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+        console.error('Upload response not OK:', response.status, response.statusText);
+        try {
+          const errorData = await response.json();
+          console.error('Upload error data:', errorData);
+          throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+        } catch (jsonError) {
+          console.error('Could not parse error response as JSON:', jsonError);
+          throw new Error(`Upload failed with status ${response.status}: ${response.statusText}`);
+        }
       }
 
       const data = await response.json();
@@ -325,8 +336,8 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
   }
 
   return (
-    <div className="flex flex-col h-[600px] rounded-lg">
-      <div className="flex-1 overflow-y-auto p-4">
+    <div className="flex flex-col rounded-lg">
+      <div className="flex-1 p-4">
         <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

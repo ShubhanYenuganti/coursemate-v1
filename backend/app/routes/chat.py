@@ -55,7 +55,11 @@ def send_message():
         materials_context = None
         
         if course_id:
-            course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
+            # Try to find course by combo_id first, then by id
+            course = Course.query.filter_by(combo_id=course_id, user_id=current_user_id).first()
+            if not course:
+                course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
+            
             if course:
                 course_context = f"""
 Course: {course.title}
@@ -69,10 +73,10 @@ Description: {course.description}
                     from app.services.course_rag_service import CourseRAGService
                     course_rag_service = CourseRAGService()
                     
-                    # Get answer from course-specific materials
+                    # Get answer from course-specific materials using the individual course ID
                     rag_result = course_rag_service.answer_question_for_course(
                         question=message,
-                        course_id=course_id,
+                        course_id=course.id,  # Use individual course ID for RAG lookup
                         user_id=current_user_id,
                         top_k=5
                     )
