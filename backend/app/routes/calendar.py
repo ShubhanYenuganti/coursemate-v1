@@ -573,7 +573,7 @@ def sync_subtask_to_google_calendar(user: User, subtask: Goal, course_title: Opt
         
         # Prepare event data
         event_data = {
-            'summary': subtask.subtask_descr,
+            'summary': f"{subtask.subtask_descr} ({'Completed' if subtask.subtask_completed else 'Incomplete'})",
             'description': event_description,
             'start': {
                 'dateTime': start_time_str,
