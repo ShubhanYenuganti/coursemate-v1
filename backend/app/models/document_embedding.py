@@ -1,7 +1,7 @@
 import uuid
+import json
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, JSON
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.init import db
 
@@ -24,10 +24,21 @@ class DocumentEmbedding(db.Model):
     content_chunk = Column(Text, nullable=False)
     chunk_index = Column(Integer, nullable=False)
     embedding = Column('embedding', db.Text)  # Will be cast to vector type in PostgreSQL
-    doc_metadata = Column(JSONB, default={})  # Renamed from metadata to avoid SQLAlchemy conflict
+    doc_metadata = Column(Text, default='{}')  # Store as JSON string for SQLite compatibility
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    def get_metadata(self):
+        """Get metadata as parsed JSON"""
+        try:
+            return json.loads(self.doc_metadata) if self.doc_metadata else {}
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    
+    def set_metadata(self, metadata_dict):
+        """Set metadata as JSON string"""
+        self.doc_metadata = json.dumps(metadata_dict) if metadata_dict else '{}'
     
     # Relationships
     user = relationship("User", back_populates="document_embeddings")
@@ -135,4 +146,4 @@ class DocumentEmbedding(db.Model):
             course_id=course_id,
             document_name=document_name
         ).delete()
-        db.session.commit() 
+        db.session.commit()

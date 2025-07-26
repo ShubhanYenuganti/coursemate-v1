@@ -11,13 +11,14 @@ from app.utils.llama_index_service import insert_placeholder_embedding, LlamaInd
 import traceback
 import uuid
 from app.models.goal import Goal
+from app.models.user_course_material import UserCourseMaterial
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
 
 courses_bp = Blueprint('courses', __name__, url_prefix='/api/courses')
 
-# Base upload directory relative to the backend folder (for local storage)
-UPLOAD_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'uploads'))
-
-# Configuration for file uploads
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'ppt', 'pptx', 'mp4'}
 
 def allowed_file(filename):
@@ -35,8 +36,8 @@ def get_user_courses():
     semester = request.args.get('semester', '')
     sort_by = request.args.get('sort_by', 'last_accessed')
     
-    # Base query - only get courses for current user
-    query = Course.query.filter_by(user_id=current_user_id)
+    # Base query - only get courses for current user and exclude 'Google Calendar'
+    query = Course.query.filter_by(user_id=current_user_id).filter(Course.title != 'Google Calendar')
     
     # Apply filters
     if not show_archived:
@@ -61,6 +62,7 @@ def get_user_courses():
         query = query.order_by(Course.is_pinned.desc(), Course.last_accessed.desc())
     
     courses = query.all()
+    
     return jsonify([course.to_dict() for course in courses])
 
 @courses_bp.route('/', methods=['POST'], strict_slashes=False)
@@ -127,7 +129,9 @@ def get_course(course_id):
     
     course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
     if not course:
-        return jsonify({'error': 'Course not found'}), 404
+        course = Course.query.filter_by(combo_id=course_id, user_id=current_user_id).first()
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
     
     # Update last accessed time
     course.update_last_accessed()
@@ -201,14 +205,18 @@ def toggle_pin(course_id):
     if not course:
         return jsonify({'error': 'Course not found'}), 404
     
-    course.is_pinned = not course.is_pinned
-    course.updated_at = datetime.utcnow()
-    db.session.commit()
-    
-    return jsonify({
-        'message': f'Course {"pinned" if course.is_pinned else "unpinned"} successfully',
-        'is_pinned': course.is_pinned
-    })
+    try:
+        course.is_pinned = not course.is_pinned
+        course.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Course {"pinned" if course.is_pinned else "unpinned"} successfully',
+            'is_pinned': course.is_pinned
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to toggle pin state: {str(e)}'}), 500
 
 @courses_bp.route('/<course_id>/toggle-archive', methods=['POST'])
 @jwt_required()
@@ -258,99 +266,53 @@ def update_progress(course_id):
 @courses_bp.route('/<course_id>/banner', methods=['POST'])
 @jwt_required()
 def upload_banner(course_id):
-    """Upload or update a banner image for a course."""
     current_user_id = get_jwt_identity()
-    
     course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
     if not course:
         return jsonify({'error': 'Course not found or unauthorized'}), 404
-        
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
-        
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-        
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        
-        # S3 vs. local storage handling
-        storage_mode = current_app.config['FILE_STORAGE']
-        
         # Delete old banner if it exists
         if course.course_image:
             try:
-                if storage_mode == 'S3':
-                    delete_file_from_s3(course.course_image)
-                else:
-                    old_file_path = os.path.join(UPLOAD_FOLDER, course.course_image)
-                    if os.path.exists(old_file_path):
-                        os.remove(old_file_path)
+                delete_file_from_s3(course.course_image)
             except Exception as e:
-                # Log the error but continue with upload
                 print(f"Warning: Failed to delete old banner: {str(e)}")
-        
-        if storage_mode == 'S3':
-            s3_path = f"banners/{course_id}/{filename}"
-            try:
-                upload_file_to_s3(file, s3_path)
-                course.course_image = s3_path  # Store S3 key
-            except Exception as e:
-                return jsonify({'error': f'S3 upload failed: {str(e)}'}), 500
-        else: # local storage
-            course_dir = os.path.join(UPLOAD_FOLDER, 'banners', course_id)
-            os.makedirs(course_dir, exist_ok=True)
-            file_path = os.path.join(course_dir, filename)
-            file.save(file_path)
-            # Store relative path for local files
-            course.course_image = os.path.join('banners', course_id, filename)
-
+        s3_path = f"banners/{course_id}/{filename}"
+        try:
+            upload_file_to_s3(file, s3_path)
+            course.course_image = s3_path  # Store S3 key
+        except Exception as e:
+            return jsonify({'error': f'S3 upload failed: {str(e)}'}), 500
         db.session.commit()
-        
-        # Return the updated course, which will include the new presigned URL
         return jsonify({
             'message': 'Banner uploaded successfully',
             'course': course.to_dict()
         })
-
     return jsonify({'error': 'File type not allowed'}), 400
 
 @courses_bp.route('/<course_id>/banner', methods=['DELETE'])
 @jwt_required()
 def delete_banner(course_id):
-    """Delete the banner image for a course."""
     current_user_id = get_jwt_identity()
-    
     course = Course.query.filter_by(id=course_id, user_id=current_user_id).first()
     if not course:
         return jsonify({'error': 'Course not found or unauthorized'}), 404
-    
     if not course.course_image:
         return jsonify({'error': 'No banner image to delete'}), 404
-    
     try:
-        # Delete from S3 or local storage
-        storage_mode = current_app.config['FILE_STORAGE']
-        
-        if storage_mode == 'S3':
-            # Delete from S3
-            delete_file_from_s3(course.course_image)
-        else:
-            # Delete from local storage
-            file_path = os.path.join(UPLOAD_FOLDER, course.course_image)
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        
-        # Clear the course_image field
+        delete_file_from_s3(course.course_image)
         course.course_image = None
         db.session.commit()
-        
         return jsonify({
             'message': 'Banner deleted successfully',
             'course': course.to_dict()
         })
-        
     except Exception as e:
         return jsonify({'error': f'Failed to delete banner: {str(e)}'}), 500
 
@@ -412,203 +374,124 @@ def get_public_course(course_id):
 @jwt_required()
 def upload_material(course_id):
     current_user_id = get_jwt_identity()
-    
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-
     filename = secure_filename(file.filename)
     file_extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-    
-    # Check if file type is supported for vector processing
     supported_types = ['pdf', 'docx', 'doc', 'txt']
-    should_process_vectors = file_extension in supported_types
-    from app.utils.llama_index_service import LlamaIndexService
+    should_process = file_extension in supported_types
     try:
-        llama_service = LlamaIndexService()
-        if current_app.config['FILE_STORAGE'] == 'S3':
-            s3_path = f"courses/{course_id}/{filename}"
-            # Insert placeholder row after upload (upload_file_to_s3 will be called in the correct place below)
-            insert_placeholder_embedding(
-                user_id=current_user_id,
-                course_id=course_id,
-                document_name=filename,
-                file_path=s3_path,
-                document_type=file_extension
-            )
-            if should_process_vectors:
-                try:
-                    # Save file to temp location first for processing
-                    import tempfile
-                    temp_file_path = None
-                    try:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as temp_file:
-                            file.save(temp_file.name)
-                            temp_file_path = temp_file.name
-                        # Process the document after the file is saved and closed
-                        result = llama_service.process_document(
-                            file_path=temp_file_path,
-                            user_id=current_user_id,
-                            course_id=course_id,
-                            document_name=filename,
-                            document_type=file_extension
-                        )
-                        # Now upload the processed file to S3
-                        with open(temp_file_path, 'rb') as temp_file:
-                            upload_file_to_s3(temp_file, s3_path)
-                    except Exception as e:
-                        raise
-                    finally:
-                        # Clean up temp file after processing
-                        if temp_file_path and os.path.exists(temp_file_path):
-                            os.unlink(temp_file_path)
-                    if result['success']:
-                        return jsonify({
-                            'url': s3_path, 
-                            'filename': filename,
-                            'vector_processed': True,
-                            'chunks_processed': result.get('chunks_processed', 0),
-                            'message': result.get('message', 'Document uploaded and processed')
-                        }), 201
-                    else:
-                        return jsonify({
-                            'url': s3_path, 
-                            'filename': filename,
-                            'vector_processed': False,
-                            'warning': f'Document uploaded but vector processing failed: {result.get("error", "Unknown error")}'
-                        }), 201
-                except Exception as e:
-                    print(f"Vector processing error: {str(e)}")
-                    return jsonify({
-                        'url': s3_path, 
-                        'filename': filename,
-                        'vector_processed': False,
-                        'warning': 'Document uploaded but vector processing failed'
-                    }), 201
-            else:
-                # If not processing vectors, upload directly to S3
+        from app.services.course_rag_service import CourseDocumentProcessor
+        course_processor = CourseDocumentProcessor()
+        s3_path = f"courses/{course_id}/{filename}"
+        if should_process:
+            import tempfile
+            temp_file_path = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as temp_file:
+                    file.save(temp_file.name)
+                    temp_file_path = temp_file.name
+                uploaded_file = course_processor.process_and_store_course_file(
+                    file_path=temp_file_path,
+                    filename=filename,
+                    course_id=course_id,
+                    user_id=current_user_id
+                )
+                with open(temp_file_path, 'rb') as temp_file_obj:
+                    upload_file_to_s3(temp_file_obj, s3_path)
+            except Exception as e:
+                print(f"Processing error: {str(e)}")
                 upload_file_to_s3(file, s3_path)
-                return jsonify({'url': s3_path, 'filename': filename}), 201
-            # After vector processing (or direct upload), update embeddings
-            llama_service.process_and_update_embeddings(
-                file_path=s3_path,
-                user_id=current_user_id,
-                course_id=course_id,
-                document_name=filename,
-                document_type=file_extension
-            )
-        else: # Local storage
-            course_dir = os.path.join(UPLOAD_FOLDER, 'courses', course_id)
-            os.makedirs(course_dir, exist_ok=True)
-            file_path = os.path.join(course_dir, filename)
-            file.save(file_path)
-            file_url = f'/uploads/courses/{course_id}/{filename}'
-            insert_placeholder_embedding(
-                user_id=current_user_id,
-                course_id=course_id,
-                document_name=filename,
-                file_path=file_path,
-                document_type=file_extension
-            )
-            if should_process_vectors:
-                try:
-                    result = llama_service.process_document(
-                        file_path=file_path,
-                        user_id=current_user_id,
-                        course_id=course_id,
-                        document_name=filename,
-                        document_type=file_extension
-                    )
-                    if result['success']:
-                        return jsonify({
-                            'url': file_url, 
-                            'filename': filename,
-                            'vector_processed': True,
-                            'chunks_processed': result.get('chunks_processed', 0),
-                            'message': result.get('message', 'Document uploaded and processed')
-                        }), 201
-                    else:
-                        return jsonify({
-                            'url': file_url, 
-                            'filename': filename,
-                            'vector_processed': False,
-                            'warning': f'Document uploaded but vector processing failed: {result.get("error", "Unknown error")}'
-                        }), 201
-                except Exception as e:
-                    print(f"Vector processing error: {str(e)}")
-                    return jsonify({
-                        'url': file_url, 
-                        'filename': filename,
-                        'vector_processed': False,
-                        'warning': 'Document uploaded but vector processing failed'
-                    }), 201
-            # After vector processing (or direct upload), update embeddings
-            llama_service.process_and_update_embeddings(
-                file_path=file_path,
-                user_id=current_user_id,
-                course_id=course_id,
-                document_name=filename,
-                document_type=file_extension
-            )
-        return jsonify({'url': file_url, 'filename': filename}), 201
+            finally:
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+        else:
+            upload_file_to_s3(file, s3_path)
+        file_path = s3_path
+        file_url = s3_path
+        combo_id = f"{course_id}+{current_user_id}+{filename}"
+        thumbnail_path = None
+        if file_extension == 'pdf' and fitz is not None:
+            try:
+                import tempfile
+                import boto3
+                from app.utils.s3 import get_s3_client
+                s3_client = get_s3_client()
+                bucket_name = current_app.config['AWS_STORAGE_BUCKET_NAME']
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
+                    s3_client.download_fileobj(bucket_name, file_path, temp_pdf)
+                    temp_pdf_path = temp_pdf.name
+                doc = fitz.open(temp_pdf_path)
+                page = doc.load_page(0)
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                thumb_filename = f"{os.path.splitext(filename)[0]}_thumb.png"
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_thumb:
+                    pix.save(temp_thumb.name)
+                    temp_thumb_path = temp_thumb.name
+                s3_thumb_path = f"thumbnails/{course_id}/{thumb_filename}"
+                with open(temp_thumb_path, 'rb') as thumb_file:
+                    upload_file_to_s3(thumb_file, s3_thumb_path)
+                thumbnail_path = s3_thumb_path
+                os.unlink(temp_thumb_path)
+                doc.close()
+            except Exception as e:
+                print(f"Failed to generate PDF thumbnail: {e}")
+        material = UserCourseMaterial(
+            user_id=current_user_id,
+            course_id=f"{course_id}+{current_user_id}",
+            file_path=file_path,
+            material_name=filename,
+            is_pinned=False,
+            last_accessed=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            thumbnail_path=thumbnail_path,
+            file_type=file_extension,
+            file_size=None,
+            original_filename=filename
+        )
+        db.session.add(material)
+        db.session.commit()
+        
+        # Generate presigned URLs for response (like course banners and list materials)
+        from app.utils.s3 import get_presigned_url
+        presigned_file_url = get_presigned_url(file_url) if file_url else None
+        presigned_thumbnail_url = get_presigned_url(thumbnail_path) if thumbnail_path else None
+        
+        return jsonify({
+            'url': presigned_file_url, 
+            'filename': filename,
+            'thumbnail_url': presigned_thumbnail_url
+        }), 201
     except Exception as e:
         print("Exception in upload_material:", e)
-        traceback.print_exc()
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 @courses_bp.route('/<course_id>/materials', methods=['GET'])
 @jwt_required()
 def list_materials(course_id):
-    if current_app.config['FILE_STORAGE'] == 'S3':
-        s3_prefix = f"courses/{course_id}/"
-        files_data = list_files_in_s3(s3_prefix)
-        # Filter out banner files and add a 'name' field to match the expected frontend structure
-        filtered_files = []
-        for file_data in files_data:
-            # Skip banner files (both old and new path structures)
-            if 'banner' in file_data['key'].lower():
-                continue
-            file_data['name'] = os.path.basename(file_data['key'])
-            filtered_files.append(file_data)
-        return jsonify(filtered_files)
-    else: # Local storage
-        course_dir = os.path.join(UPLOAD_FOLDER, 'courses', course_id)
-        if not os.path.isdir(course_dir):
-            return jsonify([])
-
-        files_data = []
-        for filename in os.listdir(course_dir):
-            # Skip banner files
-            if 'banner' in filename.lower():
-                continue
-            file_path = os.path.join(course_dir, filename)
-            if os.path.isfile(file_path):
-                 files_data.append({
-                    'key': filename, # Use filename as key for local
-                    'name': filename,
-                    'url': f'/uploads/courses/{course_id}/{filename}',
-                    'size': os.path.getsize(file_path),
-                    'last_modified': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
-                 })
-        return jsonify(files_data)
+    s3_prefix = f"courses/{course_id}/"
+    files_data = list_files_in_s3(s3_prefix)
+    filtered_files = []
+    for file_data in files_data:
+        if 'banner' in file_data['key'].lower():
+            continue
+        file_data['name'] = os.path.basename(file_data['key'])
+        filtered_files.append(file_data)
+    return jsonify(filtered_files)
 
 @courses_bp.route('/<course_id>/materials/<path:filename>', methods=['DELETE'])
 @jwt_required()
 def delete_material(course_id, filename):
     current_user_id = get_jwt_identity()
-    
     try:
-        # Extract the actual filename from the path
         actual_filename = filename.split('/')[-1] if '/' in filename else filename
         file_extension = actual_filename.rsplit('.', 1)[1].lower() if '.' in actual_filename else ''
-        
-        # Check if file type was supported for vector processing
         supported_types = ['pdf', 'docx', 'doc', 'txt']
         should_have_vectors = file_extension in supported_types
-        
-        # Delete embeddings if the file type was supported
         if should_have_vectors:
             try:
                 from app.utils.llama_index_service import LlamaIndexService
@@ -620,90 +503,45 @@ def delete_material(course_id, filename):
                 )
             except Exception as e:
                 print(f"Warning: Failed to delete embeddings for {actual_filename}: {str(e)}")
-        
-        # Delete the actual file
-        if current_app.config['FILE_STORAGE'] == 'S3':
-            # filename is the full S3 key
-            delete_file_from_s3(filename)
-            return jsonify({'message': 'File deleted successfully from S3'}), 200
-        else: # Local storage
-            safe_filename = secure_filename(actual_filename)
-            file_path = os.path.join(UPLOAD_FOLDER, 'courses', course_id, safe_filename)
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                return jsonify({'message': 'File deleted successfully'}), 200
-            else:
-                return jsonify({'error': 'File not found'}), 404 
-                
+        delete_file_from_s3(filename)
+        return jsonify({'message': 'File deleted successfully from S3'}), 200
     except Exception as e:
         return jsonify({'error': f'Delete failed: {str(e)}'}), 500
 
 @courses_bp.route('/<course_id>/materials/<path:filename>/content', methods=['GET'])
 @jwt_required()
 def get_material_content(course_id, filename):
-    """Get the content of a material file for AI processing"""
     current_user_id = get_jwt_identity()
-    
     try:
-        # Extract the actual filename from the path
         actual_filename = filename.split('/')[-1] if '/' in filename else filename
         file_extension = actual_filename.rsplit('.', 1)[1].lower() if '.' in actual_filename else ''
-        
-        # Check if file type is supported for text extraction
         supported_types = ['pdf', 'docx', 'doc', 'txt']
         if file_extension not in supported_types:
             return jsonify({'error': 'File type not supported for content extraction'}), 400
-        
-        if current_app.config['FILE_STORAGE'] == 'S3':
-            # Download file from S3 to temp location
-            import tempfile
-            import boto3
-            from app.utils.s3 import get_s3_client
-            
-            s3_client = get_s3_client()
-            bucket_name = current_app.config['AWS_STORAGE_BUCKET_NAME']
-            s3_key = f"courses/{course_id}/{actual_filename}"
-            
-            # Create temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as temp_file:
-                try:
-                    # Download from S3
-                    s3_client.download_fileobj(bucket_name, s3_key, temp_file)
-                    temp_file_path = temp_file.name
-                    
-                    # Extract text content
-                    content = extract_text_from_file(temp_file_path, file_extension)
-                    
-                    return jsonify({
-                        'content': content,
-                        'filename': actual_filename,
-                        'file_type': file_extension
-                    })
-                    
-                finally:
-                    # Clean up temp file
-                    if os.path.exists(temp_file_path):
-                        os.unlink(temp_file_path)
-        else:
-            # Local storage
-            file_path = os.path.join(UPLOAD_FOLDER, 'courses', course_id, actual_filename)
-            if not os.path.exists(file_path):
-                return jsonify({'error': 'File not found'}), 404
-            
-            content = extract_text_from_file(file_path, file_extension)
-            
-            return jsonify({
-                'content': content,
-                'filename': actual_filename,
-                'file_type': file_extension
-            })
-            
+        import tempfile
+        import boto3
+        from app.utils.s3 import get_s3_client
+        s3_client = get_s3_client()
+        bucket_name = current_app.config['AWS_STORAGE_BUCKET_NAME']
+        s3_key = f"courses/{course_id}/{actual_filename}"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as temp_file:
+            try:
+                s3_client.download_fileobj(bucket_name, s3_key, temp_file)
+                temp_file_path = temp_file.name
+                content = extract_text_from_file(temp_file_path, file_extension)
+                return jsonify({
+                    'content': content,
+                    'filename': actual_filename,
+                    'file_type': file_extension
+                })
+            finally:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
     except Exception as e:
         print(f"Error getting material content: {str(e)}")
         return jsonify({'error': f'Failed to get content: {str(e)}'}), 500
 
 def extract_text_from_file(file_path, file_type):
-    """Extract text content from different file types"""
     try:
         if file_type == 'pdf':
             import PyPDF2
@@ -713,7 +551,6 @@ def extract_text_from_file(file_path, file_type):
                 for page in pdf_reader.pages:
                     text += page.extract_text() + "\n"
                 return text
-        
         elif file_type in ['docx', 'doc']:
             import docx
             doc = docx.Document(file_path)
@@ -721,14 +558,11 @@ def extract_text_from_file(file_path, file_type):
             for paragraph in doc.paragraphs:
                 text += paragraph.text + "\n"
             return text
-        
         elif file_type == 'txt':
             with open(file_path, 'r', encoding='utf-8') as file:
                 return file.read()
-        
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
-    
     except Exception as e:
         print(f"Error extracting text from {file_path}: {e}")
         raise
@@ -770,12 +604,12 @@ def generate_study_plan(course_id):
         prompt = f"""
 You are an expert study planner and educational consultant. Based on the following document content and learning goal, create a detailed study plan with tasks and subtasks.
 
-Document Content:
-{document_content[:4000]}  # Limit content to avoid token limits
+            ],
+            max_tokens=2000,
+            temperature=0.7
+        )
 
-Learning Goal: {goal_title}
-Additional Details: {goal_description}
-
+        # Log the full OpenAI response and the raw text
 Please create a study plan in the following JSON format:
 {{
   "goal_title": "{goal_title}",
@@ -904,3 +738,153 @@ Return only the JSON response, no additional text.
     except Exception as e:
         print(f"Error generating study plan: {str(e)}")
         return jsonify({'error': f'Failed to generate study plan: {str(e)}'}), 500 
+
+@courses_bp.route('/<course_id>/materials/db', methods=['GET'])
+@jwt_required()
+def list_user_course_materials(course_id):
+    current_user_id = get_jwt_identity()
+    combo_id = f"{course_id}+{current_user_id}"
+    materials = UserCourseMaterial.query.filter_by(course_id=combo_id, user_id=current_user_id).order_by(UserCourseMaterial.created_at.desc()).all()
+    result = []
+    for m in materials:
+        d = m.to_dict()
+        from app.utils.s3 import get_presigned_url
+        d['url'] = get_presigned_url(d['file_path']) if d['file_path'] else None
+        d['thumbnail_url'] = get_presigned_url(d['thumbnail_path']) if d.get('thumbnail_path') else None
+        result.append(d)
+    return jsonify(result), 200
+
+@courses_bp.route('/<course_id>/materials/db/<material_id>', methods=['PATCH', 'PUT'])
+@jwt_required()
+def update_user_course_material(course_id, material_id):
+    current_user_id = get_jwt_identity()
+    combo_id = f"{course_id}+{current_user_id}"
+    material = UserCourseMaterial.query.filter_by(id=material_id, course_id=combo_id, user_id=current_user_id).first_or_404()
+    data = request.get_json()
+    updated = False
+    if 'material_name' in data:
+        material.material_name = data['material_name']
+        updated = True
+    if 'is_pinned' in data:
+        material.is_pinned = data['is_pinned']
+        updated = True
+    if updated:
+        material.updated_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify(material.to_dict()), 200
+
+@courses_bp.route('/<course_id>/materials/db/<material_id>', methods=['DELETE'])
+@jwt_required()
+def delete_user_course_material(course_id, material_id):
+    current_user_id = get_jwt_identity()
+    combo_id = f"{course_id}+{current_user_id}"
+    
+    try:
+        # Find the material in the database
+        material = UserCourseMaterial.query.filter_by(
+            id=material_id, 
+            course_id=combo_id, 
+            user_id=current_user_id
+        ).first_or_404()
+        
+        # Get material info before deletion
+        file_path = material.file_path
+        material_name = material.material_name
+        file_type = material.file_type
+        thumbnail_path = material.thumbnail_path
+        
+        # Delete vector embeddings if file type supports it
+        supported_types = ['pdf', 'docx', 'doc', 'txt']
+        if file_type and file_type.lower() in supported_types:
+            try:
+                from app.utils.llama_index_service import LlamaIndexService
+                llama_service = LlamaIndexService()
+                llama_service.delete_document_embeddings(
+                    user_id=current_user_id,
+                    course_id=course_id,
+                    document_name=material_name
+                )
+            except Exception as e:
+                print(f"Warning: Failed to delete embeddings for {material_name}: {str(e)}")
+        
+        # Delete from S3 (main file)
+        if file_path:
+            try:
+                from app.utils.s3 import delete_file_from_s3
+                delete_file_from_s3(file_path)
+            except Exception as e:
+                print(f"Warning: Failed to delete file from S3: {file_path}: {str(e)}")
+        
+        # Delete thumbnail from S3 if exists
+        if thumbnail_path:
+            try:
+                from app.utils.s3 import delete_file_from_s3
+                delete_file_from_s3(thumbnail_path)
+            except Exception as e:
+                print(f"Warning: Failed to delete thumbnail from S3: {thumbnail_path}: {str(e)}")
+        
+        # Delete from database
+        db.session.delete(material)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Material deleted successfully from database and S3'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting material {material_id}: {str(e)}")
+        return jsonify({'error': f'Delete failed: {str(e)}'}), 500
+
+@courses_bp.route('/<course_id>/materials/db/<material_id>/access', methods=['POST'])
+@jwt_required()
+def update_last_accessed(course_id, material_id):
+    current_user_id = get_jwt_identity()
+    combo_id = f"{course_id}+{current_user_id}"
+    material = UserCourseMaterial.query.filter_by(id=material_id, course_id=combo_id, user_id=current_user_id).first_or_404()
+    material.last_accessed = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'success': True, 'last_accessed': material.last_accessed.isoformat()}), 200 
+
+@courses_bp.route('/<course_id>/materials/db/migrate', methods=['POST'])
+@jwt_required()
+def migrate_existing_materials_to_db(course_id):
+    current_user_id = get_jwt_identity()
+    from app.utils.s3 import list_files_in_s3
+    from app.models.course import Course
+    combo_id = f"{course_id}+{current_user_id}"
+    course_row = Course.query.filter_by(combo_id=combo_id, user_id=current_user_id).first()
+    if not course_row:
+        return jsonify({'error': f'User is not enrolled in course {combo_id}.'}), 400
+    s3_prefix = f"courses/{course_id}/"
+    files_data = list_files_in_s3(s3_prefix)
+    migrated = []
+    for file_data in files_data:
+        key = file_data['key']
+        filename = os.path.basename(key)
+        if 'banner' in filename.lower() or filename.startswith('.'):
+            continue
+        material_combo_id = f"{combo_id}+{filename}"
+        exists = UserCourseMaterial.query.filter_by(course_id=combo_id, user_id=current_user_id).filter(UserCourseMaterial.material_name == filename).first()
+        if exists:
+            continue
+        file_extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+        material = UserCourseMaterial(
+            user_id=current_user_id,
+            course_id=combo_id,  # Store the combo_id value in the course_id column
+            file_path=key,
+            material_name=filename,
+            is_pinned=False,
+            last_accessed=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            thumbnail_path=None,
+            file_type=file_extension,
+            file_size=file_data.get('size'),
+            original_filename=filename
+        )
+        db.session.add(material)
+        migrated.append(filename)
+    db.session.commit()
+    return jsonify({'success': True, 'migrated': migrated, 'count': len(migrated)}), 200

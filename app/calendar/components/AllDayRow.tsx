@@ -87,10 +87,8 @@ export const AllDayRow = ({
                     {goals.slice(0, 2).map((g, index) => (
                       <div
                         key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
-                        className={`h-6 px-2 rounded text-xs font-medium text-white cursor-grab active:cursor-grabbing truncate hover:opacity-90 transition-opacity flex items-center col-span-2 ${
-                          isDraggingTask ? 'opacity-50' : ''
-                        }`}
-                        style={{ backgroundColor: getEventColor(g) }}
+                        className={`h-6 px-2 rounded text-xs font-medium cursor-grab active:cursor-grabbing truncate hover:opacity-90 transition-opacity flex items-center col-span-2 ${isDraggingTask ? 'opacity-50' : ''} ${g.task_completed ? 'bg-gray-300 text-gray-500' : 'text-white'}`}
+                        style={{ backgroundColor: g.task_completed ? undefined : getEventColor(g) }}
                         title={g.goal_descr ?? g.task_title ?? ""}
                         tabIndex={0}
                         onClick={(e) => {
@@ -105,7 +103,7 @@ export const AllDayRow = ({
                         onDragStart={(e) => handleSubtaskDragStart?.(e, g)}
                         onDragEnd={(e) => handleSubtaskDragEnd?.(e)}
                       >
-                        <div className="font-semibold leading-tight truncate">
+                        <div className={`font-semibold leading-tight truncate ${g.task_completed ? 'line-through' : ''}`}>
                           {g.goal_id === 'Google Calendar' ? (g.task_title ?? "(untitled)") : (g.subtask_descr ?? "(untitled)")}
                         </div>
                         <Move className="w-3 h-3 opacity-50 hover:opacity-100 transition-opacity flex-shrink-0" />

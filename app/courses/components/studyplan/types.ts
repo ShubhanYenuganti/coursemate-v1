@@ -46,6 +46,7 @@ export interface Subtask {
   subtask_engagement_end?: string;   // ISO string for when user finished working on subtask
   subtask_total_active_minutes?: number; // Total time spent (like Canvas's "time questions were on-screen")
   subtask_last_interaction?: string; // ISO string for last time user interacted with subtask
+  has_conflict?: boolean;
 }
 
 export interface StudyPlanStats {

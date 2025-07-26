@@ -4,7 +4,7 @@ import { notificationService, Notification } from '../../../lib/api/notification
 import { friendService } from '../../../lib/api/friendService';
 import { Button } from '../../../components/ui/button';
 import { Textarea } from '../../../components/ui/textarea';
-import { BookOpen, User, Bell, Check, X } from 'lucide-react';
+import { BookOpen, User, Bell, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/app/context/SocketContext';
 
@@ -27,10 +27,63 @@ interface CommunityActivityProps {
   onActivityClick?: (activity: Activity) => void;
 }
 
-const defaultActivities: Activity[] = [];
+const defaultActivities: Activity[] = [
+  {
+    id: '1',
+    user: 'Priya Patel',
+    avatar: 'PP',
+    action: 'posted in',
+    target: 'Calculus Study Group',
+    content: 'Anyone else stuck on problem 5 of the latest assignment? Would love some hints!',
+    time: '25 min ago',
+    type: 'message',
+  },
+  {
+    id: '2',
+    user: 'David Lee',
+    avatar: 'DL',
+    action: 'shared a resource in',
+    target: 'Physics Help Forum',
+    content: 'Check out this great summary PDF!',
+    time: '1 hour ago',
+    type: 'message',
+  },
+  {
+    id: '3',
+    user: 'You',
+    avatar: 'Y',
+    action: 'completed subtask',
+    target: 'Biology Chapter 3',
+    content: 'Finished reading section 3.2',
+    time: '2 hours ago',
+    type: 'notification',
+  },
+  {
+    id: '4',
+    user: 'Ava Chen',
+    avatar: 'AC',
+    action: 'joined',
+    target: 'General Biology',
+    content: '',
+    time: '3 hours ago',
+    type: 'notification',
+  },
+  {
+    id: '5',
+    user: 'Ava Chen',
+    avatar: 'AC',
+    action: 'joined',
+    target: 'General Biology',
+    content: '',
+    time: '3 hours ago',
+    type: 'notification',
+  },
+];
+
+const CARDS_PER_PAGE = 4;
 
 const CommunityActivity: React.FC<CommunityActivityProps> = ({
-  activities = [],
+  activities = defaultActivities,
   onFilterChange,
   onActivityClick,
 }) => {
@@ -42,6 +95,10 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   const [sendingReply, setSendingReply] = useState(false);
   const router = useRouter();
   const { socket } = useSocket();
+  const [page, setPage] = useState(0);
+  const [showModal, setShowModal] = useState(false);
+  const activitiesToShow = activities.length > 0 ? activities : [...messageActivities, ...notificationActivities];
+  const visibleActivities = activitiesToShow.slice(0, 2);
 
   // Fetch recent messages and convert them to activities
   useEffect(() => {
@@ -169,15 +226,6 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
     }
   };
 
-  // Combine messages and notifications, sort by time
-  const allActivities = [...messageActivities, ...notificationActivities].sort((a, b) => {
-    const timeA = new Date(a.time.includes('ago') ? Date.now() - getTimeDiff(a.time) : a.time).getTime();
-    const timeB = new Date(b.time.includes('ago') ? Date.now() - getTimeDiff(b.time) : b.time).getTime();
-    return timeB - timeA;
-  });
-
-  const activitiesToDisplay = activities.length > 0 ? activities : allActivities.slice(0, 8);
-
   const getTimeDiff = (timeString: string) => {
     const match = timeString.match(/(\d+)\s*(min|hour|day)/);
     if (!match) return 0;
@@ -190,6 +238,19 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
       default: return 0;
     }
   };
+
+  // Combine messages and notifications, sort by time
+  const allActivities = [...messageActivities, ...notificationActivities].sort((a, b) => {
+    const timeA = new Date(a.time.includes('ago') ? Date.now() - getTimeDiff(a.time) : a.time).getTime();
+    const timeB = new Date(b.time.includes('ago') ? Date.now() - getTimeDiff(b.time) : b.time).getTime();
+    return timeB - timeA;
+  });
+
+  // Only show the most recent 10 activities for the horizontal feed
+  const activitiesToDisplay = activities.length > 0 ? activities : allActivities.slice(0, 10);
+
+  const totalPages = Math.ceil(activitiesToDisplay.length / CARDS_PER_PAGE);
+  const paginatedActivities = activitiesToDisplay.slice(page * CARDS_PER_PAGE, (page + 1) * CARDS_PER_PAGE);
 
   const handleActivityClick = async (activity: Activity) => {
     if (activity.type === 'message') {
@@ -336,166 +397,100 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
     }
   };
 
-  return (
-    <div className="bg-white rounded-xl p-5 shadow-sm relative">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-5">
-        <h2 className="text-lg font-semibold text-gray-800">Notifications</h2>
-      </div>
-      {/* Activity List */}
-      {activitiesToDisplay.map(activity => (
-        <div
-          key={activity.id}
-          onClick={() => handleActivityClick(activity)}
-          className="flex items-start py-3 border-b border-gray-100 last:border-b-0 cursor-pointer hover:bg-gray-50 transition-colors rounded-lg"
-        >
-          {/* Avatar */}
-          <div className={`w-8 h-8 ${getAvatarColor(activity.avatar)} rounded-full flex items-center justify-center text-white text-xs font-bold mr-3 flex-shrink-0`}>
-            {activity.avatar}
-          </div>
-          {/* Content */}
-          <div className="flex-1">
-            <div className="text-sm text-gray-700 mb-1">
-              <strong>{activity.user}</strong> {activity.action}
-            </div>
-            {activity.content && (
-              <div className="text-xs text-gray-600 mb-1 italic">
-                {activity.content}
-              </div>
-            )}
-            <div className="text-xs text-gray-500">{activity.time}</div>
-            
-            {/* Course Invite Actions */}
-            {activity.type === 'notification' && 
-             activity.notificationData?.type === 'course_invite' && 
-             !activity.notificationData.is_read && (
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCourseInviteResponse(activity.notificationData!.id, 'accept');
-                  }}
-                  className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCourseInviteResponse(activity.notificationData!.id, 'decline');
-                  }}
-                  className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700 transition-colors"
-                >
-                  Decline
-                </button>
-              </div>
-            )}
+  const pastelAvatarColors = ['bg-[#E0D7FB]', 'bg-[#D0E7FB]', 'bg-[#D0FBE7]'];
 
-            {/* Friend Request Actions */}
-            {activity.type === 'notification' && 
-             activity.notificationData?.type === 'friend_request' && 
-             !activity.notificationData.is_read && (
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleFriendRequestResponse(activity.notificationData!.id, 'accept');
-                  }}
-                  className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleFriendRequestResponse(activity.notificationData!.id, 'reject');
-                  }}
-                  className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700 transition-colors"
-                >
-                  Decline
-                </button>
-              </div>
-            )}
+  return (
+    <div className="bg-indigo-100 w-full rounded-2xl shadow-lg border border-[#ECE6FA] bg-[#F3F0FF] flex flex-col justify-center min-h-[180px] max-h-[220px] p-0 relative">
+      <div className="flex flex-row items-center justify-between px-6 pt-4 pb-1">
+        <h2 className="text-base font-bold text-gray-800">Recent Activity</h2>
+        <button
+          className="text-gray-400 hover:text-gray-700 text-xl px-2 py-1 rounded transition"
+          aria-label="Show all recent activity"
+          onClick={() => setShowModal(true)}
+        >
+          &#8230;
+        </button>
+      </div>
+      <div className="flex flex-col gap-0.5 px-6 pb-4 h-full items-start">
+        {visibleActivities.length === 0 ? (
+          <div className="flex items-center justify-center text-gray-400 w-full h-20">
+            <span className="text-2xl">🕒</span>
+            <span className="ml-2">No recent activity</span>
           </div>
-        </div>
-      ))}
-      {/* Empty State */}
-      {activitiesToDisplay.length === 0 && !loading && (
-        <div className="text-center py-8 text-gray-500">
-          <div className="text-4xl mb-2">📭</div>
-          <p className="mb-2">No new notifications</p>
-        </div>
-      )}
-      {loading && (
-        <div className="text-center py-8 text-gray-500">
-          <div className="text-4xl mb-2">⏳</div>
-          <p className="mb-2">Loading notifications...</p>
-        </div>
-      )}
-            {/* Modal for Activity Details */}
-      {modalActivity && (
+        ) : (
+          visibleActivities.map((activity, idx, arr) => {
+            const avatarBg = pastelAvatarColors[idx % pastelAvatarColors.length];
+            return (
+              <div key={activity.id} className="flex flex-row items-start w-full gap-3 py-1.5 relative">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-[#6C4AB6] text-sm shadow ${avatarBg}`}
+                  style={{ fontFamily: 'Inter, sans-serif' }}
+                >
+                  {activity.avatar}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <span className="text-[11px] text-gray-400 mb-0.5">{activity.time}</span>
+                  <div className="text-[15px] text-gray-900 font-bold truncate">
+                    {activity.user && <span className="font-bold text-gray-900">{activity.user}</span>}
+                    {activity.action && <span className="font-normal text-gray-700 ml-1">{activity.action}</span>}
+                    {activity.target && <span className="font-medium text-blue-600 ml-1 underline cursor-pointer">{activity.target}</span>}
+                  </div>
+                  {activity.content && (
+                    <div className="text-xs text-gray-500 truncate mt-0.5">{activity.content}</div>
+                  )}
+                </div>
+                {/* Divider except for last item */}
+                {idx < arr.length - 1 && <div className="absolute left-11 right-0 bottom-0 border-b border-[#ECE6FA]" />}
+              </div>
+            );
+          })
+        )}
+      </div>
+      {/* Modal for all activities */}
+      {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg relative">
-            <button
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-2xl"
-              onClick={handleCloseModal}
-              aria-label="Close"
-            >
-              &times;
-            </button>
-            
-            {/* Message Header */}
-            <div className="flex items-center mb-4">
-              <div className={`w-10 h-10 ${getAvatarColor(modalActivity.avatar)} rounded-full flex items-center justify-center text-white text-lg font-bold mr-4`}>
-                {modalActivity.avatar}
-              </div>
-              <div>
-                <div className="font-semibold text-gray-800 text-lg">
-                  {modalActivity.user}
-                </div>
-                <div className="text-xs text-gray-500">{modalActivity.time}</div>
-              </div>
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">All Recent Activity</h2>
+              <button
+                className="text-gray-400 hover:text-gray-700 text-2xl px-2 py-1 rounded transition"
+                aria-label="Close activity modal"
+                onClick={() => setShowModal(false)}
+              >
+                &times;
+              </button>
             </div>
-            
-            {/* Original Message */}
-            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-              {modalActivity.content && (
-                <div className="text-gray-700 text-base whitespace-pre-line">
-                  {modalActivity.content}
+            <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-2">
+              {activitiesToShow.length === 0 ? (
+                <div className="flex items-center justify-center text-gray-400 w-full h-20">
+                  <span className="text-2xl">🕒</span>
+                  <span className="ml-2">No recent activity</span>
                 </div>
+              ) : (
+                activitiesToShow.map((activity, idx) => {
+                  const avatarColors = ['bg-purple-400', 'bg-blue-400', 'bg-green-400'];
+                  const avatarBg = avatarColors[idx % avatarColors.length];
+                  return (
+                    <div key={activity.id} className="flex flex-row items-start w-full gap-3 py-2">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm shadow ${avatarBg}`}
+                        style={{ fontFamily: 'Inter, sans-serif' }}
+                      >
+                        {activity.avatar}
+                      </div>
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <span className="text-xs text-gray-400 mb-0.5">{activity.time}</span>
+                        <div className="text-sm text-gray-900 font-semibold truncate">
+                          {activity.user && <span className="font-semibold text-gray-900">{activity.user}</span>}
+                          {activity.action && <span className="font-normal text-gray-700 ml-1">{activity.action}</span>}
+                          {activity.target && <span className="font-medium text-blue-600 ml-1 underline cursor-pointer">{activity.target}</span>}
+                        </div>
+                        {activity.content && (
+                          <div className="text-xs text-gray-500 truncate mt-0.5">{activity.content}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
               )}
-            </div>
-            
-            {/* Reply Section */}
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-gray-700">Reply to {modalActivity.user}</div>
-              <Textarea
-                placeholder="Type your reply..."
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                className="min-h-[100px] resize-none"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendReply();
-                  }
-                }}
-              />
-              <div className="flex justify-end space-x-2">
-                <Button
-                  variant="outline"
-                  onClick={handleCloseModal}
-                  disabled={sendingReply}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSendReply}
-                  disabled={!replyText.trim() || sendingReply}
-                >
-                  {sendingReply ? 'Sending...' : 'Send Reply'}
-                </Button>
-              </div>
             </div>
           </div>
         </div>

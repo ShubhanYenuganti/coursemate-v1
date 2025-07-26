@@ -93,6 +93,56 @@ const CoursesPage = () => {
     loadCourses();
   }, [showArchived, searchTerm, selectedSemester, sortBy]);
 
+  // After loading courses, aggregate progress for each course
+  useEffect(() => {
+    if (!courses.length) return;
+    const fetchAllProgress = async () => {
+      const updatedCourses = await Promise.all(
+        courses.map(async (course) => {
+          try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/courses/${course.id}/goals`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+            });
+            if (!res.ok) return { ...course, daily_progress: 0 };
+            const goals = await res.json();
+            let total = 0;
+            let completed = 0;
+            await Promise.all(
+              goals.map(async (goal: any) => {
+                const tasksRes = await fetch(`/api/goals/${goal.goal_id}/tasks`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  credentials: 'include',
+                });
+                if (!tasksRes.ok) return;
+                const tasks = await tasksRes.json();
+                tasks.forEach((task: any) => {
+                  // Each task row is a subtask row
+                  total += 1;
+                  if (task.subtask_completed) completed += 1;
+                });
+              })
+            );
+            const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+            return { ...course, daily_progress: progress };
+          } catch (e) {
+            return { ...course, daily_progress: 0 };
+          }
+        })
+      );
+      setCourses(updatedCourses);
+    };
+    fetchAllProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courses.length]);
+
   const togglePin = async (courseId: string) => {
     try {
       await courseService.togglePin(courseId);
@@ -203,8 +253,9 @@ const CoursesPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8 relative">
-      <div className="max-w-7xl mx-auto">
+    <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="min-h-full p-8 relative">
+        <div className="max-w-7xl mx-auto pb-32">{/* Added bottom padding for floating button */}
         <CourseHeader />
         
         <CourseFilters
@@ -288,10 +339,10 @@ const CoursesPage = () => {
         {!isLoading && !error && filteredCourses.length === 0 && (
           <EmptyState onClearFilters={clearAllFilters} />
         )}
-      </div>
-      
-      {/* Floating Add Button with Speed Dial - DEBUG VERSION */}
-      <div className="fixed bottom-8 right-8 z-[9999] flex flex-col items-end group">
+        </div>
+        
+        {/* Floating Add Button with Speed Dial - DEBUG VERSION */}
+        <div className="fixed bottom-8 right-8 z-[9999] flex flex-col items-end group">
         {/* Speed dial options (hidden by default, shown on hover, animate upwards) */}
         <div className="flex flex-col items-end space-y-2 mb-2">
           <button
@@ -320,12 +371,13 @@ const CoursesPage = () => {
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 hover:opacity-20 transition-opacity duration-300"></div>
         </button>
       </div>
-      {isCreateModalOpen && (
-        <CreateCourseModal 
-          onClose={() => setCreateModalOpen(false)} 
-          onCourseCreated={loadCourses}
-        />
-      )}
+        {isCreateModalOpen && (
+          <CreateCourseModal 
+            onClose={() => setCreateModalOpen(false)} 
+            onCourseCreated={loadCourses}
+          />
+        )}
+      </div>
     </div>
   );
 };

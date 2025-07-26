@@ -1,13 +1,12 @@
 import React from 'react';
+import { Flame, Clock, BarChart2 } from 'lucide-react';
 
 export interface AnalyticsCardData {
   id: number;
-  icon: string;
+  icon: React.ReactNode;
   value: string;
   label: string;
-  bgColor: string;
-  iconColor: string;
-  gradient: string;
+  bgGradient: string;
 }
 
 interface AnalyticsCardsProps {
@@ -17,39 +16,24 @@ interface AnalyticsCardsProps {
 const defaultAnalytics: AnalyticsCardData[] = [
   {
     id: 1,
-    icon: '🔥',
+    icon: <Flame className="w-5 h-5 text-white" />,
     value: '12',
     label: 'Day Study Streak',
-    bgColor: 'bg-orange-100',
-    iconColor: 'text-orange-500',
-    gradient: 'from-orange-400 to-orange-500',
+    bgGradient: 'bg-indigo-500',
   },
   {
     id: 2,
-    icon: '⏰',
+    icon: <Clock className="w-5 h-5 text-white" />,
     value: '25.5 hrs',
     label: 'Hours Logged (Weekly)',
-    bgColor: 'bg-emerald-100',
-    iconColor: 'text-emerald-500',
-    gradient: 'from-emerald-400 to-emerald-500',
+    bgGradient: 'bg-cyan-500',
   },
   {
     id: 3,
-    icon: '📊',
+    icon: <BarChart2 className="w-5 h-5 text-white" />,
     value: '60%',
     label: 'Overall Completion',
-    bgColor: 'bg-indigo-100',
-    iconColor: 'text-indigo-500',
-    gradient: 'from-indigo-400 to-indigo-500',
-  },
-  {
-    id: 4,
-    icon: '🏆',
-    value: '5',
-    label: 'Achievements Unlocked',
-    bgColor: 'bg-amber-100',
-    iconColor: 'text-amber-500',
-    gradient: 'from-amber-400 to-amber-500',
+    bgGradient: 'bg-emerald-500',
   },
 ];
 
@@ -57,25 +41,18 @@ const AnalyticsCards: React.FC<AnalyticsCardsProps> = ({ analyticsData = [] }) =
   const dataToDisplay = analyticsData.length > 0 ? analyticsData : defaultAnalytics;
 
   return (
-    <div className="grid grid-cols-4 gap-4">
-      {dataToDisplay.map(item => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+      {dataToDisplay.map((item) => (
         <div
           key={item.id}
-          className="relative overflow-hidden rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
+          className={`rounded-xl p-4 h-24 flex items-center gap-4 ${item.bgGradient} shadow-lg`}
         >
-          <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-10`} />
-          <div className="relative bg-white/80 backdrop-blur-sm p-3 flex flex-row items-center gap-3">
-            <div className={`w-10 h-10 ${item.bgColor} ${item.iconColor} rounded-lg flex items-center justify-center text-xl flex-shrink-0`}>
-              {item.icon}
-            </div>
-            <div className="flex flex-col items-start">
-              <div className="text-xl font-bold text-gray-800">
-                {item.value}
-              </div>
-              <div className="text-xs text-gray-600">
-                {item.label}
-              </div>
-            </div>
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20">
+            {item.icon}
+          </div>
+          <div className="flex flex-col justify-center">
+            <span className="text-xl font-bold text-white leading-tight" style={{fontFamily: 'Inter, sans-serif'}}>{item.value}</span>
+            <span className="text-xs text-white font-medium mt-0.5 whitespace-nowrap opacity-80">{item.label}</span>
           </div>
         </div>
       ))}

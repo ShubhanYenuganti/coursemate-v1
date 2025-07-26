@@ -77,6 +77,8 @@ def create_app(config_class=Config):
     from .routes.calendar import calendar_bp, register_calendar_oauth
     from .routes.embeddings import embeddings_bp
     from .routes.notifications import notifications_bp
+    from .routes.materials import materials_bp
+    from .routes.conversations import conversations_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
@@ -92,6 +94,8 @@ def create_app(config_class=Config):
     app.register_blueprint(friends_bp)
     app.register_blueprint(embeddings_bp, url_prefix='/api/embeddings')
     app.register_blueprint(notifications_bp)
+    app.register_blueprint(materials_bp, url_prefix='/api/materials')
+    app.register_blueprint(conversations_bp)
 
     # Ensure SocketIO handlers from blueprints are recognized
     # (This is implicitly handled by importing the blueprints before socketio runs,
@@ -127,6 +131,10 @@ def create_app(config_class=Config):
     # Create tables if they don't exist
     with app.app_context():
         db.create_all()
+        # Reset calendar_sync_in_progress for all users on startup
+        from .models.user import User
+        db.session.query(User).update({User.calendar_sync_in_progress: False})
+        db.session.commit()
 
     # Log the current storage backend being used
     storage_backend = app.config.get('FILE_STORAGE', 'LOCAL').upper()

@@ -125,9 +125,9 @@ export const MonthView = ({
                 ) : goals.length <= 2 ? (
                   // 1-2 events - stacked with padding
                   <div className="space-y-1">
-                    {goals.map((g: any) => (
+                    {goals.map((g: any, idx: number) => (
                       <div
-                        key={`${g.goal_id}-${g.task_id}-${g.subtask_id}`}
+                        key={`${g.goal_id}-${g.task_id}-${g.subtask_id}-${idx}`}
                         className={`text-xs p-1 rounded text-white font-medium truncate cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity ${
                           isDraggingTask ? 'opacity-30' : ''
                         }`}

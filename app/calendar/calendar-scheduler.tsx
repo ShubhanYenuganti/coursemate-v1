@@ -14,6 +14,7 @@ import {
   ExternalLink,
   RotateCcw,
   Move,
+  Pencil,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -49,31 +50,36 @@ function formatDate(dateString: string) {
 
 // Refactor updateCourseTitles to accept courses array and return new array
 async function updateCourseTitles(courseIds: string[], token: string, courses: Course[]): Promise<Course[]> {
+  function getBaseCourseId(courseId: string) {
+    return courseId.split('+')[0];
+  }
   const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
   const coursePromises = courseIds.map(async courseId => {
+    const realCourseId = getBaseCourseId(courseId);
     try {
-      const course = await fetch(`${api}/api/courses/${courseId}`, {
+      const course = await fetch(`${api}/api/courses/${realCourseId}`, {
         headers: { Authorization: `Bearer ${token}` },
         method: "GET"
       });
       if (!course.ok) throw new Error(`Request failed ${course.status}`);
       const courseDetails = await course.json();
       return {
-        course_id: courseId,
+        course_id: realCourseId,
         course_title: courseDetails.title,
         course_description: courseDetails.description
       };
     } catch (error) {
       return {
-        course_id: courseId,
-        course_title: courseId,
+        course_id: realCourseId,
+        course_title: realCourseId,
         course_description: ''
       };
     }
   });
   const courseDetails = await Promise.all(coursePromises);
   const newCourses = courses.map((course: Course) => {
-    const details = courseDetails.find(d => d.course_id === course.course_id);
+    const realCourseId = getBaseCourseId(course.course_id);
+    const details = courseDetails.find(d => d.course_id === realCourseId);
     return details ? {
       ...course,
       course_title: details.course_title,
@@ -90,80 +96,30 @@ export function CalendarScheduler() {
   const [sortedGoalsByDate, setSortedGoalsByDate] = useState<GoalsByDate>({});
   const [courses, setCourses] = useState<Course[]>([]);
 
-  // SYNC BUTTON HANDLER
-  const handleSyncAll = async () => {
-    setSyncing(true);
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Not authenticated");
-      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      
-      // Call the new Google Calendar sync endpoint
-      const response = await fetch(`${api}/api/calendar/sync`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-      toast.success(result.message || "Google Calendar sync completed successfully");
-      
-      // Refresh the goals data to show any new events from Google Calendar
-      const fetchGoals = async () => {
-        try {
-          const goalsRes = await fetch(`${api}/api/goals/subtasks`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!goalsRes.ok) throw new Error(`Request failed ${goalsRes.status}`);
-          const grouped = await goalsRes.json() as Record<string, Goal[]>;
-          // Filter out placeholder tasks from each date group
-          const filteredGrouped: Record<string, Goal[]> = {};
-          Object.keys(grouped).forEach(key => {
-            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-          });
-          setGoalsByDate(filteredGrouped);
-          const ordered = Object.keys(filteredGrouped)
-            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
-            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
-          setSortedGoalsByDate(ordered);
-          const all: Goal[] = ([] as Goal[]).concat(...Object.values(grouped));
-          const courses: Course[] = [];
-          const courseIds = [...new Set(all.map(g => g.course_id))];
-          courseIds.forEach(courseId => {
-            const courseGoals = all.filter(goal => goal.course_id === courseId);
-            const firstGoal = courseGoals[0];
-            const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
-            courses.push({
-              goals: courseGoals,
-              course_title: courseId,
-              course_description: '',
-              course_id: courseId,
-              color: color
-            });
-          });
-          setCourses(courses);
-          updateCourseTitles(courseIds, token, courses).then(setCourses);
-        } catch (err) {
-          console.error("fetchGoals error", err);
-        }
-      };
-
-      // Refresh the goals data
-      fetchGoals();
-      
-    } catch (err: any) {
-      toast.error("Sync failed: " + (err.message || err));
-    } finally {
-      setSyncing(false);
-    }
-  };
+  // Poll backend for sync status every 2 seconds
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    let isUnmounted = false;
+    const pollSyncStatus = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const res = await fetch(`${api}/api/calendar/sync-status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isUnmounted) setSyncing(!!data.calendar_sync_in_progress);
+      } catch {}
+    };
+    pollSyncStatus();
+    interval = setInterval(pollSyncStatus, 2000);
+    return () => {
+      isUnmounted = true;
+      if (interval) clearInterval(interval);
+    };
+  }, []);
 
   /** Current selected date -- initialised to today */
   const [currentDate, setCurrentDate] = useState<Date>(() => startOfToday())
@@ -172,6 +128,7 @@ export function CalendarScheduler() {
   /** UI State */
   const [showSettings, setShowSettings] = useState(false)
   const [showAddTask, setShowAddTask] = useState(false)
+  const [newTaskDueDateError, setNewTaskDueDateError] = useState('');
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
   const [sidebarTab, setSidebarTab] = useState<"courses" | "tasks">("tasks");
   const [goalDisplayPosition, setGoalDisplayPosition] = useState<{ x: number; y: number } | null>(null)
@@ -313,7 +270,19 @@ export function CalendarScheduler() {
   const [isDraggingTask, setIsDraggingTask] = useState(false);
   const [draggedTask, setDraggedTask] = useState<Goal | null>(null);
   const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
+  const [highlightSubtaskId, setHighlightSubtaskId] = useState<string | null>(null);
 
+  const [showRescheduleTaskModal, setShowRescheduleTaskModal] = useState(false);
+  const [rescheduleTaskDueDate, setRescheduleTaskDueDate] = useState<string>('');
+  const [rescheduleTaskSubtasks, setRescheduleTaskSubtasks] = useState<any[]>([]);
+  const latestSubtaskEnd = rescheduleTaskSubtasks.length > 0
+    ? new Date(Math.max(...rescheduleTaskSubtasks.map((sub: any) => sub.end_time ? new Date(sub.end_time).getTime() : 0)))
+    : null;
+  const minDueDate = latestSubtaskEnd ? latestSubtaskEnd.toISOString().split('T')[0] : undefined;
+
+  /** Edit Subtask Modal */
+  const [showEditSubtaskModal, setShowEditSubtaskModal] = useState(false);
+  const [editSubtaskData, setEditSubtaskData] = useState<any>(null);
   /** Helpers */
   const weekDates = getWeekDates(currentDate) // Sunday‑based week
 
@@ -385,29 +354,29 @@ export function CalendarScheduler() {
   const handleTimeSlotMouseDown = (e: React.MouseEvent, date: Date, hour: number, minute: number = 0) => {
     // Only start drag-to-create if not already dragging a task
     if (isDraggingTask) return;
-    
+
     // Check if the click target is an event
     const target = e.target as HTMLElement;
-    const isEvent = target.closest('div.absolute.rounded') || 
-                   target.closest('div[style*="background-color"]') || 
-                   target.closest('div[style*="backgroundColor"]') ||
-                   (target.classList.contains('absolute') && target.style.backgroundColor);
-    
+    const isEvent = target.closest('div.absolute.rounded') ||
+      target.closest('div[style*="background-color"]') ||
+      target.closest('div[style*="backgroundColor"]') ||
+      (target.classList.contains('absolute') && target.style.backgroundColor);
+
     // Don't start drag-to-create if clicking on an event
     if (isEvent) {
       return;
     }
-    
+
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Store the initial click position
     setInitialClickPosition({ x: e.clientX, y: e.clientY });
-    
+
     setIsCreatingSubtask(true);
     setCreateSubtaskStart({ date, hour, minute });
     setCreateSubtaskEnd({ date, hour, minute });
-    
+
     // Initialize drag preview
     setDragPreview({
       startDate: date,
@@ -421,29 +390,29 @@ export function CalendarScheduler() {
 
   const handleTimeSlotMouseMove = (e: React.MouseEvent, date: Date, hour: number, minute: number = 0) => {
     if (!isCreatingSubtask || !createSubtaskStart) return;
-    
+
     // Check if the mouse is over an event
     const target = e.target as HTMLElement;
-    const isEvent = target.closest('div.absolute.rounded') || 
-                   target.closest('div[style*="background-color"]') || 
-                   target.closest('div[style*="backgroundColor"]') ||
-                   (target.classList.contains('absolute') && target.style.backgroundColor);
-    
+    const isEvent = target.closest('div.absolute.rounded') ||
+      target.closest('div[style*="background-color"]') ||
+      target.closest('div[style*="backgroundColor"]') ||
+      (target.classList.contains('absolute') && target.style.backgroundColor);
+
     // Don't continue drag-to-create if over an event
     if (isEvent) {
       return;
     }
-    
+
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Adjust hour and minute for display - if minute is 0, use the current hour
     // If minute is 30, use the current hour with 30 minutes
     let displayHour = hour;
     let displayMinute = minute;
-    
+
     setCreateSubtaskEnd({ date, hour, minute });
-    
+
     // Update drag preview
     setDragPreview({
       startDate: createSubtaskStart.date,
@@ -460,11 +429,11 @@ export function CalendarScheduler() {
       // Check if the mouse is over an event
       if (e) {
         const target = e.target as HTMLElement;
-        const isEvent = target.closest('div.absolute.rounded') || 
-                       target.closest('div[style*="background-color"]') || 
-                       target.closest('div[style*="backgroundColor"]') ||
-                       (target.classList.contains('absolute') && target.style.backgroundColor);
-        
+        const isEvent = target.closest('div.absolute.rounded') ||
+          target.closest('div[style*="background-color"]') ||
+          target.closest('div[style*="backgroundColor"]') ||
+          (target.classList.contains('absolute') && target.style.backgroundColor);
+
         // Don't complete drag-to-create if over an event
         if (isEvent) {
           setIsCreatingSubtask(false);
@@ -472,16 +441,16 @@ export function CalendarScheduler() {
           return;
         }
       }
-      
+
       setIsCreatingSubtask(false);
       setShowCreateSubtaskModal(true);
-              // Initialize modal position so the top-right corner is next to the top-left corner of where the user started the drag
-        if (initialClickPosition) {
-          setCreateSubtaskModalPosition({
-            x: Math.max(10, initialClickPosition.x - 500), // Increased offset to avoid overlap with shaded box
-            y: Math.max(10, initialClickPosition.y)
-          });
-        } else {
+      // Initialize modal position so the top-right corner is next to the top-left corner of where the user started the drag
+      if (initialClickPosition) {
+        setCreateSubtaskModalPosition({
+          x: Math.max(10, initialClickPosition.x - 500), // Increased offset to avoid overlap with shaded box
+          y: Math.max(10, initialClickPosition.y)
+        });
+      } else {
         // Fallback to center if no initial position
         setCreateSubtaskModalPosition({
           x: Math.max(10, window.innerWidth / 2 - 200),
@@ -504,7 +473,7 @@ export function CalendarScheduler() {
       const res = await fetch(`${api}/api/goals/tasks`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       if (!res.ok) throw new Error(`Request failed ${res.status}`);
       const tasks = await res.json();
       setAvailableTasks(tasks);
@@ -515,7 +484,7 @@ export function CalendarScheduler() {
   };
 
   // Handle creating the subtask
-  const handleCreateSubtaskConfirm = async (bypassDueDateCheck = false) => {
+  const handleCreateSubtaskConfirm = async (bypassDueDateCheck = false, bypass = false) => {
     if (!selectedTaskId || !newSubtaskDescription.trim() || !createSubtaskStart || !createSubtaskEnd) {
       toast.error("Please fill in all required fields");
       return;
@@ -526,10 +495,10 @@ export function CalendarScheduler() {
       // Get the task details to check due date
       const allGoals = Object.values(goalsByDate).flat();
       const task = allGoals.find(goal => goal.task_id === selectedTaskId);
-      
+
       // Use stored due date from URL search params if available, otherwise use task's due date
       let taskDueDateStr = storedTaskDueDate;
-      
+
       // Debug stored due date
       console.log('Due date check:', {
         taskId: selectedTaskId,
@@ -538,12 +507,12 @@ export function CalendarScheduler() {
         taskFound: !!task,
         task: task
       });
-      
+
       // If no stored due date, try to get it from the task data
       if (!taskDueDateStr && task) {
         taskDueDateStr = task.task_due_date || task.due_date;
       }
-      
+
       console.log('Due date check:', {
         taskId: selectedTaskId,
         taskDueDateStr,
@@ -551,10 +520,10 @@ export function CalendarScheduler() {
         taskFound: !!task,
         task: task
       });
-      
+
       if (taskDueDateStr) {
         console.log('Raw taskDueDateStr:', taskDueDateStr);
-        
+
         // Parse the due date consistently - always convert to local date
         let dueDateLocal;
         if (storedTaskDueDate) {
@@ -572,7 +541,7 @@ export function CalendarScheduler() {
           );
           console.log('Parsed from task data:', { dueDateUTC: dueDateUTC.toISOString(), dueDateLocal: dueDateLocal.toISOString() });
         }
-        
+
         // Create scheduled date consistently in local timezone
         const scheduledDate = new Date(createSubtaskStart.date);
         scheduledDate.setHours(createSubtaskStart.hour, createSubtaskStart.minute, 0, 0);
@@ -581,7 +550,7 @@ export function CalendarScheduler() {
           scheduledDate.getMonth(),
           scheduledDate.getDate()
         );
-        
+
         console.log('Date comparison:', {
           dueDateLocal: dueDateLocal.toISOString(),
           scheduledDateLocal: scheduledDateLocal.toISOString(),
@@ -589,7 +558,7 @@ export function CalendarScheduler() {
           scheduledDateLocalTime: scheduledDateLocal.getTime(),
           isPastDue: scheduledDateLocal > dueDateLocal
         });
-        
+
         // Compare local dates consistently (both are now in local timezone, date-only)
         if (scheduledDateLocal > dueDateLocal) {
           console.log('Showing due date warning modal');
@@ -622,7 +591,8 @@ export function CalendarScheduler() {
               status: null,
               goal_completed: false,
               created_at: '',
-              updated_at: ''
+              updated_at: '',
+              is_conflicting: false // <-- Added field
             },
             targetDate: createSubtaskStart.date,
             targetHour: createSubtaskStart.hour,
@@ -638,8 +608,8 @@ export function CalendarScheduler() {
       if (!token) return;
 
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      
-      // Calculate start and end times in local timezone
+
+      // Construct start and end times in local time, then send as UTC ISO string (backend expects UTC)
       const startDate = new Date(createSubtaskStart.date);
       const startDateTime = new Date(
         startDate.getFullYear(),
@@ -647,32 +617,31 @@ export function CalendarScheduler() {
         startDate.getDate(),
         createSubtaskStart.hour,
         createSubtaskStart.minute,
-        0,
-        0
+        0, 0
       );
-      
+
       const endDate = new Date(createSubtaskEnd.date);
-      const endDateTime = new Date(
+      let endDateTime = new Date(
         endDate.getFullYear(),
         endDate.getMonth(),
         endDate.getDate(),
         createSubtaskEnd.hour,
         createSubtaskEnd.minute,
-        0,
-        0
+        0, 0
       );
-      
-      // Ensure end time is after start time
+      // Ensure end time is after start time (min 30 min)
       if (endDateTime <= startDateTime) {
-        endDateTime.setMinutes(endDateTime.getMinutes() + 30); // Default to 30 minutes
+        endDateTime = new Date(startDateTime.getTime() + 30 * 60000);
       }
 
-      const payload = {
+      let payload: any = {
         subtask_descr: newSubtaskDescription.trim(),
         subtask_type: newSubtaskTypeForCreate,
+        // Send as UTC ISO string (backend expects UTC)
         subtask_start_time: startDateTime.toISOString(),
-        subtask_end_time: endDateTime.toISOString()
+        subtask_end_time: endDateTime.toISOString(),
         // Don't send task_due_date - let backend use placeholder row's task_due_date
+        bypass_due_date: bypass
       };
 
       const res = await fetch(`${api}/api/goals/tasks/${selectedTaskId}/subtasks`, {
@@ -689,7 +658,7 @@ export function CalendarScheduler() {
       }
 
       toast.success("Subtask created successfully!");
-      
+
       // Reset form
       setShowCreateSubtaskModal(false);
       setSelectedTaskId('');
@@ -699,7 +668,7 @@ export function CalendarScheduler() {
       setCreateSubtaskEnd(null);
       setDragPreview(null); // Clear preview when subtask is created
       setInitialClickPosition(null); // Clear initial click position
-      
+
       // Refresh goals data
       const fetchGoals = async () => {
         try {
@@ -711,7 +680,7 @@ export function CalendarScheduler() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
-          
+
           const grouped = await res.json() as Record<string, Goal[]>;
           const filteredGrouped: Record<string, Goal[]> = {};
           Object.keys(grouped).forEach(key => {
@@ -722,15 +691,15 @@ export function CalendarScheduler() {
             .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
             .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
           setSortedGoalsByDate(ordered);
-        } catch (err) { 
+        } catch (err) {
           console.error("fetchGoals error", err);
         }
       };
 
       await fetchGoals();
-      
+
       setShowBanner(false);
-      
+
       // Route back to goal detail page if goalId and courseId are available
       if (goalIdForRouting && courseIdForRouting) {
         window.location.href = `http://localhost:3001/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
@@ -760,7 +729,7 @@ export function CalendarScheduler() {
       e.preventDefault();
       return;
     }
-    
+
     e.stopPropagation();
     setIsDraggingTask(true);
     setDraggedTask(subtask);
@@ -797,7 +766,7 @@ export function CalendarScheduler() {
     setDragTargetDate(null);
   };
 
-  const performSubtaskDrop = async (subtask: Goal, targetDate: Date, targetHour: number, targetMinute: number = 0) => {
+  const performSubtaskDrop = async (subtask: Goal, targetDate: Date, targetHour: number, targetMinute: number = 0, bypass = false) => {
     try {
       // Calculate new start and end times based on drop location in local timezone
       const newStartTime = new Date(
@@ -809,24 +778,27 @@ export function CalendarScheduler() {
         0,
         0
       );
-      
+
       // Calculate duration from original subtask
       const originalStart = new Date(subtask.start_time!);
       const originalEnd = new Date(subtask.end_time!);
       const durationMs = originalEnd.getTime() - originalStart.getTime();
-      
+
       // Set new end time based on duration
       const newEndTime = new Date(newStartTime.getTime() + durationMs);
-      
+
       // Call the update_subtask endpoint
       const token = localStorage.getItem("token");
       if (!token) return alert("Please log in first.");
 
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const payload = {
+      let payload: any = {
         subtask_start_time: newStartTime.toISOString(),
-        subtask_end_time: newEndTime.toISOString()
+        subtask_end_time: newEndTime.toISOString(),
+        bypass_due_date: bypass
       };
+
+      console.log("Payload", payload)
 
       const res = await fetch(`${api}/api/goals/tasks/subtasks/${subtask.subtask_id}`, {
         method: 'PUT',
@@ -852,7 +824,7 @@ export function CalendarScheduler() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
-          
+
           const grouped = await res.json() as Record<string, Goal[]>;
           const filteredGrouped: Record<string, Goal[]> = {};
           Object.keys(grouped).forEach(key => {
@@ -863,15 +835,15 @@ export function CalendarScheduler() {
             .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
             .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
           setSortedGoalsByDate(ordered);
-        } catch (err) { 
+        } catch (err) {
           console.error("fetchGoals error", err);
         }
       };
 
       await fetchGoals();
-      
+
       toast.success(`Subtask moved to ${targetDate.toLocaleDateString()} at ${targetHour}:${targetMinute.toString().padStart(2, '0')}`);
-      
+
       // Close the overflow modal if it's open
       if (overflowEvents) {
         setOverflowEvents(null);
@@ -887,7 +859,7 @@ export function CalendarScheduler() {
   const handleTimeSlotDrop = async (e: React.DragEvent, targetDate: Date, targetHour: number, targetMinute: number = 0) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!draggedTask) return;
 
     // Check if the target date is past the task's due date
@@ -901,7 +873,7 @@ export function CalendarScheduler() {
         dueDateUTC.getUTCMonth(),
         dueDateUTC.getUTCDate()
       );
-      
+
       // Create target date in local timezone
       const targetDateTime = new Date(targetDate);
       targetDateTime.setHours(targetHour, targetMinute, 0, 0);
@@ -910,7 +882,7 @@ export function CalendarScheduler() {
         targetDateTime.getMonth(),
         targetDateTime.getDate()
       );
-      
+
       // Compare local dates (ignoring time and timezone)
       if (targetDateLocal > dueDateLocal) {
         // Show warning modal instead of proceeding
@@ -929,22 +901,186 @@ export function CalendarScheduler() {
     await performSubtaskDrop(draggedTask, targetDate, targetHour, targetMinute);
   };
 
+  // Set pre-filled form state for Editing Subtask
+  const handleEditSubtask = () => {
+    if (!viewSubtaskModal?.subtask) return;
+    const subtask = viewSubtaskModal.subtask;
+    // Defensive: Only create Date if not null
+    const start = subtask.start_time ? new Date(subtask.start_time) : new Date();
+    const end = subtask.end_time ? new Date(subtask.end_time) : new Date();
+    setEditSubtaskData({
+      subtask_id: subtask.subtask_id,
+      subtask_descr: subtask.subtask_descr,
+      subtask_type: subtask.subtask_type || 'other',
+      startDate: new Date(start.getFullYear(), start.getMonth(), start.getDate()),
+      startHour: start.getHours(),
+      startMinute: start.getMinutes(),
+      endDate: new Date(end.getFullYear(), end.getMonth(), end.getDate()),
+      endHour: end.getHours(),
+      endMinute: end.getMinutes(),
+    });
+    setShowEditSubtaskModal(true);
+  }
+
+  const handleEditSubtaskCancel = () => {
+    setShowEditSubtaskModal(false);
+    setEditSubtaskData(null);
+  }
+
+  const handleEditSubtaskSave = async (bypass = false) => {
+    if (!editSubtaskData) return;
+    // Find the parent task (from goalsByDate)
+    const allGoals = Object.values(goalsByDate).flat();
+    const parentTask = allGoals.find(goal => goal.subtask_id === editSubtaskData.subtask_id);
+    let taskDueDateStr = parentTask?.task_due_date || parentTask?.due_date;
+    if (taskDueDateStr && !bypass) {
+      // Parse the due date as local date
+      let dueDateLocal;
+      if (taskDueDateStr.includes('-') && !taskDueDateStr.includes('T')) {
+        // YYYY-MM-DD format
+        const [year, month, day] = taskDueDateStr.split('-').map(Number);
+        dueDateLocal = new Date(year, month - 1, day);
+      } else {
+        // ISO format
+        const dueDateUTC = new Date(taskDueDateStr);
+        dueDateLocal = new Date(
+          dueDateUTC.getUTCFullYear(),
+          dueDateUTC.getUTCMonth(),
+          dueDateUTC.getUTCDate()
+        );
+      }
+      // Get the new scheduled date from the edit modal
+      const scheduledDate = new Date(editSubtaskData.startDate);
+      scheduledDate.setHours(editSubtaskData.startHour, editSubtaskData.startMinute, 0, 0);
+      const scheduledDateLocal = new Date(
+        scheduledDate.getFullYear(),
+        scheduledDate.getMonth(),
+        scheduledDate.getDate()
+      );
+      if (scheduledDateLocal > dueDateLocal) {
+        setDueDateWarningModal({
+          isOpen: true,
+          subtask: parentTask || {
+            ...editSubtaskData,
+            task_due_date: taskDueDateStr,
+            due_date: taskDueDateStr,
+            start_time: '',
+            end_time: '',
+            subtask_id: editSubtaskData.subtask_id,
+            subtask_descr: editSubtaskData.subtask_descr,
+            subtask_type: editSubtaskData.subtask_type,
+            subtask_completed: false,
+            task_completed: false,
+            progress: 0,
+            totalSubtasks: 0,
+            completedSubtasks: 0,
+            subtasks: [],
+            google_calendar_color: '',
+            status: null,
+            goal_completed: false,
+            created_at: '',
+            updated_at: '',
+            is_conflicting: false
+          },
+          targetDate: scheduledDate,
+          targetHour: editSubtaskData.startHour,
+          targetMinute: editSubtaskData.startMinute
+        });
+        return;
+      }
+    }
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+    // Construct start and end ISO strings
+    const startDateTime = new Date(
+      editSubtaskData.startDate.getFullYear(),
+      editSubtaskData.startDate.getMonth(),
+      editSubtaskData.startDate.getDate(),
+      editSubtaskData.startHour,
+      editSubtaskData.startMinute,
+      0, 0
+    );
+    let endDateTime = new Date(
+      editSubtaskData.endDate.getFullYear(),
+      editSubtaskData.endDate.getMonth(),
+      editSubtaskData.endDate.getDate(),
+      editSubtaskData.endHour,
+      editSubtaskData.endMinute,
+      0, 0
+    );
+    if (endDateTime <= startDateTime) {
+      endDateTime = new Date(startDateTime.getTime() + 30 * 60000);
+    }
+    const payload = {
+      subtask_descr: editSubtaskData.subtask_descr,
+      subtask_type: editSubtaskData.subtask_type,
+      // Send as UTC ISO string (backend expects UTC)
+      subtask_start_time: startDateTime.toISOString(),
+      subtask_end_time: endDateTime.toISOString(),
+      bypass_due_date: bypass
+    };
+    try {
+      const res = await fetch(`${api}/api/goals/tasks/subtasks/${editSubtaskData.subtask_id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Failed to update subtask');
+      setShowEditSubtaskModal(false);
+      setEditSubtaskData(null);
+      setViewSubtaskModal(null);
+      // Optionally, refresh goals data here
+      // ...
+      toast.success('Subtask updated successfully');
+      // Refresh goals data
+      const fetchGoals = async () => {
+        try {
+          const res = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          const grouped = await res.json() as Record<string, Goal[]>;
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+      fetchGoals();
+    } catch (err) {
+      toast.error('Failed to update subtask');
+    }
+  };
+
   const handleDueDateWarningConfirm = async () => {
     if (dueDateWarningModal) {
       const { subtask, targetDate, targetHour, targetMinute } = dueDateWarningModal;
       setDueDateWarningModal(null);
-      
+
       if (subtask && targetDate && targetHour !== null) {
         // Check if this is from drag-to-create or add subtask modal
         if (showCreateSubtaskModal) {
           // This is from drag-to-create, proceed with creating the subtask
-          await handleCreateSubtaskConfirm(true);
+          await handleCreateSubtaskConfirm(true, true);
         } else if (addSubtaskModal?.isOpen) {
           // This is from add subtask modal, proceed with creating the subtask
-          await handleAddSubtaskConfirm(true);
+          await handleAddSubtaskConfirm(true, true);
+        } else if (showEditSubtaskModal) {
+          await handleEditSubtaskSave(true);
         } else {
           // This is from drag-and-drop, proceed with the drop
-          await performSubtaskDrop(subtask, targetDate, targetHour, targetMinute || 0);
+          await performSubtaskDrop(subtask, targetDate, targetHour, targetMinute || 0, true);
         }
       }
     }
@@ -969,10 +1105,106 @@ export function CalendarScheduler() {
     }
   };
 
+  // Add this handler inside CalendarScheduler:
+  const handleRescheduleTaskSave = async () => {
+    // Use the first subtask as a fallback if viewSubtaskModal.subtask is null
+    const subtask = viewSubtaskModal?.subtask || rescheduleTaskSubtasks[0];
+    if (!subtask) return;
+    const taskId = subtask.task_id;
+    const goalId = subtask.goal_id;
+    const token = localStorage.getItem('token');
+    if (!token) return toast.error('Not logged in');
+    try {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5173';
+      const payload = {
+        tasks: [{
+          task_id: taskId,
+          task_due_date: rescheduleTaskDueDate,
+        }],
+        bypass: false
+      };
+      console.log('Sending to backend:', payload); // <-- Added log
+      const res = await fetch(`${api}/api/goals/${goalId}/tasks`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.conflicting_subtasks) {
+        // Find descriptions for conflicting subtasks
+        const descs = rescheduleTaskSubtasks
+          .filter((sub: any) => data.conflicting_subtasks.includes(sub.subtask_id))
+          .map((sub: any) => sub.subtask_descr || sub.subtask_id);
+        alert('Conflicting subtasks: ' + descs.join(', '));
+      } else {
+        setShowRescheduleTaskModal(false);
+        // Refresh goals data
+        try {
+          const res = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          const grouped: Record<string, any[]> = await res.json();
+          const filteredGrouped: Record<string, any[]> = {};
+          Object.keys(grouped).forEach((key: string) => {
+            filteredGrouped[key] = grouped[key].filter((goal: any) => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc: Record<string, any[]>, k: string) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, any[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) {
+          console.error('fetchGoals error', err);
+        }
+        toast.success('Task due date updated');
+        // In handleRescheduleTaskSave, after a successful update_goal_tasks and before refreshing goals:
+        if (!data.conflicting_subtasks) {
+          // Greedily remove the conflict flag in the main calendar state
+          setGoalsByDate(prev => {
+            const updated = { ...prev };
+            Object.keys(updated).forEach(dateKey => {
+              updated[dateKey] = updated[dateKey].map((goal: any) =>
+                rescheduleTaskSubtasks.some((sub: any) => sub.subtask_id === goal.subtask_id)
+                  ? { ...goal, is_conflicting: false }
+                  : goal
+              );
+            });
+            return updated;
+          });
+          // Optionally also update rescheduleTaskSubtasks for modal consistency
+          setRescheduleTaskSubtasks(prev => prev.map((sub: any) => ({ ...sub, is_conflicting: false })));
+          // Update each subtask with bypass_due_date: false
+          for (const sub of rescheduleTaskSubtasks) {
+            await fetch(`${api}/api/goals/tasks/subtasks/${sub.subtask_id}`, {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                subtask_descr: sub.subtask_descr,
+                subtask_type: sub.subtask_type,
+                subtask_start_time: sub.start_time,
+                subtask_end_time: sub.end_time,
+                bypass_due_date: false
+              })
+            });
+          }
+        }
+      }
+    } catch (err) {
+      toast.error('Failed to update task due date');
+    }
+  };
+
   const handleGoalClick = (event: Goal | any, clickEvent?: React.MouseEvent) => {
     console.log('handleGoalClick called with event:', event);
     console.log('clickEvent:', clickEvent);
-    
+
     // Check if this is coming from the sidebar (has task_title and represents a task, not a subtask)
     if (event.task_title && (event.totalSubtasks || event.subtasks)) {
       // Show regular task modal for sidebar task events
@@ -1007,13 +1239,6 @@ export function CalendarScheduler() {
     }
   };
 
-  const openViewSubtaskModal = (subtask: Goal) => {
-    setViewSubtaskModal({
-      isOpen: true,
-      subtask: subtask,
-      position: { x: 100, y: 100 }
-    });
-  };
 
   const closeViewSubtaskModal = () => {
     setViewSubtaskModal(null);
@@ -1022,10 +1247,10 @@ export function CalendarScheduler() {
   const formatEventTime = (start: string, end: string) => {
     const startDate = new Date(start);
     const endDate = new Date(end);
-    const options: Intl.DateTimeFormatOptions = { 
-      hour: 'numeric', 
+    const options: Intl.DateTimeFormatOptions = {
+      hour: 'numeric',
       minute: '2-digit',
-      hour12: true 
+      hour12: true
     };
     return `${startDate.toLocaleTimeString([], options)} - ${endDate.toLocaleTimeString([], options)}`;
   };
@@ -1049,16 +1274,16 @@ export function CalendarScheduler() {
     if (subtask.subtask_completed) {
       return "Completed";
     }
-    
+
     if (subtask.end_time) {
       const endTime = new Date(subtask.end_time);
       const now = new Date();
-      
+
       if (now > endTime) {
         return "Overdue";
       }
     }
-    
+
     return "In Progress";
   };
 
@@ -1136,7 +1361,7 @@ export function CalendarScheduler() {
     setNewSubtaskTime(15);
   }
 
-  const handleAddSubtaskConfirm = async (bypassDueDateCheck = false) => {
+  const handleAddSubtaskConfirm = async (bypassDueDateCheck = false, bypass = false) => {
     if (!addSubtaskModal?.task || !newSubtaskDescr.trim()) {
       toast.error('Please enter a subtask description');
       return;
@@ -1147,17 +1372,17 @@ export function CalendarScheduler() {
       const task = addSubtaskModal.task;
       // Use stored due date from URL search params if available, otherwise use task's due date
       let taskDueDateStr = storedTaskDueDate || task.task_due_date || task.due_date;
-      
+
       console.log('Add subtask due date check:', {
         taskId: task.task_id,
         taskDueDateStr,
         storedTaskDueDate,
         task: task
       });
-      
+
       if (taskDueDateStr) {
         console.log('Raw taskDueDateStr (add subtask):', taskDueDateStr);
-        
+
         // Parse the due date consistently - always convert to local date
         let dueDateLocal;
         if (storedTaskDueDate) {
@@ -1175,7 +1400,7 @@ export function CalendarScheduler() {
           );
           console.log('Parsed from task data (add subtask):', { dueDateUTC: dueDateUTC.toISOString(), dueDateLocal: dueDateLocal.toISOString() });
         }
-        
+
         // For add subtask modal, we don't have a specific scheduled time,
         // so we'll use the current date as a reference
         const currentDate = new Date();
@@ -1184,7 +1409,7 @@ export function CalendarScheduler() {
           currentDate.getMonth(),
           currentDate.getDate()
         );
-        
+
         console.log('Add subtask date comparison:', {
           dueDateLocal: dueDateLocal.toISOString(),
           currentDateLocal: currentDateLocal.toISOString(),
@@ -1192,7 +1417,7 @@ export function CalendarScheduler() {
           currentDateLocalTime: currentDateLocal.getTime(),
           isPastDue: currentDateLocal > dueDateLocal
         });
-        
+
         // Compare local dates consistently (both are now in local timezone, date-only)
         if (currentDateLocal > dueDateLocal) {
           console.log('Showing add subtask due date warning modal');
@@ -1225,7 +1450,8 @@ export function CalendarScheduler() {
               status: null,
               goal_completed: false,
               created_at: '',
-              updated_at: ''
+              updated_at: '',
+              is_conflicting: false // <-- Added field
             },
             targetDate: currentDate,
             targetHour: currentDate.getHours(),
@@ -1241,11 +1467,13 @@ export function CalendarScheduler() {
       if (!token) return alert("Please log in first.");
 
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const payload = {
+      let payload: any = {
         subtask_descr: newSubtaskDescr.trim(),
-        subtask_type: newSubtaskTypeForAdd
+        subtask_type: newSubtaskTypeForAdd,
         // Don't send task_due_date - let backend use placeholder row's task_due_date
+        bypass_due_date: bypass
       };
+
 
       const res = await fetch(`${api}/api/goals/tasks/${addSubtaskModal.task.task_id}/subtasks`, {
         method: 'POST',
@@ -1272,7 +1500,7 @@ export function CalendarScheduler() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
-          
+
           const grouped = await res.json() as Record<string, Goal[]>;
           console.log("Fetched goals from backend:", grouped);
           Object.values(grouped).flat().forEach(goal => {
@@ -1297,17 +1525,17 @@ export function CalendarScheduler() {
             .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
             .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
           setSortedGoalsByDate(ordered);
-        } catch (err) { 
+        } catch (err) {
           console.error("fetchGoals error", err);
         }
       };
 
       await fetchGoals();
-      
+
       handleAddSubtaskCancel();
       toast.success("Subtask created successfully");
       setShowBanner(false);
-      
+
       // Route back to goal detail page if goalId and courseId are available
       if (goalIdForRouting && courseIdForRouting) {
         window.location.href = `http://localhost:3001/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
@@ -1370,7 +1598,7 @@ export function CalendarScheduler() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
-          
+
           const grouped = await res.json() as Record<string, Goal[]>;
           // Filter out placeholder tasks from each date group
           const filteredGrouped: Record<string, Goal[]> = {};
@@ -1382,13 +1610,13 @@ export function CalendarScheduler() {
             .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
             .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
           setSortedGoalsByDate(ordered);
-        } catch (err) { 
+        } catch (err) {
           console.error("fetchGoals error", err);
         }
       };
 
       await fetchGoals();
-      
+
       setShowUndoToast(false);
       setDeletedTask(null);
       toast.success("Task restored successfully");
@@ -1484,7 +1712,7 @@ export function CalendarScheduler() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
-          
+
           const grouped = await res.json() as Record<string, Goal[]>;
           // Filter out placeholder tasks from each date group
           const filteredGrouped: Record<string, Goal[]> = {};
@@ -1496,20 +1724,20 @@ export function CalendarScheduler() {
             .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
             .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
           setSortedGoalsByDate(ordered);
-        } catch (err) { 
+        } catch (err) {
           console.error("fetchGoals error", err);
         }
       };
 
       // Refresh the goals data to ensure consistency
       await fetchGoals();
-      
+
       // Auto-hide undo toast after 5 seconds
       setTimeout(() => {
         setShowUndoSubtaskToast(false);
         setDeletedSubtask(null);
       }, 5000);
-      
+
       toast.success("Subtask deleted successfully");
     } catch (err) {
       console.error("handleSubtaskDelete error", err);
@@ -1532,7 +1760,8 @@ export function CalendarScheduler() {
         subtask_completed: deletedSubtask.subtask_completed || false,
         task_due_date: deletedSubtask.task_due_date || deletedSubtask.due_date,
         subtask_start_time: deletedSubtask.start_time,
-        subtask_end_time: deletedSubtask.end_time
+        subtask_end_time: deletedSubtask.end_time,
+        bypass_due_date: deletedSubtask.is_conflicting || false
       };
 
       const res = await fetch(`${api}/api/goals/tasks/${deletedSubtask.task_id}/subtasks`, {
@@ -1560,7 +1789,7 @@ export function CalendarScheduler() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
-          
+
           const grouped = await res.json() as Record<string, Goal[]>;
           // Filter out placeholder tasks from each date group
           const filteredGrouped: Record<string, Goal[]> = {};
@@ -1572,13 +1801,13 @@ export function CalendarScheduler() {
             .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
             .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
           setSortedGoalsByDate(ordered);
-        } catch (err) { 
+        } catch (err) {
           console.error("fetchGoals error", err);
         }
       };
 
       await fetchGoals();
-      
+
       setShowUndoSubtaskToast(false);
       setDeletedSubtask(null);
       toast.success("Subtask restored successfully");
@@ -1751,7 +1980,7 @@ export function CalendarScheduler() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) throw new Error(`Request failed ${res.status}`);
-          
+
           const grouped = await res.json() as Record<string, Goal[]>;
           // Filter out placeholder tasks from each date group
           const filteredGrouped: Record<string, Goal[]> = {};
@@ -1763,20 +1992,20 @@ export function CalendarScheduler() {
             .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
             .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
           setSortedGoalsByDate(ordered);
-        } catch (err) { 
+        } catch (err) {
           console.error("fetchGoals error", err);
         }
       };
 
       // Refresh the goals data to ensure consistency
       await fetchGoals();
-      
+
       // Auto-hide undo toast after 5 seconds
       setTimeout(() => {
         setShowUndoToast(false);
         setDeletedTask(null);
       }, 5000);
-      
+
       toast.success("Task deleted successfully");
     } catch (err) {
       console.error("handleTaskDelete error", err);
@@ -1784,104 +2013,6 @@ export function CalendarScheduler() {
     }
   }
 
-  const handleTaskDueDateChange = async (task: Goal, newDueDate: string) => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return alert("Please log in first.")
-
-      // Store original state for potential rollback
-      const originalSelectedGoal = selectedGoal;
-      const originalGoalsByDate = goalsByDate;
-      const originalSortedGoalsByDate = sortedGoalsByDate;
-
-      // Greedy optimistic update - immediately update the UI for all instances of this task
-      setSelectedGoal((prev) => {
-        if (!prev || prev.task_id !== task.task_id) return prev;
-        return {
-          ...prev,
-          task_due_date: newDueDate
-        };
-      });
-
-      // Update all instances of this task across all date groups
-      setGoalsByDate((prev) => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach(dateKey => {
-          updated[dateKey] = updated[dateKey].map(goal => 
-            goal.task_id === task.task_id ? { ...goal, task_due_date: newDueDate } : goal
-          );
-        });
-        return updated;
-      });
-
-      setSortedGoalsByDate((prev) => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach(dateKey => {
-          updated[dateKey] = updated[dateKey].map(goal => 
-            goal.task_id === task.task_id ? { ...goal, task_due_date: newDueDate } : goal
-          );
-        });
-        return updated;
-      });
-
-      // Call the update_task route with the new due date
-      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const res = await fetch(`${api}/api/goals/tasks/${task.task_id}`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ 
-          task_due_date: newDueDate 
-        }),
-      });
-
-      if (!res.ok) {
-        // If API call fails, revert the optimistic updates
-        console.error("Task due date change failed, reverting changes");
-        setSelectedGoal(originalSelectedGoal);
-        setGoalsByDate(originalGoalsByDate);
-        setSortedGoalsByDate(originalSortedGoalsByDate);
-        throw new Error(`Failed to update task due date: ${res.status}`);
-      }
-
-      // If successful, refresh the data to ensure consistency with server
-      const fetchGoals = async () => {
-        try {
-          const token =
-            typeof window !== "undefined" ? localStorage.getItem("token") : null;
-          if (!token) return console.warn("No JWT in localStorage");
-
-          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-          const res = await fetch(`${api}/api/goals/subtasks`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) throw new Error(`Request failed ${res.status}`);
-          
-          const grouped = await res.json() as Record<string, Goal[]>;
-          // Filter out placeholder tasks from each date group
-          const filteredGrouped: Record<string, Goal[]> = {};
-          Object.keys(grouped).forEach(key => {
-            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-          });
-          setGoalsByDate(filteredGrouped);
-          const ordered = Object.keys(filteredGrouped)
-            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
-            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
-          setSortedGoalsByDate(ordered);
-        } catch (err) { 
-          console.error("fetchGoals error", err);
-        }
-      };
-
-      // Refresh the goals data to ensure consistency
-      await fetchGoals();
-    } catch (err) {
-      console.error("handleTaskDueDateChange error", err);
-      toast.error("Failed to update task due date");
-    }
-  }
 
   const handleSubtaskToggle = async (sub: Goal) => {
     try {
@@ -2252,6 +2383,91 @@ export function CalendarScheduler() {
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
 
+  const handleSyncAll = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not authenticated");
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+  
+      // Call the new Google Calendar sync endpoint
+      const response = await fetch(`${api}/api/calendar/sync`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+  
+      // Poll until backend reports sync is done
+      let done = false;
+      while (!done) {
+        try {
+          const res = await fetch(`${api}/api/calendar/sync-status`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (!data.calendar_sync_in_progress) done = true;
+          }
+        } catch {}
+        if (!done) await new Promise(r => setTimeout(r, 1000));
+      }
+  
+      toast.success("Google Calendar sync completed successfully");
+  
+      // Refresh the goals data to show any new events from Google Calendar
+      const fetchGoals = async () => {
+        try {
+          const goalsRes = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!goalsRes.ok) throw new Error(`Request failed ${goalsRes.status}`);
+          const grouped = await goalsRes.json() as Record<string, Goal[]>;
+          // Filter out placeholder tasks from each date group
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+          const all: Goal[] = ([] as Goal[]).concat(...Object.values(grouped));
+          const courses: Course[] = [];
+          const courseIds = [...new Set(all.map(g => g.course_id))];
+          courseIds.forEach(courseId => {
+            const courseGoals = all.filter(goal => goal.course_id === courseId);
+            const firstGoal = courseGoals[0];
+            const color = firstGoal?.google_calendar_color || colorForCourse(courseId, null);
+            courses.push({
+              goals: courseGoals,
+              course_title: courseId,
+              course_description: '',
+              course_id: courseId,
+              color: color
+            });
+          });
+          setCourses(courses);
+          updateCourseTitles(courseIds, token, courses).then(setCourses);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+  
+      // Refresh the goals data
+      fetchGoals();
+  
+    } catch (err: any) {
+      toast.error("Sync failed: " + (err.message || err));
+    }
+  };
+  
   // Fetch user courses for add task modal
   const fetchUserCourses = async () => {
     try {
@@ -2329,32 +2545,37 @@ export function CalendarScheduler() {
       alert('Please fill in all required fields.');
       return;
     }
+
+    // Validate due date against selected goal's due date
+    const goal = courseGoals.find(g => g.goal_id === selectedGoalId) || selectedGoal;
+    if (goal && goal.due_date) {
+      const taskDate = newTaskDueDate.split('T')[0];
+      const goalDate = goal.due_date.split('T')[0];
+      if (taskDate > goalDate) {
+        setNewTaskDueDateError(`Task due date must be on or before: ${formatDate(goal.due_date)}`);
+        return;
+      }
+    }
+
     try {
       const token = localStorage.getItem('token');
       if (!token) throw new Error('Not authenticated');
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const payload = {
+      const tasksData = [{
         task_title: newTaskName,
         task_descr: newTaskDescription,
-        task_due_date: newTaskDueDate,
-        subtasks: newSubtasks.map((sub: { subtask_descr: string; subtask_type: string; estimatedTimeMinutes: number }, index: number) => ({
-          subtask_descr: sub.subtask_descr,
-          subtask_type: sub.subtask_type,
-          subtask_completed: false,
-          subtask_order: index,
-          estimatedTimeMinutes: sub.estimatedTimeMinutes
-        }))
-      };
-      const res = await fetch(`${api}/api/goals/${selectedGoalId}/create-task`, {
+        scheduledDate: newTaskDueDate,
+        completed: false
+      }];
+      const res = await fetch(`${api}/api/goals/${selectedGoalId}/save-tasks`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({tasks: tasksData})
       });
       if (!res.ok) throw new Error(`Failed to create task: ${res.status}`);
-      alert('Task created successfully!');
 
       // Refresh goals data to show the newly created task
       const fetchGoals = async () => {
@@ -2443,7 +2664,7 @@ export function CalendarScheduler() {
     if (!taskId) {
       return "#6b7280"; // fallback to gray
     }
-    
+
     // Generate a consistent color based on task_id
     const colors = [
       "#3b82f6", // blue
@@ -2459,7 +2680,7 @@ export function CalendarScheduler() {
       "#14b8a6", // teal
       "#f43f5e", // rose
     ];
-    
+
     // Use task_id to generate a consistent index
     let hash = 0;
     for (let i = 0; i < taskId.length; i++) {
@@ -2467,7 +2688,7 @@ export function CalendarScheduler() {
       hash = ((hash << 5) - hash) + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
-    
+
     const index = Math.abs(hash) % colors.length;
     return colors[index];
   };
@@ -2505,14 +2726,14 @@ export function CalendarScheduler() {
 
         // Reprocess the data to group calendar events by their start_time instead of goal date
         const reprocessedGrouped: Record<string, Goal[]> = {};
-        
+
         Object.values(filteredGrouped).flat().forEach(goal => {
           let key: string;
-          
+
           // For calendar events, use start_time for grouping
           if (goal.start_time && goal.end_time) {
             key = getLocalDateKey(new Date(goal.start_time));
-          } 
+          }
           // For non-calendar tasks, use task_due_date if available, otherwise fall back to due_date
           else if (goal.task_due_date) {
             key = getDateKeyFromDateString(goal.task_due_date);
@@ -2522,7 +2743,7 @@ export function CalendarScheduler() {
             // Fallback to current date if no date is available
             key = getLocalDateKey(new Date());
           }
-          
+
           if (!reprocessedGrouped[key]) {
             reprocessedGrouped[key] = [];
           }
@@ -2733,15 +2954,15 @@ export function CalendarScheduler() {
   // Helper function to group tasks by task_due_date for sidebar
   const groupTasksByTaskDueDate = (goals: Goal[]) => {
     const groupedByTaskDueDate: { [date: string]: Goal[] } = {};
-    
+
     console.log("=== TASK DUE DATE GROUPING DEBUG ===");
     console.log("Input goals:", goals.length);
-    
+
     goals
       .filter(goal => goal.goal_id !== "Google Calendar") // Exclude Google Calendar events
       .forEach(goal => {
         let key: string;
-        
+
         console.log("Processing goal for sidebar:", {
           task_id: goal.task_id,
           subtask_id: goal.subtask_id,
@@ -2753,7 +2974,7 @@ export function CalendarScheduler() {
           end_time: goal.end_time,
           goal_id: goal.goal_id
         });
-        
+
         // For calendar events, use task_due_date if available, otherwise use start_time
         if (goal.start_time && goal.end_time) {
           if (goal.task_due_date) {
@@ -2763,7 +2984,7 @@ export function CalendarScheduler() {
             key = getLocalDateKey(new Date(goal.start_time));
             console.log("  → Calendar event without task_due_date, using start_time for key:", key);
           }
-        } 
+        }
         // For non-calendar tasks, use task_due_date if available, otherwise fall back to due_date
         else if (goal.task_due_date) {
           key = getDateKeyFromDateString(goal.task_due_date);
@@ -2776,14 +2997,14 @@ export function CalendarScheduler() {
           key = getLocalDateKey(new Date());
           console.log("  → No date available, using current date for key:", key);
         }
-        
+
         if (!groupedByTaskDueDate[key]) {
           groupedByTaskDueDate[key] = [];
         }
         groupedByTaskDueDate[key].push(goal);
         console.log("  → Added to group:", key);
       });
-    
+
     console.log("Final groupedByTaskDueDate:", groupedByTaskDueDate);
     return groupedByTaskDueDate;
   };
@@ -2812,7 +3033,7 @@ export function CalendarScheduler() {
 
     Object.entries(filteredGoalsByDate).forEach(([date, goals]) => {
       const taskDate = new Date(date + 'T00:00:00');
-      
+
       console.log("Processing date group:", date, "with", goals.length, "goals");
       console.log("  Task date:", taskDate.toISOString());
       console.log("  Goals:", goals.map(g => ({
@@ -2825,7 +3046,7 @@ export function CalendarScheduler() {
       // Separate completed tasks
       const completedGoals = goals.filter(goal => goal.task_completed);
       const incompleteGoals = goals.filter(goal => !goal.task_completed);
-      
+
       console.log("  Completed goals:", completedGoals.length);
       console.log("  Incomplete goals:", incompleteGoals.length);
 
@@ -2898,40 +3119,101 @@ export function CalendarScheduler() {
                 return dateAObj.getTime() - dateBObj.getTime();
               })
               .map(([date, goals]) => {
-              const groupedTasks = groupTasksByTaskId(goals);
-              const taskDate = new Date(date + 'T00:00:00');
-              const isPastDue = taskDate < startOfToday() && taskDate.toDateString() !== startOfToday().toDateString();
+                const groupedTasks = groupTasksByTaskId(goals);
+                const taskDate = new Date(date + 'T00:00:00');
+                const isPastDue = taskDate < startOfToday() && taskDate.toDateString() !== startOfToday().toDateString();
 
-              return (
-                <div key={date} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className={`text-sm font-medium ${isPastDue && !isCompletedSection ? 'text-red-600' : 'text-[#18181b]'}`}>
-                      {taskDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                return (
+                  <div key={date} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className={`text-sm font-medium ${isPastDue && !isCompletedSection ? 'text-red-600' : 'text-[#18181b]'}`}>
+                        {taskDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                      </div>
+                      <div className={`text-xs ${isPastDue && !isCompletedSection ? 'text-red-500' : 'text-[#71717a]'}`}>
+                        {Object.keys(groupedTasks).length} task{Object.keys(groupedTasks).length !== 1 ? "s" : ""}
+                      </div>
                     </div>
-                    <div className={`text-xs ${isPastDue && !isCompletedSection ? 'text-red-500' : 'text-[#71717a]'}`}>
-                      {Object.keys(groupedTasks).length} task{Object.keys(groupedTasks).length !== 1 ? "s" : ""}
-                    </div>
-                  </div>
 
-                  <div className="space-y-2 ml-2">
-                    {Object.values(groupedTasks).map((group, index) => {
-                      const taskId = `${group.subtasks[0].task_id}-${date}`;
-                      const isSubtaskExpanded = expandedSidebarSubtasks[taskId];
-                      
-                      return (
-                        <div
-                          key={index}
-                          className={`flex items-start gap-3 p-3 rounded-lg hover:bg-[#f0f0f0] ${isCompletedSection ? 'bg-[#f8f9fa] opacity-75' : 'bg-[#f8f9fa]'
-                            }`}
-                        >
+                    <div className="space-y-2 ml-2">
+                      {Object.values(groupedTasks).map((group, index) => {
+                        const taskId = `${group.subtasks[0].task_id}-${date}`;
+                        const isSubtaskExpanded = expandedSidebarSubtasks[taskId];
+
+                        return (
                           <div
-                            className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
-                            style={{ backgroundColor: getTaskColor(group.taskId) }}
-                          />
-                          <div className="flex-1 min-w-0">
+                            key={index}
+                            className={`flex items-start gap-3 p-3 rounded-lg hover:bg-[#f0f0f0] ${isCompletedSection ? 'bg-[#f8f9fa] opacity-75' : 'bg-[#f8f9fa]'
+                              }`}
+                          >
                             <div
-                              className="cursor-pointer"
+                              className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
+                              style={{ backgroundColor: getTaskColor(group.taskId) }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div
+                                className="cursor-pointer"
+                                onClick={(e) => {
+                                  const representativeGoal = {
+                                    ...group.subtasks[0],
+                                    task_title: group.taskTitle,
+                                    task_descr: group.taskDescr,
+                                    start_time: group.startTime,
+                                    end_time: group.endTime,
+                                    course_id: group.courseId,
+                                    google_calendar_color: group.googleCalendarColor,
+                                    progress: group.progress,
+                                    totalSubtasks: group.totalSubtasks,
+                                    completedSubtasks: group.completedSubtasks,
+                                    subtasks: group.subtasks,
+                                    status: calculateStatus(group.subtasks[0])
+                                  };
+                                  handleGoalClick(representativeGoal, e);
+                                }}
+                              >
+                                <div className={`text-sm font-medium truncate ${isCompletedSection ? 'text-[#71717a] line-through' : 'text-[#18181b]'
+                                  }`}>
+                                  {group.taskTitle || "(untitled)"}
+                                </div>
+                                {group.taskDescr && (
+                                  <div className={`text-xs truncate mt-1 ${isCompletedSection ? 'text-[#a1a1aa] line-through' : 'text-[#71717a]'
+                                    }`}>
+                                    {group.taskDescr}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* View Subtasks Button */}
+                              {group.totalSubtasks && group.totalSubtasks >= 1 && (
+                                <div className="mt-2">
+                                  <button
+                                    onClick={(e) => {
+                                      const representativeGoal = {
+                                        ...group.subtasks[0],
+                                        task_title: group.taskTitle,
+                                        task_descr: group.taskDescr,
+                                        start_time: group.startTime,
+                                        end_time: group.endTime,
+                                        course_id: group.courseId,
+                                        google_calendar_color: group.googleCalendarColor,
+                                        progress: group.progress,
+                                        totalSubtasks: group.totalSubtasks,
+                                        completedSubtasks: group.completedSubtasks,
+                                        subtasks: group.subtasks,
+                                        status: calculateStatus(group.subtasks[0])
+                                      };
+                                      openSubtasksModal(representativeGoal, e);
+                                    }}
+                                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors hover:underline"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    View Subtasks ({group.completedSubtasks}/{group.totalSubtasks})
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <button
                               onClick={(e) => {
+                                e.stopPropagation();
                                 const representativeGoal = {
                                   ...group.subtasks[0],
                                   task_title: group.taskTitle,
@@ -2946,88 +3228,27 @@ export function CalendarScheduler() {
                                   subtasks: group.subtasks,
                                   status: calculateStatus(group.subtasks[0])
                                 };
-                                handleGoalClick(representativeGoal, e);
+                                handleTaskToggle(representativeGoal);
                               }}
-                            >
-                              <div className={`text-sm font-medium truncate ${isCompletedSection ? 'text-[#71717a] line-through' : 'text-[#18181b]'
-                                }`}>
-                                {group.taskTitle || "(untitled)"}
-                              </div>
-                              {group.taskDescr && (
-                                <div className={`text-xs truncate mt-1 ${isCompletedSection ? 'text-[#a1a1aa] line-through' : 'text-[#71717a]'
-                                  }`}>
-                                  {group.taskDescr}
-                                </div>
-                              )}
-                            </div>
-                            
-                            {/* View Subtasks Button */}
-                            {group.totalSubtasks && group.totalSubtasks >= 1 && (
-                              <div className="mt-2">
-                                <button
-                                  onClick={(e) => {
-                                    const representativeGoal = {
-                                      ...group.subtasks[0],
-                                      task_title: group.taskTitle,
-                                      task_descr: group.taskDescr,
-                                      start_time: group.startTime,
-                                      end_time: group.endTime,
-                                      course_id: group.courseId,
-                                      google_calendar_color: group.googleCalendarColor,
-                                      progress: group.progress,
-                                      totalSubtasks: group.totalSubtasks,
-                                      completedSubtasks: group.completedSubtasks,
-                                      subtasks: group.subtasks,
-                                      status: calculateStatus(group.subtasks[0])
-                                    };
-                                    openSubtasksModal(representativeGoal, e);
-                                  }}
-                                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors hover:underline"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                  View Subtasks ({group.completedSubtasks}/{group.totalSubtasks})
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const representativeGoal = {
-                                ...group.subtasks[0],
-                                task_title: group.taskTitle,
-                                task_descr: group.taskDescr,
-                                start_time: group.startTime,
-                                end_time: group.endTime,
-                                course_id: group.courseId,
-                                google_calendar_color: group.googleCalendarColor,
-                                progress: group.progress,
-                                totalSubtasks: group.totalSubtasks,
-                                completedSubtasks: group.completedSubtasks,
-                                subtasks: group.subtasks,
-                                status: calculateStatus(group.subtasks[0])
-                              };
-                              handleTaskToggle(representativeGoal);
-                            }}
-                            className={`w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors ${group.subtasks[0].task_completed
+                              className={`w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors ${group.subtasks[0].task_completed
                                 ? 'bg-green-500 border-green-500'
                                 : 'bg-white border-gray-300 hover:border-green-400'
-                              }`}
-                            title={group.subtasks[0].task_completed ? "Mark as incomplete" : "Mark as complete"}
-                          >
-                            {group.subtasks[0].task_completed && (
-                              <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                          </button>
-                        </div>
-                      );
-                    })}
+                                }`}
+                              title={group.subtasks[0].task_completed ? "Mark as incomplete" : "Mark as complete"}
+                            >
+                              {group.subtasks[0].task_completed && (
+                                <svg className="w-3 h-3 text-white mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         )}
       </div>
@@ -3081,35 +3302,37 @@ export function CalendarScheduler() {
         </div>
         {/* ───────── DAY VIEW ───────── */}
         {currentView === "day" ? (
-                      <DayView
-              currentDate={currentDate}
-              setCurrentDate={setCurrentDate}
-              hours={hours}
-              getGoalsForDate={getGoalsForDate}
-              handleGoalClick={handleGoalClick}
-              setTimelineRef={setTimelineRef}
-              formatHourLabel={formatHourLabel}
-              handleOverflowClick={handleOverflowClick}
-              getCourseColor={getCourseColor}
-              getEventColor={getEventColor}
-              handleSubtaskDragStart={handleSubtaskDragStart}
-              handleSubtaskDragEnd={handleSubtaskDragEnd}
-              handleTimeSlotDragOver={handleTimeSlotDragOver}
-              handleTimeSlotDragLeave={handleTimeSlotDragLeave}
-              handleTimeSlotDrop={handleTimeSlotDrop}
-              isDraggingTask={isDraggingTask}
-              dragOverDate={dragOverDate}
-              dragTargetHour={dragTargetHour}
-              dragTargetMinute={dragTargetMinute}
-              dragTargetDate={dragTargetDate}
-              onDayClick={handleDayClick}
-              onTaskHover={handleTaskHover}
-              onTaskMouseLeave={handleTaskMouseLeave}
-              handleTimeSlotMouseDown={handleTimeSlotMouseDown}
-              handleTimeSlotMouseMove={handleTimeSlotMouseMove}
-              handleTimeSlotMouseUp={handleTimeSlotMouseUp}
-              dragPreview={dragPreview}
-            />
+          <DayView
+            currentDate={currentDate}
+            setCurrentDate={setCurrentDate}
+            hours={hours}
+            getGoalsForDate={getGoalsForDate}
+            handleGoalClick={handleGoalClick}
+            setTimelineRef={setTimelineRef}
+            formatHourLabel={formatHourLabel}
+            handleOverflowClick={handleOverflowClick}
+            getCourseColor={getCourseColor}
+            getEventColor={getEventColor}
+            handleSubtaskDragStart={handleSubtaskDragStart}
+            handleSubtaskDragEnd={handleSubtaskDragEnd}
+            handleTimeSlotDragOver={handleTimeSlotDragOver}
+            handleTimeSlotDragLeave={handleTimeSlotDragLeave}
+            handleTimeSlotDrop={handleTimeSlotDrop}
+            isDraggingTask={isDraggingTask}
+            dragOverDate={dragOverDate}
+            dragTargetHour={dragTargetHour}
+            dragTargetMinute={dragTargetMinute}
+            dragTargetDate={dragTargetDate}
+            onDayClick={handleDayClick}
+            onTaskHover={handleTaskHover}
+            onTaskMouseLeave={handleTaskMouseLeave}
+            handleTimeSlotMouseDown={handleTimeSlotMouseDown}
+            handleTimeSlotMouseMove={handleTimeSlotMouseMove}
+            handleTimeSlotMouseUp={handleTimeSlotMouseUp}
+            dragPreview={dragPreview}
+            draggedTask={draggedTask}
+            highlightSubtaskId={highlightSubtaskId}
+          />
         ) : currentView === "week" ? (
           <WeekView
             currentDate={currentDate}
@@ -3140,6 +3363,8 @@ export function CalendarScheduler() {
             handleTimeSlotMouseMove={handleTimeSlotMouseMove}
             handleTimeSlotMouseUp={handleTimeSlotMouseUp}
             dragPreview={dragPreview}
+            draggedTask={draggedTask}
+            highlightSubtaskId={highlightSubtaskId}
           />
         ) : currentView === "month" ? (
           <MonthView
@@ -3280,7 +3505,7 @@ export function CalendarScheduler() {
                 <div className="flex items-center gap-2">
                   <GripVertical className="w-4 h-4 text-gray-400" />
                   <CardTitle className="text-lg truncate">
-                    {selectedGoal.goal_id !== "Google Calendar" ? "Edit Task" : "Google Calendar Event"}
+                    {selectedGoal.goal_id !== "Google Calendar" ? "View Task" : "Google Calendar Event"}
                   </CardTitle>
                   {selectedGoal.goal_id !== "Google Calendar" && (
                     <button
@@ -3362,11 +3587,11 @@ export function CalendarScheduler() {
                     <ul className="text-sm text-gray-800 space-y-1">
                       <li><strong>Status:</strong> <span className={`font-medium ${getStatusColor(calculateStatus(selectedGoal))}`}>{calculateStatus(selectedGoal)}</span></li>
                       <li><strong>Due:</strong> {formatDate(selectedGoal.task_due_date || selectedGoal.due_date || '')}</li>
-                                          {/* Progress Bar */}
-                    {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks >= 1 && (
-                      <li><strong>Progress:</strong> {selectedGoal.completedSubtasks}/{selectedGoal.totalSubtasks} subtasks ({selectedGoal.progress || 0}%)</li>
-                    )}
-                  </ul>
+                      {/* Progress Bar */}
+                      {selectedGoal.totalSubtasks && selectedGoal.totalSubtasks >= 1 && (
+                        <li><strong>Progress:</strong> {selectedGoal.completedSubtasks}/{selectedGoal.totalSubtasks} subtasks ({selectedGoal.progress || 0}%)</li>
+                      )}
+                    </ul>
                   </div>
                 )}
               </div>
@@ -3443,9 +3668,8 @@ export function CalendarScheduler() {
                 {overflowEvents.events.map((event, index) => (
                   <div
                     key={`${event.goal_id}-${event.task_id}-${event.subtask_id}-${index}`}
-                    className={`flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-grab active:cursor-grabbing transition-colors ${
-                      isDraggingTask ? 'opacity-50' : ''
-                    }`}
+                    className={`flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-grab active:cursor-grabbing transition-colors ${isDraggingTask ? 'opacity-50' : ''
+                      }`}
                     tabIndex={0}
                     onClick={(e) => {
                       // Prevent click if we're dragging
@@ -3457,8 +3681,8 @@ export function CalendarScheduler() {
                     onMouseEnter={(e) => handleTaskHover(event, e)}
                     onMouseLeave={handleTaskMouseLeave}
                     draggable={event.goal_id !== "Google Calendar"}
-                                          onDragStart={(e) => handleSubtaskDragStart(e, event)}
-                      onDragEnd={(e) => handleSubtaskDragEnd(e)}
+                    onDragStart={(e) => handleSubtaskDragStart(e, event)}
+                    onDragEnd={(e) => handleSubtaskDragEnd(e)}
                   >
                     <div
                       className="w-3 h-3 rounded-full flex-shrink-0"
@@ -3494,12 +3718,6 @@ export function CalendarScheduler() {
                 </div>
                 <DialogTitle className="text-xl font-semibold">CourseHelper</DialogTitle>
               </div>
-              <div className="flex items-center gap-4 text-sm text-[#71717a]">
-                <span>Track Progress</span>
-                <span>Docs</span>
-                <span>My Tasks</span>
-                <span>Calendar</span>
-              </div>
             </div>
           </DialogHeader>
 
@@ -3507,7 +3725,6 @@ export function CalendarScheduler() {
             <div className="p-6">
               <div className="mb-6">
                 <h2 className="text-2xl font-semibold text-[#18181b] mb-2">Settings</h2>
-                <p className="text-[#71717a]">Manage your account and preferences</p>
               </div>
 
               <Tabs defaultValue="integrations" className="w-full">
@@ -3639,7 +3856,12 @@ export function CalendarScheduler() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       value={newTaskDueDate}
                       onChange={e => setNewTaskDueDate(e.target.value)}
+                      // Optionally restrict calendar selection
+                      max={selectedGoal?.due_date ? selectedGoal.due_date.split('T')[0] : undefined}
                     />
+                    {newTaskDueDateError && (
+                      <p className="mt-1 text-sm text-red-600">{newTaskDueDateError}</p>
+                    )}
                   </div>
                 </div>
 
@@ -3662,11 +3884,13 @@ export function CalendarScheduler() {
                     {isLoadingCourses ? (
                       <option value="" disabled>Loading courses...</option>
                     ) : (
-                      userCourses.map((course) => (
-                        <option key={course.id} value={course.id}>
-                          {course.title || course.id}
-                        </option>
-                      ))
+                      userCourses
+                        .filter(course => course.title !== 'Google Calendar' && course.id !== 'Google Calendar')
+                        .map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.title || course.id}
+                          </option>
+                        ))
                     )}
                   </select>
                 </div>
@@ -3709,101 +3933,6 @@ export function CalendarScheduler() {
                   />
                 </div>
 
-                {/* Subtasks */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-medium text-gray-900">Subtasks</h3>
-                    <button
-                      type="button"
-                      className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-2"
-                      onClick={() => setNewSubtasks([...newSubtasks, { subtask_descr: '', subtask_type: 'other', estimatedTimeMinutes: 15 }])}
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Subtask
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {newSubtasks.map((subtask, index) => (
-                      <div key={index} className="bg-gray-50 rounded-lg p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                          <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Subtask {index + 1} *
-                            </label>
-                            <input
-                              type="text"
-                              value={subtask.subtask_descr}
-                              onChange={e => {
-                                const updated = [...newSubtasks];
-                                updated[index].subtask_descr = e.target.value;
-                                setNewSubtasks(updated);
-                              }}
-                              placeholder={`Enter subtask ${index + 1} name`}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Type
-                            </label>
-                            <select
-                              value={subtask.subtask_type}
-                              onChange={e => {
-                                const updated = [...newSubtasks];
-                                updated[index].subtask_type = e.target.value;
-                                setNewSubtasks(updated);
-                              }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                              <option value="reading">Reading</option>
-                              <option value="flashcard">Flashcard</option>
-                              <option value="quiz">Quiz</option>
-                              <option value="practice">Practice</option>
-                              <option value="review">Review</option>
-                              <option value="other">Other</option>
-                            </select>
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Time (min)
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={subtask.estimatedTimeMinutes || 15}
-                                onChange={e => {
-                                  const updated = [...newSubtasks];
-                                  updated[index].estimatedTimeMinutes = parseInt(e.target.value) || 0;
-                                  setNewSubtasks(updated);
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                min="5"
-                                max="120"
-                              />
-                              <button
-                                onClick={() => setNewSubtasks(newSubtasks.filter((_, i) => i !== index))}
-                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Remove subtask"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {newSubtasks.length === 0 && (
-                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                      <p>No subtasks yet. Add your first subtask to get started.</p>
-                    </div>
-                  )}
-                </div>
-
                 {/* Footer */}
                 <div className="flex gap-3 pt-4 border-t border-gray-200">
                   <button
@@ -3841,11 +3970,11 @@ export function CalendarScheduler() {
         >
           <Card className="border-0 shadow-none h-full">
             <CardHeader className="pb-3">
-                              <div
-                  className="flex items-center justify-between"
-                  onMouseDown={(e) => handleSubtasksModalMouseDown(e)}
-                  style={{ cursor: isSubtasksModalDragging ? 'grabbing' : 'grab' }}
-                >
+              <div
+                className="flex items-center justify-between"
+                onMouseDown={(e) => handleSubtasksModalMouseDown(e)}
+                style={{ cursor: isSubtasksModalDragging ? 'grabbing' : 'grab' }}
+              >
                 <div className="flex items-center gap-2">
                   <GripVertical className="w-4 h-4 text-gray-400" />
                   <CardTitle className="text-lg truncate">
@@ -3884,16 +4013,16 @@ export function CalendarScheduler() {
                     const updatedSubtask = Object.values(goalsByDate)
                       .flat()
                       .find(goal => goal.subtask_id === subtask.subtask_id);
-                    
+
                     // Use updated data if available, otherwise fall back to original
                     const currentSubtask = updatedSubtask || subtask;
-                    
+
                     return (
                       <div
                         key={currentSubtask.subtask_id || index}
                         className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                       >
-                        <div 
+                        <div
                           className={`w-3 h-3 rounded-full flex-shrink-0 cursor-pointer ${currentSubtask.subtask_completed ? 'bg-green-500' : 'bg-gray-300'}`}
                           onClick={() => handleSubtaskToggle(currentSubtask)}
                         />
@@ -3912,6 +4041,10 @@ export function CalendarScheduler() {
                             </div>
                           )}
                         </div>
+                        {/* Warning icon if is_conflicting, now to the left of the trash icon */}
+                        {currentSubtask.is_conflicting === true && (
+                          <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ minWidth: '24px' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -3933,16 +4066,6 @@ export function CalendarScheduler() {
                   })}
                 </div>
 
-                {/* Add Subtask Button */}
-                <div className="pt-3 border-t border-gray-200">
-                  <button
-                    onClick={handleAddSubtask}
-                    className="w-full px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Subtask
-                  </button>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -4143,8 +4266,8 @@ export function CalendarScheduler() {
                     Type
                   </label>
                   <select
-                                          value={newSubtaskTypeForAdd}
-                      onChange={e => setNewSubtaskTypeForAdd(e.target.value)}
+                    value={newSubtaskTypeForAdd}
+                    onChange={e => setNewSubtaskTypeForAdd(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="reading">Reading</option>
@@ -4195,7 +4318,7 @@ export function CalendarScheduler() {
 
       {/* Undo Toast */}
       {showUndoToast && deletedTask && (
-        <div className="fixed bottom-6 left-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[10000] max-w-sm">
+        <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
           <div className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -4224,7 +4347,7 @@ export function CalendarScheduler() {
 
       {/* Undo Subtask Toast */}
       {showUndoSubtaskToast && deletedSubtask && (
-        <div className="fixed bottom-6 left-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[10000] max-w-sm">
+        <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
           <div className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -4255,7 +4378,7 @@ export function CalendarScheduler() {
       {viewSubtaskModal?.isOpen && viewSubtaskModal?.subtask && (
         <>
           {/* Backdrop for click-outside-to-close */}
-          <div 
+          <div
             className="fixed inset-0 z-[9998]"
             onClick={closeViewSubtaskModal}
           />
@@ -4292,24 +4415,33 @@ export function CalendarScheduler() {
                   <div className="flex items-center gap-2">
                     <GripVertical className="w-4 h-4 text-gray-400" />
                     <CardTitle className="text-lg truncate">
-                      <span className={`px-2 py-1 rounded text-sm font-medium ${
-                        calculateSubtaskStatus(viewSubtaskModal.subtask) === "Completed" 
-                          ? "bg-green-100 text-green-800" 
-                          : calculateSubtaskStatus(viewSubtaskModal.subtask) === "Overdue"
+                      <span className={`px-2 py-1 rounded text-sm font-medium ${calculateSubtaskStatus(viewSubtaskModal.subtask) === "Completed"
+                        ? "bg-green-100 text-green-800"
+                        : calculateSubtaskStatus(viewSubtaskModal.subtask) === "Overdue"
                           ? "bg-red-100 text-red-800"
                           : "bg-yellow-100 text-yellow-800"
-                      }`}>
+                        }`}>
                         {calculateSubtaskStatus(viewSubtaskModal.subtask)}
                       </span>
                     </CardTitle>
                   </div>
-                  <button
-                    onClick={closeViewSubtaskModal}
-                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 hover:bg-gray-100 rounded"
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleEditSubtask}
+                      className="text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0 p-1 hover:bg-blue-50 rounded"
+                      title="Edit subtask"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <Pencil className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={closeViewSubtaskModal}
+                      className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 hover:bg-gray-100 rounded"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="overflow-y-auto" style={{ maxHeight: '400px' }}>
@@ -4322,8 +4454,59 @@ export function CalendarScheduler() {
                     <div>
                       <p className="text-sm text-gray-600">Time: {formatEventTime(viewSubtaskModal.subtask.start_time!, viewSubtaskModal.subtask.end_time!)}</p>
                     </div>
+                    {/* Conflict warning message */}
+                    {viewSubtaskModal.subtask.is_conflicting === true && (
+                      <div className="flex flex-col gap-2 mt-2">
+                        <div className="flex items-center gap-2 text-yellow-800 bg-yellow-100 rounded px-2 py-1 text-xs font-medium">
+                          <svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                          Conflicts with Task Due Date {(() => {
+                            const due = viewSubtaskModal.subtask.task_due_date || viewSubtaskModal.subtask.due_date;
+                            if (!due) return '';
+                            // Use the same logic as formatDate, but format as 'Tue, Jul 15'
+                            const [year, month, day] = due.split('T')[0].split('-');
+                            const date = new Date(Number(year), Number(month) - 1, Number(day));
+                            return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                          })()}
+                        </div>
+                        <div className="flex gap-2 mt-1">
+                          <button
+                            className="px-3 py-1 rounded bg-blue-100 text-blue-700 text-xs font-semibold hover:bg-blue-200 transition-colors"
+                            onClick={() => {
+                              if (viewSubtaskModal.subtask) {
+                                // Find all subtasks for this task
+                                const allGoals = Object.values(goalsByDate).flat();
+                                const taskSubtasks = allGoals.filter((g: any) => g.task_id === viewSubtaskModal.subtask!.task_id);
+                                setRescheduleTaskSubtasks(taskSubtasks);
+                                const minDueDate = taskSubtasks.length > 0
+                                  ? new Date(Math.max(...taskSubtasks.map((sub: any) => sub.end_time ? new Date(sub.end_time).getTime() : 0))).toISOString().split('T')[0]
+                                  : undefined;
+                                let initialDueDate = (viewSubtaskModal.subtask!.task_due_date || viewSubtaskModal.subtask!.due_date || '').split('T')[0];
+                                if (minDueDate && (!initialDueDate || initialDueDate < minDueDate)) {
+                                  initialDueDate = minDueDate;
+                                }
+                                setRescheduleTaskDueDate(initialDueDate);
+                                setShowRescheduleTaskModal(true);
+                              }
+                            }}
+                          >
+                            Change Task Due Date
+                          </button>
+                          <button
+                            className="px-3 py-1 rounded bg-green-100 text-green-700 text-xs font-semibold hover:bg-green-200 transition-colors"
+                            onClick={() => {
+                              setViewSubtaskModal(null);
+                              if (viewSubtaskModal.subtask) {
+                                setHighlightSubtaskId(viewSubtaskModal.subtask.subtask_id);
+                                setTimeout(() => setHighlightSubtaskId(null), 3000);
+                              }
+                            }}
+                          >
+                            Reschedule Subtask
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  
                   <div className="pt-3 border-t border-gray-200">
                     <p className="text-sm text-gray-600">
                       {viewSubtaskModal.subtask.task_title}: {viewSubtaskModal.subtask.goal_descr}
@@ -4368,26 +4551,26 @@ export function CalendarScheduler() {
                     Task: {dueDateWarningModal.subtask.task_title}
                   </p>
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">Task due date:</span>
                     <span className="text-sm text-gray-900">
-                      {dueDateWarningModal.subtask.task_due_date || dueDateWarningModal.subtask.due_date 
+                      {dueDateWarningModal.subtask.task_due_date || dueDateWarningModal.subtask.due_date
                         ? (() => {
-                            const dueDateUTC = new Date(dueDateWarningModal.subtask.task_due_date || dueDateWarningModal.subtask.due_date!);
-                            const dueDateLocal = new Date(
-                              dueDateUTC.getUTCFullYear(),
-                              dueDateUTC.getUTCMonth(),
-                              dueDateUTC.getUTCDate()
-                            );
-                            return dueDateLocal.toLocaleDateString();
-                          })()
+                          const dueDateUTC = new Date(dueDateWarningModal.subtask.task_due_date || dueDateWarningModal.subtask.due_date!);
+                          const dueDateLocal = new Date(
+                            dueDateUTC.getUTCFullYear(),
+                            dueDateUTC.getUTCMonth(),
+                            dueDateUTC.getUTCDate()
+                          );
+                          return dueDateLocal.toLocaleDateString();
+                        })()
                         : 'Not set'
                       }
                     </span>
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">Target date:</span>
                     <span className="text-sm text-gray-900">
@@ -4428,7 +4611,7 @@ export function CalendarScheduler() {
       {showCreateSubtaskModal && (
         <>
           {/* Backdrop for click-outside-to-close */}
-          <div 
+          <div
             className="fixed inset-0 z-[9998]"
             onClick={handleCreateSubtaskCancel}
           />
@@ -4501,7 +4684,8 @@ export function CalendarScheduler() {
                           onChange={e => {
                             const val = e.target.value;
                             if (!val) return;
-                            const d = new Date(val);
+                            // Set as local midnight to avoid timezone issues
+                            const d = new Date(val + 'T00:00:00');
                             setCreateSubtaskStart(prev => prev ? { ...prev, date: d } : { date: d, hour: 9, minute: 0 });
                             setCreateSubtaskEnd(prev => prev ? { ...prev, date: d } : { date: d, hour: 10, minute: 0 });
                           }}
@@ -4616,10 +4800,7 @@ export function CalendarScheduler() {
         </>
       )}
       {showBanner && bannerTaskName && bannerTaskDueDate && (
-        <div
-          className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-4 animate-fade-in"
-          style={{ minWidth: 320, maxWidth: 480 }}
-        >
+        <div className="fixed left-1/2 top-8 transform -translate-x-1/2 flex justify-center items-center gap-4 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in" style={{ minWidth: 320, maxWidth: 480 }}>
           <span>
             Schedule a subtask for "<span className='font-semibold'>{bannerTaskName}</span>" (due <span className='font-semibold'>{formatDate(bannerTaskDueDate)}</span>)
           </span>
@@ -4634,6 +4815,207 @@ export function CalendarScheduler() {
           </button>
         </div>
       )}
+      {showEditSubtaskModal && editSubtaskData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Pencil className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Editing: {editSubtaskData.subtask_descr}</h2>
+                </div>
+                <button
+                  onClick={handleEditSubtaskCancel}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                {/* Subtask Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subtask Description *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter subtask description"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={editSubtaskData.subtask_descr}
+                    onChange={e => setEditSubtaskData((prev: any) => ({ ...prev, subtask_descr: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+                {/* Subtask Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Type
+                  </label>
+                  <select
+                    value={editSubtaskData.subtask_type}
+                    onChange={e => setEditSubtaskData((prev: any) => ({ ...prev, subtask_type: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="reading">Reading</option>
+                    <option value="flashcard">Flashcard</option>
+                    <option value="quiz">Quiz</option>
+                    <option value="practice">Practice</option>
+                    <option value="review">Review</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                {/* Date and Time Range */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={editSubtaskData.startDate.toISOString().split('T')[0]}
+                      onChange={e => {
+                        const d = new Date(e.target.value + 'T00:00:00');
+                        setEditSubtaskData((prev: any) => ({ ...prev, startDate: d, endDate: d }));
+                      }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                      <input
+                        type="time"
+                        className="w-36 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={`${String(editSubtaskData.startHour).padStart(2, '0')}:${String(editSubtaskData.startMinute).padStart(2, '0')}`}
+                        onChange={e => {
+                          const [h, m] = e.target.value.split(':').map(Number);
+                          setEditSubtaskData((prev: any) => ({ ...prev, startHour: h, startMinute: m }));
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                      <input
+                        type="time"
+                        className="w-36 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={`${String(editSubtaskData.endHour).padStart(2, '0')}:${String(editSubtaskData.endMinute).padStart(2, '0')}`}
+                        onChange={e => {
+                          const [h, m] = e.target.value.split(':').map(Number);
+                          setEditSubtaskData((prev: any) => ({ ...prev, endHour: h, endMinute: m }));
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {/* Footer */}
+              <div className="flex gap-3 pt-4 border-t border-gray-200 mt-6">
+                <button
+                  onClick={handleEditSubtaskCancel}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleEditSubtaskSave()}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Reschedule Task Modal */}
+      {showRescheduleTaskModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Reschedule Task</h2>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={rescheduleTaskDueDate}
+                  min={minDueDate}
+                  onChange={e => setRescheduleTaskDueDate(e.target.value)}
+                />
+              </div>
+              {minDueDate && rescheduleTaskDueDate && rescheduleTaskDueDate < minDueDate && (
+                <div className="text-xs text-red-600 mt-1">Due date cannot be before the latest subtask end time.</div>
+              )}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subtasks</label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {rescheduleTaskSubtasks.map((sub, idx) => (
+                    <div key={sub.subtask_id || idx} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">{sub.subtask_descr || `Subtask ${idx + 1}`}</div>
+                        <div className="text-xs text-gray-600">
+                          {sub.start_time && sub.end_time ?
+                            `${new Date(sub.start_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })} - ${new Date(sub.end_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`
+                            : 'No time scheduled'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end mt-6">
+                <button
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => setShowRescheduleTaskModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  type="button"
+                  disabled={!!(minDueDate && rescheduleTaskDueDate && rescheduleTaskDueDate < minDueDate)}
+                  onClick={handleRescheduleTaskSave}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSettings && (
+        <div className="fixed inset-0 z-[9999] bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-8 relative">
+            <button
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setShowSettings(false)}
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-2xl font-semibold mb-6 text-center">Settings</h2>
+            <Tabs defaultValue="calendar" className="w-full">
+              <TabsList className="w-full flex justify-center mb-6">
+                <TabsTrigger value="calendar" className="text-lg">Calendar Integrations</TabsTrigger>
+              </TabsList>
+              <TabsContent value="calendar">
+                <div className="flex flex-col items-center gap-6">
+                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg w-full max-w-md">
+                    <img src="/google-calendar-icon.svg" alt="Google Calendar" className="w-10 h-10" />
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900">Google Calendar</div>
+                      <div className="text-sm text-gray-600">Sync your events and tasks with Google Calendar.</div>
+                    </div>
+                    <Button onClick={handleConnectCalendar} className="bg-blue-600 text-white hover:bg-blue-700">Connect</Button>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
