@@ -306,7 +306,7 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
                   {/* Content */}
                   <div className="flex-1">
                     <div className="prose prose-sm max-w-none mb-4">
-                      <p className="text-gray-700 whitespace-pre-wrap">{answer.content}</p>
+                      <div className="text-gray-700 prose prose-sm max-w-none mb-4" dangerouslySetInnerHTML={{ __html: answer.content }} />
                     </div>
 
                     <div className="flex items-center justify-between">

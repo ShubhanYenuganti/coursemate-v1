@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { RichTextEditor } from './RichTextEditor';
+import TiptapEditor from './TiptapEditor';
 
 interface AnswerFormProps {
   onSubmit: (content: string) => void;
@@ -43,17 +43,17 @@ export function AnswerForm({ onSubmit, onCancel }: AnswerFormProps) {
     <Card className="bg-white border-gray-200 shadow-lg rounded-2xl">
       <CardContent className="space-y-6 pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          <RichTextEditor
-            content={content}
+          <TiptapEditor
+            value={content}
             onChange={setContent}
             onCancel={onCancel}
-            placeholder="Share your knowledge and help the community...
+            placeholder={`Share your knowledge and help the community...
 
 Use the toolbar above to:
 • Format text with bold, italic, and underline
 • Add bulleted or numbered lists  
 • Include code blocks and LaTeX formulas
-• Insert links and structure your response"
+• Insert links and structure your response`}
             className="min-h-[250px]"
           />
           

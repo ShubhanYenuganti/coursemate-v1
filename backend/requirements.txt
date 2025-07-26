@@ -34,6 +34,7 @@ llama-index-vector-stores-postgres
 llama-index-readers-file
 
 # Development
+# Note: Tiptap and lowlight are JavaScript-only packages and do not need to be listed here. All frontend dependencies are managed in package.json.
 alembic>=1.12.1
 pytest>=7.4.2
 pytest-cov>=4.1.0

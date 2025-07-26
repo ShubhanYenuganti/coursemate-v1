@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RichTextEditor } from './RichTextEditor';
+import TiptapEditor from './TiptapEditor';
 import { ForumPost } from './CommunityTab';
 
 interface CreatePostModalProps {
@@ -217,15 +217,15 @@ export function CreatePostModal({ isOpen, onClose, onSubmit, courseId }: CreateP
             <label htmlFor="content" className="text-sm font-semibold text-slate-700">
               Content *
             </label>
-            <RichTextEditor
-              content={content}
+            <TiptapEditor
+              value={content}
               onChange={setContent}
-              placeholder="Provide more details about your question or topic...
+              placeholder={`Provide more details about your question or topic...
 
 Use the toolbar to:
 • Format your text with bold, italic, and underline
 • Add code blocks and LaTeX formulas
-• Create lists and insert links"
+• Create lists and insert links`}
               className="min-h-[200px]"
             />
             <div className="text-xs text-slate-500 flex justify-between">
