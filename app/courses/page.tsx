@@ -253,8 +253,9 @@ const CoursesPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8 relative">
-      <div className="max-w-7xl mx-auto">
+    <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="min-h-full p-8 relative">
+        <div className="max-w-7xl mx-auto pb-32">{/* Added bottom padding for floating button */}
         <CourseHeader />
         
         <CourseFilters
@@ -338,10 +339,10 @@ const CoursesPage = () => {
         {!isLoading && !error && filteredCourses.length === 0 && (
           <EmptyState onClearFilters={clearAllFilters} />
         )}
-      </div>
-      
-      {/* Floating Add Button with Speed Dial - DEBUG VERSION */}
-      <div className="fixed bottom-8 right-8 z-[9999] flex flex-col items-end group">
+        </div>
+        
+        {/* Floating Add Button with Speed Dial - DEBUG VERSION */}
+        <div className="fixed bottom-8 right-8 z-[9999] flex flex-col items-end group">
         {/* Speed dial options (hidden by default, shown on hover, animate upwards) */}
         <div className="flex flex-col items-end space-y-2 mb-2">
           <button
@@ -370,12 +371,13 @@ const CoursesPage = () => {
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 hover:opacity-20 transition-opacity duration-300"></div>
         </button>
       </div>
-      {isCreateModalOpen && (
-        <CreateCourseModal 
-          onClose={() => setCreateModalOpen(false)} 
-          onCourseCreated={loadCourses}
-        />
-      )}
+        {isCreateModalOpen && (
+          <CreateCourseModal 
+            onClose={() => setCreateModalOpen(false)} 
+            onCourseCreated={loadCourses}
+          />
+        )}
+      </div>
     </div>
   );
 };
