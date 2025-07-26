@@ -261,137 +261,114 @@ export default function CommunityTab({ courseId }: CommunityTabProps) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 min-h-screen">
+    <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
-      <div className="bg-gradient-to-r from-white via-blue-50/20 to-indigo-50/30 border-b border-gray-200/30 backdrop-blur-sm flex-shrink-0 shadow-sm">
-        {/* Title and New Post Button */}
-        <div className="px-4 sm:px-6 py-4 border-b border-gray-100/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl blur-sm opacity-20"></div>
-                <div className="relative p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                  <MessageSquare className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  Community Forum
-                </h1>
-                <p className="text-sm text-gray-600 hidden sm:block">Connect, learn, and grow together</p>
-              </div>
+      <div className="bg-white border-b border-gray-200/50 p-6 flex-shrink-0">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <MessageSquare className="w-6 h-6 text-blue-600" />
             </div>
-            <Button 
-              onClick={() => setShowCreateModal(true)} 
-              className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200 px-4 sm:px-6"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Post</span>
-              <span className="sm:hidden">Post</span>
-            </Button>
-          </div>
-        </div>
-
-        {/* Stats, Search and Filters Row */}
-        <div className="px-4 sm:px-6 py-4">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-            {/* Quick Stats - Compact Version */}
-            <div className="flex gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
-              <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50/80 to-blue-100/60 backdrop-blur-sm border border-blue-200/50 rounded-lg px-3 py-2 shadow-sm">
-                <MessageSquare className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                <div className="text-xs sm:text-sm">
-                  <span className="font-semibold text-blue-800">{posts.length}</span>
-                  <span className="text-blue-700 ml-1 hidden sm:inline">Posts</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 bg-gradient-to-r from-green-50/80 to-green-100/60 backdrop-blur-sm border border-green-200/50 rounded-lg px-3 py-2 shadow-sm">
-                <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <div className="text-xs sm:text-sm">
-                  <span className="font-semibold text-green-800">{posts.filter(p => p.hasAcceptedAnswer).length}</span>
-                  <span className="text-green-700 ml-1 hidden sm:inline">Solved</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 bg-gradient-to-r from-purple-50/80 to-purple-100/60 backdrop-blur-sm border border-purple-200/50 rounded-lg px-3 py-2 shadow-sm">
-                <Users className="w-4 h-4 text-purple-600 flex-shrink-0" />
-                <div className="text-xs sm:text-sm">
-                  <span className="font-semibold text-purple-800">{posts.filter(p => p.type === 'study-group').length}</span>
-                  <span className="text-purple-700 ml-1 hidden sm:inline">Groups</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 bg-gradient-to-r from-orange-50/80 to-orange-100/60 backdrop-blur-sm border border-orange-200/50 rounded-lg px-3 py-2 shadow-sm">
-                <Tag className="w-4 h-4 text-orange-600 flex-shrink-0" />
-                <div className="text-xs sm:text-sm">
-                  <span className="font-semibold text-orange-800">{posts.filter(p => p.type === 'resource-sharing').length}</span>
-                  <span className="text-orange-700 ml-1 hidden sm:inline">Resources</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Search and Filters */}
-            <div className="flex-1 w-full lg:w-auto">
-              <CommunitySearch 
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                selectedCategory={selectedCategory}
-                setSelectedCategory={setSelectedCategory}
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-              />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Community Forum</h1>
+              <p className="text-gray-600">Connect with fellow learners, ask questions, share resources, and collaborate</p>
             </div>
           </div>
+          <Button onClick={() => setShowCreateModal(true)} className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Post
+          </Button>
         </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-blue-600" />
+                <div>
+                  <p className="text-sm text-blue-700 font-medium">Total Posts</p>
+                  <p className="text-xl font-bold text-blue-800">{posts.length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-r from-green-50 to-green-100 border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                <div>
+                  <p className="text-sm text-green-700 font-medium">Solved</p>
+                  <p className="text-xl font-bold text-green-800">{posts.filter(p => p.hasAcceptedAnswer).length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-purple-600" />
+                <div>
+                  <p className="text-sm text-purple-700 font-medium">Study Groups</p>
+                  <p className="text-xl font-bold text-purple-800">{posts.filter(p => p.type === 'study-group').length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-r from-orange-50 to-orange-100 border-orange-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-orange-600" />
+                <div>
+                  <p className="text-sm text-orange-700 font-medium">Resources</p>
+                  <p className="text-xl font-bold text-orange-800">{posts.filter(p => p.type === 'resource-sharing').length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search and Filters */}
+        <CommunitySearch 
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+        />
       </div>
 
       {/* Content Area */}
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-          <div className="px-4 sm:px-6 py-3 bg-gradient-to-r from-white/90 via-blue-50/10 to-indigo-50/20 backdrop-blur-sm border-b border-gray-200/30">
-            <TabsList className="grid w-full grid-cols-5 mb-0 bg-gray-100/50 backdrop-blur-sm border border-gray-200/30 shadow-sm rounded-lg p-1">
-              <TabsTrigger 
-                value="all" 
-                className="gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 text-xs sm:text-sm font-medium transition-all duration-200"
-              >
-                <MessageSquare className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="hidden sm:inline">All Posts</span>
-                <span className="sm:hidden">All</span>
+          <div className="px-6 pt-4 bg-white border-b border-gray-200/50">
+            <TabsList className="grid w-full grid-cols-5 mb-4">
+              <TabsTrigger value="all" className="gap-2">
+                <MessageSquare className="w-4 h-4" />
+                All Posts
               </TabsTrigger>
-              <TabsTrigger 
-                value="unanswered" 
-                className="gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-orange-600 text-xs sm:text-sm font-medium transition-all duration-200"
-              >
-                <Clock className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="hidden sm:inline">Need Help</span>
-                <span className="sm:hidden">Help</span>
+              <TabsTrigger value="unanswered" className="gap-2">
+                <Clock className="w-4 h-4" />
+                Need Help
               </TabsTrigger>
-              <TabsTrigger 
-                value="resolved" 
-                className="gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-green-600 text-xs sm:text-sm font-medium transition-all duration-200"
-              >
-                <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="hidden sm:inline">Solved</span>
-                <span className="sm:hidden">Solved</span>
+              <TabsTrigger value="resolved" className="gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                Solved
               </TabsTrigger>
-              <TabsTrigger 
-                value="pinned" 
-                className="gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-purple-600 text-xs sm:text-sm font-medium transition-all duration-200"
-              >
-                <Pin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="hidden sm:inline">Popular</span>
-                <span className="sm:hidden">Popular</span>
+              <TabsTrigger value="pinned" className="gap-2">
+                <Pin className="w-4 h-4" />
+                Popular
               </TabsTrigger>
-              <TabsTrigger 
-                value="trending" 
-                className="gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-indigo-600 text-xs sm:text-sm font-medium transition-all duration-200"
-              >
-                <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="hidden sm:inline">Active</span>
-                <span className="sm:hidden">Active</span>
+              <TabsTrigger value="trending" className="gap-2">
+                <TrendingUp className="w-4 h-4" />
+                Active
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <div className="flex-1 overflow-hidden bg-gradient-to-b from-slate-50/30 to-white/50">
-            <TabsContent value={activeTab} className="h-full m-0 p-0">
+          <div className="flex-1 overflow-hidden">
+            <TabsContent value={activeTab} className="h-full m-0">
               <QuestionFeed 
                 posts={sortedPosts}
                 loading={loading}
