@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Upload, File, Trash2, Eye, Download, AlertCircle, CheckCircle, Loader2, Pin } from 'lucide-react';
+import { Upload, File, Trash2, Eye, Download, AlertCircle, CheckCircle, Loader2, Pin, Edit2, Save, X } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import { Portal } from '../../../../components/Portal';
 import dynamic from 'next/dynamic';
 
@@ -18,14 +19,20 @@ const AnnotatablePDFViewer = dynamic(
 
 interface UploadedFile {
   id: string;
-  filename: string;
+  filename?: string;
+  material_name?: string;
   user_id: number | null;
   uploaded_at: string;
+  created_at?: string;
   chunk_count: number;
   url: string;
   size: number;
-  last_modified: string;
-  pinned?: boolean;
+  file_size?: number;
+  content_type: string;
+  file_type?: string;
+  is_pinned?: boolean;
+  thumbnail_url?: string;
+  original_filename?: string;
 }
 
 interface MaterialsManagerCourseProps {
@@ -41,12 +48,16 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
   const [success, setSuccess] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pinnedFiles, setPinnedFiles] = useState<Set<string>>(new Set());
+  const [editingFile, setEditingFile] = useState<string | null>(null);
+  const [editedFilename, setEditedFilename] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<{ id: string; filename: string } | null>(null);
 
   // Fetch uploaded files for this course
   const fetchFiles = async () => {
     try {
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const response = await fetch(`${api}/api/courses/${courseId}/materials`, {
+      const response = await fetch(`${api}/api/courses/${courseId}/materials/db`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -58,19 +69,36 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
       
       const data = await response.json();
       
-      // Map S3 files to the expected format
+      // Map DB materials to UploadedFile format to match MaterialsList.tsx
       const mappedFiles = data.map((f: any) => ({
-        id: f.key,
-        filename: f.key.split("/").pop() || f.key,
-        user_id: null, // Not provided by S3 API
-        uploaded_at: f.last_modified || new Date().toISOString(),
-        chunk_count: 0, // Not available for course materials yet
-        url: f.url,
-        size: f.size,
-        last_modified: f.last_modified || new Date().toISOString()
+        id: f.id,
+        filename: f.material_name,
+        material_name: f.material_name,
+        user_id: f.user_id,
+        uploaded_at: f.created_at || f.uploaded_at,
+        created_at: f.created_at,
+        chunk_count: 0,
+        url: f.url || (f.file_path?.startsWith('http') ? f.file_path : `${api}/${f.file_path}`),
+        size: f.file_size || 0,
+        file_size: f.file_size,
+        content_type: f.file_type || 'application/octet-stream',
+        file_type: f.file_type,
+        is_pinned: f.is_pinned,
+        thumbnail_url: f.thumbnail_url,
+        original_filename: f.original_filename
       }));
       
       setFiles(mappedFiles);
+      
+      // Update pinned files state based on database
+      const pinnedSet = new Set<string>();
+      mappedFiles.forEach((f: UploadedFile) => {
+        if (f.is_pinned) {
+          pinnedSet.add(f.id);
+        }
+      });
+      setPinnedFiles(pinnedSet);
+      
     } catch (err) {
       setError('Failed to load files');
       console.error('Error fetching files:', err);
@@ -80,7 +108,6 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
   };
 
   useEffect(() => {
-    loadPinnedFiles();
     fetchFiles();
   }, [courseId]);
 
@@ -165,31 +192,9 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
     }
   };
 
-  // Delete file
-  const handleDeleteFile = async (fileId: string, filename: string) => {
-    if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
-
-    try {
-      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const response = await fetch(`${api}/api/courses/${courseId}/materials/${encodeURIComponent(fileId)}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete file');
-      }
-
-      setSuccess(`Deleted "${filename}"`);
-      await fetchFiles();
-      
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError('Failed to delete file');
-      console.error('Delete error:', err);
-    }
+  // Delete file - now just shows confirmation modal
+  const handleDeleteFile = (fileId: string, filename: string) => {
+    showDeleteConfirmation(fileId, filename);
   };
 
   // View file chunks (placeholder for now)
@@ -207,18 +212,27 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
     });
   };
 
-  const getFileTypeFromName = (filename: string) => {
+  const getFileTypeFromName = (filename?: string, fileType?: string) => {
+    // First try to use the file_type from database
+    if (fileType) {
+      return fileType.toUpperCase();
+    }
+    
+    // Fallback to filename extension
+    if (!filename) return 'Unknown';
     const ext = filename.split('.').pop()?.toLowerCase();
     switch (ext) {
       case 'pdf': return 'PDF';
       case 'txt': return 'TXT';
       case 'docx': case 'doc': return 'DOCX';
+      case 'png': return 'PNG';
+      case 'jpg': case 'jpeg': return 'JPG';
       default: return 'Unknown';
     }
   };
 
   const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
+    if (!bytes || bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -284,47 +298,189 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
   };
 
   // Load pinned files from localStorage
-  const loadPinnedFiles = () => {
+  // Start editing a filename
+  const startEditing = (fileId: string, currentFilename: string) => {
+    setEditingFile(fileId);
+    setEditedFilename(currentFilename);
+  };
+
+  // Cancel editing
+  const cancelEditing = () => {
+    setEditingFile(null);
+    setEditedFilename('');
+  };
+
+  // Save the edited filename
+  const saveFilename = async (fileId: string) => {
+    if (!editedFilename.trim()) {
+      setError('Filename cannot be empty');
+      return;
+    }
+
     try {
-      const saved = localStorage.getItem(`pinnedFiles-${courseId}`);
-      if (saved) {
-        setPinnedFiles(new Set(JSON.parse(saved)));
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      
+      // Store original filename for potential revert
+      const originalFile = files.find(f => f.id === fileId);
+      const originalFilename = originalFile?.filename || originalFile?.material_name;
+      
+      // Optimistically update the UI first
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { 
+          ...f, 
+          filename: editedFilename.trim(),
+          material_name: editedFilename.trim() 
+        } : f
+      ));
+
+      const response = await fetch(`${api}/api/courses/${courseId}/materials/db/${fileId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ material_name: editedFilename.trim() })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to rename file');
       }
-    } catch (error) {
-      console.error('Error loading pinned files:', error);
+
+      setEditingFile(null);
+      setEditedFilename('');
+      setSuccess('File renamed successfully');
+
+    } catch (err) {
+      console.error('Error renaming file:', err);
+      setError('Failed to rename file');
+      
+      // Revert the UI update if the request fails
+      const originalFile = files.find(f => f.id === fileId);
+      const originalFilename = originalFile?.filename || originalFile?.material_name;
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { 
+          ...f, 
+          filename: originalFilename,
+          material_name: originalFilename 
+        } : f
+      ));
     }
   };
 
-  // Save pinned files to localStorage
-  const savePinnedFiles = (pinned: Set<string>) => {
+  // Show delete confirmation modal
+  const showDeleteConfirmation = (fileId: string, filename: string) => {
+    setFileToDelete({ id: fileId, filename });
+    setShowConfirmModal(true);
+  };
+
+  // Cancel delete
+  const cancelDelete = () => {
+    setFileToDelete(null);
+    setShowConfirmModal(false);
+  };
+
+  // Confirm delete
+  const confirmDelete = async () => {
+    if (!fileToDelete) return;
+
     try {
-      localStorage.setItem(`pinnedFiles-${courseId}`, JSON.stringify(Array.from(pinned)));
-    } catch (error) {
-      console.error('Error saving pinned files:', error);
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const response = await fetch(`${api}/api/courses/${courseId}/materials/db/${fileToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete file');
+      }
+
+      // Remove from local state
+      setFiles(prev => prev.filter(f => f.id !== fileToDelete.id));
+      setPinnedFiles(prev => {
+        const newPinned = new Set(prev);
+        newPinned.delete(fileToDelete.id);
+        return newPinned;
+      });
+
+      setSuccess(`File "${fileToDelete.filename}" deleted successfully`);
+      setFileToDelete(null);
+      setShowConfirmModal(false);
+
+    } catch (err) {
+      console.error('Error deleting file:', err);
+      setError('Failed to delete file');
     }
   };
 
   // Toggle pin status for a file
-  const togglePin = (fileId: string) => {
-    setPinnedFiles(prev => {
-      const newPinned = new Set(prev);
-      if (newPinned.has(fileId)) {
-        newPinned.delete(fileId);
-      } else {
-        newPinned.add(fileId);
+  const togglePin = async (fileId: string) => {
+    try {
+      const currentlyPinned = pinnedFiles.has(fileId);
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      
+      // Optimistically update the UI first
+      setPinnedFiles(prev => {
+        const newPinned = new Set(prev);
+        if (currentlyPinned) {
+          newPinned.delete(fileId);
+        } else {
+          newPinned.add(fileId);
+        }
+        return newPinned;
+      });
+
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { ...f, is_pinned: !currentlyPinned } : f
+      ));
+      
+      const response = await fetch(`${api}/api/courses/${courseId}/materials/db/${fileId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_pinned: !currentlyPinned })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update pin status');
       }
-      savePinnedFiles(newPinned);
-      return newPinned;
-    });
+
+    } catch (err) {
+      console.error('Error toggling pin:', err);
+      setError('Failed to update pin status');
+      
+      // Revert the UI update if the request fails
+      const currentlyPinned = !pinnedFiles.has(fileId); // Opposite of what we set above
+      setPinnedFiles(prev => {
+        const newPinned = new Set(prev);
+        if (currentlyPinned) {
+          newPinned.delete(fileId);
+        } else {
+          newPinned.add(fileId);
+        }
+        return newPinned;
+      });
+
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { ...f, is_pinned: currentlyPinned } : f
+      ));
+    }
   };
 
   // Sort files with pinned files first
   const sortedFiles = [...files].sort((a, b) => {
-    const aPinned = pinnedFiles.has(a.id);
-    const bPinned = pinnedFiles.has(b.id);
+    const aPinned = a.is_pinned || false;
+    const bPinned = b.is_pinned || false;
     if (aPinned && !bPinned) return -1;
     if (!aPinned && bPinned) return 1;
-    return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
+    
+    // Sort by date (use created_at if available, fallback to uploaded_at)
+    const aDate = a.created_at || a.uploaded_at;
+    const bDate = b.created_at || b.uploaded_at;
+    return new Date(bDate).getTime() - new Date(aDate).getTime();
   });
 
   if (loading) {
@@ -425,28 +581,78 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
                   <div
                     key={file.id}
                     className={`flex items-center justify-between p-4 border rounded-lg hover:bg-white/50 backdrop-blur-sm ${
-                      pinnedFiles.has(file.id) ? 'border-yellow-300/50 bg-yellow-50/30' : 'border-gray-200/50 bg-white/20'
+                      file.is_pinned ? 'border-yellow-300/50 bg-yellow-50/30' : 'border-gray-200/50 bg-white/20'
                     }`}
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
-                        {pinnedFiles.has(file.id) && (
-                          <Pin className="w-4 h-4 text-yellow-500" />
+                        {/* Thumbnail */}
+                        {file.thumbnail_url ? (
+                          <img 
+                            src={file.thumbnail_url} 
+                            alt="Thumbnail" 
+                            className="w-10 h-10 object-cover rounded border border-gray-200" 
+                          />
+                        ) : (
+                          <File className="w-5 h-5 text-blue-600" />
                         )}
-                        <File className="w-5 h-5 text-blue-600" />
-                        <div>
+                        
+                        <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium">{file.filename}</p>
-                            {pinnedFiles.has(file.id) && (
+                            {editingFile === file.id ? (
+                              <div className="flex items-center gap-2 flex-1">
+                                <Input
+                                  value={editedFilename}
+                                  onChange={(e) => setEditedFilename(e.target.value)}
+                                  className="h-8 flex-1"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      saveFilename(file.id);
+                                    } else if (e.key === 'Escape') {
+                                      cancelEditing();
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => saveFilename(file.id)}
+                                  className="h-8 px-2"
+                                >
+                                  <Save className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={cancelEditing}
+                                  className="h-8 px-2"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="font-medium">{file.filename || file.material_name || 'Unnamed file'}</p>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => startEditing(file.id, file.filename || file.material_name || 'unnamed')}
+                                  className="h-6 px-1 text-gray-400 hover:text-gray-600"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </Button>
+                              </>
+                            )}
+                            
+                            {file.is_pinned && (
                               <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
                                 Pinned
                               </Badge>
                             )}
                           </div>
                           <div className="flex items-center gap-4 text-sm text-gray-500">
-                            <span>Uploaded {formatDate(file.uploaded_at)}</span>
-                            <Badge variant="outline">{getFileTypeFromName(file.filename)}</Badge>
-                            <Badge variant="secondary">{formatFileSize(file.size)}</Badge>
+                            <span>Uploaded {formatDate(file.uploaded_at || file.created_at || '')}</span>
+                            <Badge variant="outline">{getFileTypeFromName(file.filename, file.file_type)}</Badge>
                           </div>
                         </div>
                       </div>
@@ -470,7 +676,7 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDeleteFile(file.id, file.filename)}
+                        onClick={() => handleDeleteFile(file.id, file.filename || file.material_name || 'unnamed file')}
                         className="text-red-600 hover:text-red-700"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -480,13 +686,13 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
                         size="sm"
                         onClick={() => togglePin(file.id)}
                         className={`${
-                          pinnedFiles.has(file.id) 
+                          file.is_pinned 
                             ? 'bg-yellow-100 text-yellow-700 border-yellow-300 hover:bg-yellow-200' 
                             : 'hover:text-yellow-600'
                         }`}
-                        title={pinnedFiles.has(file.id) ? 'Unpin from top' : 'Pin to top'}
+                        title={file.is_pinned ? 'Unpin from top' : 'Pin to top'}
                       >
-                        <Pin className={`w-4 h-4 ${pinnedFiles.has(file.id) ? 'fill-current' : ''}`} />
+                        <Pin className={`w-4 h-4 ${file.is_pinned ? 'fill-current' : ''}`} />
                       </Button>
                     </div>
                   </div>
@@ -519,6 +725,38 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
         url={previewUrl}
         onClose={() => setPreviewUrl(null)}
       />
+
+      {/* Delete Confirmation Modal */}
+      {showConfirmModal && fileToDelete && (
+        <Portal>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Delete File
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to delete "{fileToDelete.filename}"? This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={cancelDelete}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={confirmDelete}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
         </div>
     </div>
   );
