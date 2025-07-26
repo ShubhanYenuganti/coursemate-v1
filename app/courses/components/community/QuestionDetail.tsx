@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ChevronUp, ChevronDown, MessageSquare, Eye, Clock, CheckCircle2, Pin, User, Tag, Reply, MoreVertical } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -59,6 +59,11 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
 
   const [showAnswerForm, setShowAnswerForm] = useState(false);
 
+  // Auto-scroll to top when component mounts
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -90,13 +95,13 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
   const getRoleColor = (role: string) => {
     switch (role) {
       case 'ta':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-purple-100 text-purple-800 border-purple-200';
       case 'tutor':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'mentor':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 border-green-200';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -130,14 +135,14 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
   });
 
   return (
-    <div className="h-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-y-auto">
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button 
             variant="ghost" 
             onClick={onBack}
-            className="gap-2"
+            className="flex items-center gap-2 hover:bg-gray-100"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Forum
@@ -145,15 +150,15 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
         </div>
 
         {/* Main Question */}
-        <Card className="bg-white/70 backdrop-blur-sm border-gray-200/50">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2 flex-wrap mb-3">
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardHeader className="bg-gray-50 border-b border-gray-200">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-2 flex-wrap">
                 {post.isPinned && (
                   <Pin className="w-4 h-4 text-yellow-600 fill-current" />
                 )}
                 <Badge variant="outline" className={getPostTypeColor(post.type)}>
-                  {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+                  {post.type.replace('-', ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                 </Badge>
                 {post.hasAcceptedAnswer && (
                   <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
@@ -164,11 +169,11 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" className="hover:bg-gray-100">
                     <MoreVertical className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent>
+                <DropdownMenuContent className="bg-white shadow-lg border border-gray-200 rounded-lg">
                   <DropdownMenuItem>Edit Post</DropdownMenuItem>
                   <DropdownMenuItem>Pin Post</DropdownMenuItem>
                   <DropdownMenuItem className="text-red-600">Delete Post</DropdownMenuItem>
@@ -178,7 +183,7 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
             <h1 className="text-2xl font-bold text-gray-900 mb-4">{post.title}</h1>
           </CardHeader>
           <CardContent>
-            <div className="flex items-start gap-6">
+            <div className="flex items-start gap-6 pt-4">
               {/* Vote Section */}
               <div className="flex flex-col items-center gap-2 min-w-[80px]">
                 <Button variant="ghost" size="sm" className="p-2">
@@ -248,14 +253,32 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
           </CardContent>
         </Card>
 
+        {/* Answer Form - positioned right after the question */}
+        {showAnswerForm && (
+          <Card className="bg-white border border-gray-200 shadow-sm">
+            <CardHeader className="bg-blue-50 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Write Your Answer</h3>
+            </CardHeader>
+            <CardContent className="p-6">
+              <AnswerForm
+                onSubmit={handleAddAnswer}
+                onCancel={() => setShowAnswerForm(false)}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Answers Section */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
             <h2 className="text-xl font-semibold text-gray-900">
               {answers.length} Answer{answers.length !== 1 ? 's' : ''}
             </h2>
-            <Button onClick={() => setShowAnswerForm(true)} className="gap-2">
-              <Reply className="w-4 h-4" />
+            <Button 
+              onClick={() => setShowAnswerForm(true)} 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              <Reply className="w-4 h-4 mr-2" />
               Write Answer
             </Button>
           </div>
@@ -340,13 +363,6 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
             </Card>
           ))}
 
-          {/* Answer Form */}
-          {showAnswerForm && (
-            <AnswerForm
-              onSubmit={handleAddAnswer}
-              onCancel={() => setShowAnswerForm(false)}
-            />
-          )}
         </div>
       </div>
     </div>

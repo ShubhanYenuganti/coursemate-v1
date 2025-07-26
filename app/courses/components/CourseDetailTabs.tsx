@@ -24,16 +24,16 @@ const CourseDetailTabs: React.FC<CourseDetailTabsProps> = ({ activeTab, setActiv
   const nonHoveredTabClass = (isActive: boolean) => 
     `px-3 py-1 flex items-center justify-center rounded-xl transition-all duration-200 ${
       isActive 
-        ? 'bg-indigo-100 text-indigo-700 shadow-sm' 
-        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+        ? 'bg-indigo-100 text-blue-600 border-2 border-blue-600 shadow-sm' 
+        : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
     }`;
 
   // Hovered tab class - expanded with text
   const hoveredTabClass = (isActive: boolean) => 
     `flex items-center px-3 py-2 rounded-xl transition-all duration-200 whitespace-nowrap ${
       isActive 
-        ? 'bg-indigo-100 text-indigo-700 shadow-sm' 
-        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+        ? 'bg-indigo-100 text-blue-600 border-2 border-blue-600 shadow-sm' 
+        : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
     }`;
 
   // Handle swipe gestures

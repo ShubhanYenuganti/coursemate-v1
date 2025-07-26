@@ -1,10 +1,10 @@
 "use client"
 
 import React, { useState } from 'react';
-import { Send, X } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import { RichTextEditor } from './RichTextEditor';
 
 interface AnswerFormProps {
   onSubmit: (content: string) => void;
@@ -30,49 +30,56 @@ export function AnswerForm({ onSubmit, onCancel }: AnswerFormProps) {
     }
   };
 
+  // Count text content (excluding HTML tags) for character count
+  const getTextContent = (html: string) => {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  };
+
+  const textLength = getTextContent(content).length;
+
   return (
-    <Card className="bg-white/70 backdrop-blur-sm border-gray-200/50">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Write Your Answer</CardTitle>
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Textarea
-            placeholder="Share your knowledge and help the community..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={6}
-            className="min-h-[150px] bg-white/50 border-gray-200/50"
-            required
+    <Card className="bg-white border-gray-200 shadow-lg rounded-2xl">
+      <CardContent className="space-y-6 pt-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <RichTextEditor
+            content={content}
+            onChange={setContent}
+            onCancel={onCancel}
+            placeholder="Share your knowledge and help the community...
+
+Use the toolbar above to:
+• Format text with bold, italic, and underline
+• Add bulleted or numbered lists  
+• Include code blocks and LaTeX formulas
+• Insert links and structure your response"
+            className="min-h-[250px]"
           />
           
-          <div className="flex items-center justify-between text-sm text-gray-600">
+          <div className="flex items-center justify-between text-sm text-gray-600 pt-2">
             <div className="flex items-center gap-4">
-              <span>Supports Markdown formatting</span>
+              <span>Rich text editor with LaTeX and code support</span>
             </div>
             <div className="text-gray-500">
-              {content.length} characters
+              {textLength} characters
             </div>
           </div>
 
-          <div className="flex items-center gap-3 justify-end">
+          <div className="flex items-center gap-3 justify-end pt-2">
             <Button
               type="button"
               variant="outline"
               onClick={onCancel}
               disabled={isSubmitting}
+              className="border-gray-300 hover:bg-gray-50"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={!content.trim() || isSubmitting}
-              className="gap-2"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
             >
               <Send className="w-4 h-4" />
               {isSubmitting ? 'Posting...' : 'Post Answer'}

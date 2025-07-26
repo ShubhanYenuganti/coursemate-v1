@@ -15,10 +15,10 @@ interface QuestionFeedProps {
 export function QuestionFeed({ posts, loading, onPostClick }: QuestionFeedProps) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center py-16">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Loading forum posts...</p>
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading forum posts...</p>
         </div>
       </div>
     );
@@ -26,27 +26,35 @@ export function QuestionFeed({ posts, loading, onPostClick }: QuestionFeedProps)
 
   if (posts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center p-8">
-        <div className="bg-gray-100 rounded-full p-4 mb-4">
+      <div className="flex flex-col items-center justify-center py-16 text-center px-8">
+        <div className="bg-gray-100 rounded-full p-6 mb-6">
           <MessageSquare className="w-12 h-12 text-gray-400" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">No posts found</h3>
-        <p className="text-gray-600 max-w-sm">
-          Be the first to start a discussion! Ask a question or share your thoughts with the community.
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">No posts found</h3>
+        <p className="text-gray-600 max-w-md">
+          Be the first to start a discussion! Ask a question, share resources, or create a study group.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-4 overflow-y-auto h-full">
-      {posts.map((post) => (
-        <QuestionCard
-          key={post.id}
-          post={post}
-          onClick={() => onPostClick(post)}
-        />
-      ))}
+    <div className="w-full max-w-7xl mx-auto">
+      {/* Decorative separator with better spacing */}
+      <div className="flex items-center justify-center">
+        <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent w-full max-w-md"></div>
+      </div>
+      
+      {/* Posts container with improved spacing */}
+      <div className="space-y-0 pb-4">
+        {posts.map((post) => (
+          <QuestionCard
+            key={post.id}
+            post={post}
+            onClick={() => onPostClick(post)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
