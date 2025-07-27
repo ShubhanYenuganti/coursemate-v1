@@ -97,7 +97,7 @@ class Goal(db.Model):
                  task_has_ever_been_completed=False, subtask_order=None, 
                  subtask_engagement_start=None, subtask_engagement_end=None, 
                  subtask_total_active_minutes=None, subtask_last_interaction=None,
-                 workMinutesPerDay = None, frequency = None):
+                 workMinutesPerDay = None, frequency = None, is_conflicting=False):
         self.id = str(uuid.uuid4())
         self.user_id = user_id
         self.course_id = course_id

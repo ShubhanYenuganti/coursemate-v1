@@ -24,7 +24,7 @@ interface StudyPlanSubtask {
   name: string;
   description: string;
   estimated_minutes: number;
-  type: 'reading' | 'practice' | 'review' | 'assessment';
+  type: 'reading' | 'flashcard' | 'quiz' | 'practice' | 'review' | 'other';
 }
 
 interface StudyPlan {
@@ -150,9 +150,11 @@ const AIGenerateStudyPlan: React.FC<AIGenerateStudyPlanProps> = ({
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'reading': return '📖';
+      case 'flashcard': return '🃏';
+      case 'quiz': return '📝';
       case 'practice': return '✏️';
       case 'review': return '🔄';
-      case 'assessment': return '📝';
+      case 'other': return '�';
       default: return '📋';
     }
   };

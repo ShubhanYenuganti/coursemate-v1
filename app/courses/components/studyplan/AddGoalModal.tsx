@@ -10,9 +10,10 @@ interface AddGoalModalProps {
   onClose: () => void;
   courseId: string;
   onGoalAdded: (goal: GoalWithProgress) => void;
+  onRefreshGoals?: () => void;
 }
 
-const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, onGoalAdded }) => {
+const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, onGoalAdded, onRefreshGoals }) => {
   const initialFormData = {
     title: '',
     targetDate: '',
@@ -134,8 +135,11 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
 
   const handleStudyPlanGenerated = async (studyPlan: any) => {
     setIsAIGenerating(false);
-    // The AI generation will create the goal directly in the backend
-    // We just need to close the modal and refresh the goals list
+    // The AI generation creates the goal directly in the backend
+    // We need to refresh the goals list to show the new goal
+    if (onRefreshGoals) {
+      onRefreshGoals();
+    }
     onClose();
   };
 

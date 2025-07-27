@@ -605,12 +605,11 @@ def generate_study_plan(course_id):
         prompt = f"""
 You are an expert study planner and educational consultant. Based on the following document content and learning goal, create a detailed study plan with tasks and subtasks.
 
-            ],
-            max_tokens=2000,
-            temperature=0.7
-        )
+Document content: {document_content[:2000]}
 
-        # Log the full OpenAI response and the raw text
+Goal: {goal_title}
+Description: {goal_description}
+
 Please create a study plan in the following JSON format:
 {{
   "goal_title": "{goal_title}",
@@ -618,7 +617,7 @@ Please create a study plan in the following JSON format:
   "tasks": [
     {{
       "name": "Task name",
-      "description": "Task description",
+      "description": "Task description", 
       "estimated_hours": 2,
       "priority": "high|medium|low",
       "subtasks": [
@@ -626,7 +625,7 @@ Please create a study plan in the following JSON format:
           "name": "Subtask name",
           "description": "Subtask description",
           "estimated_minutes": 30,
-          "type": "reading|practice|review|assessment"
+          "type": "reading|flashcard|quiz|practice|review|other"
         }}
       ]
     }}
@@ -637,10 +636,17 @@ Guidelines:
 1. Break down the goal into at least 4 but no more than 8 manageable tasks
 2. Each task should have 2-5 subtasks
 3. Focus on practical, actionable steps
-4. Consider different learning activities (reading, practice, review, assessment)
+4. Use appropriate subtask types:
+   - "reading": Reading material, studying content
+   - "flashcard": Creating or reviewing flashcards
+   - "quiz": Taking quizzes or self-assessments
+   - "practice": Doing exercises, problem-solving
+   - "review": Reviewing previous material, summary
+   - "other": Any other learning activity
 5. Estimate realistic time requirements
 6. Prioritize tasks based on importance and dependencies
 7. Make sure the plan is comprehensive but achievable
+8. Include a variety of subtask types for effective learning
 
 Return only the JSON response, no additional text.
 """
@@ -721,7 +727,8 @@ Return only the JSON response, no additional text.
                         subtask_id=subtask_id,
                         subtask_descr=subtask_descr,
                         subtask_type=subtask_type,
-                        subtask_completed=subtask_completed
+                        subtask_completed=subtask_completed,
+                        is_conflicting=False  # Default to False for AI-generated plans
                     )
                     db.session.add(goal_row)
             db.session.commit()
