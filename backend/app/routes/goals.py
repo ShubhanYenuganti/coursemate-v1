@@ -519,9 +519,9 @@ def update_goal(goal_id):
             all_tasks_completed = True if all_task_ids else False
             for tid in all_task_ids:
                 task_rows = [g for g in goals if g.task_id == tid]
-                    if not all(g.task_completed for g in task_rows):
-                        all_tasks_completed = False
-                        break
+                if not all(g.task_completed for g in task_rows):
+                    all_tasks_completed = False
+                    break
                 for g in goals:
                     g.goal_completed = all_tasks_completed
         
@@ -647,8 +647,8 @@ def update_goal_tasks(goal_id):
         bypass = data.get('bypass')
         
         if not bypass:
-        for task_data in data['tasks']:
-            task_id = task_data.get('task_id')
+            for task_data in data['tasks']:
+                task_id = task_data.get('task_id')
                 task_rows = [g for g in goals if g.task_id == task_id]
                 task_due_date = None
 
@@ -676,11 +676,11 @@ def update_goal_tasks(goal_id):
                         if start_time and subtask_id and start_time.date() > task_due_date.date():
                             conflicting_subtasks.add(subtask_id)
 
-            if conflicting_subtasks:
-                return jsonify({
-                    'conflicting_subtasks': list(conflicting_subtasks),
-                    'message': 'Some subtasks have a start_time after the task due date.'
-                }), 409
+                if conflicting_subtasks:
+                    return jsonify({
+                        'conflicting_subtasks': list(conflicting_subtasks),
+                        'message': 'Some subtasks have a start_time after the task due date.'
+                    }), 409
 
         for task_data in data['tasks']:
             task_id = task_data.get('task_id')
