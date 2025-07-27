@@ -75,7 +75,6 @@ interface TiptapEditorProps {
 export default function TiptapEditor({ value, onChange, onCancel, placeholder = "Start writing...", className = "" }: TiptapEditorProps) {
   // All hooks must be called before any return
   const lowlightInstance = createLowlight(common);
-  // Removed dropdown, only use custom equation modal
   const [showCustomEquationModal, setShowCustomEquationModal] = useState(false);
   const [customLatex, setCustomLatex] = useState('');
   const commonEquations = [
