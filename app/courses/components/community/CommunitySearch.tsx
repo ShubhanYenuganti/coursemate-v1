@@ -47,6 +47,7 @@ export function CommunitySearch({
             <SelectContent className="bg-white border border-gray-200 rounded-xl shadow-xl">
               <SelectItem value="all" className="py-3 px-4 rounded-lg">All Posts</SelectItem>
               <SelectItem value="my-posts" className="py-3 px-4 rounded-lg">My Posts</SelectItem>
+              <SelectItem value="deleted" className="py-3 px-4 rounded-lg">Deleted Posts</SelectItem>
               <SelectItem value="unanswered" className="py-3 px-4 rounded-lg">Unanswered</SelectItem>
               <SelectItem value="most-upvoted" className="py-3 px-4 rounded-lg">Most Upvoted</SelectItem>
               <SelectItem value="ta-instructor" className="py-3 px-4 rounded-lg">TA/Instructor Posts</SelectItem>

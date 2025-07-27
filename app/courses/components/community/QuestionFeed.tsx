@@ -10,9 +10,10 @@ interface QuestionFeedProps {
   posts: ForumPost[];
   loading: boolean;
   onPostClick: (post: ForumPost) => void;
+  searchQuery?: string;
 }
 
-export function QuestionFeed({ posts, loading, onPostClick }: QuestionFeedProps) {
+export function QuestionFeed({ posts, loading, onPostClick, searchQuery }: QuestionFeedProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -52,6 +53,7 @@ export function QuestionFeed({ posts, loading, onPostClick }: QuestionFeedProps)
             key={post.id}
             post={post}
             onClick={() => onPostClick(post)}
+            searchQuery={searchQuery}
           />
         ))}
       </div>

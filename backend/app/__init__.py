@@ -79,6 +79,7 @@ def create_app(config_class=Config):
     from .routes.notifications import notifications_bp
     from .routes.materials import materials_bp
     from .routes.conversations import conversations_bp
+    from .api.community import community_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
@@ -96,6 +97,7 @@ def create_app(config_class=Config):
     app.register_blueprint(notifications_bp)
     app.register_blueprint(materials_bp, url_prefix='/api/materials')
     app.register_blueprint(conversations_bp)
+    app.register_blueprint(community_bp, url_prefix='/api')
 
     # Ensure SocketIO handlers from blueprints are recognized
     # (This is implicitly handled by importing the blueprints before socketio runs,

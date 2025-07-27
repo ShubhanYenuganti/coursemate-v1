@@ -8,18 +8,27 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ForumPost } from './CommunityTab';
+import { highlightText, highlightHtmlContent, highlightTags } from '@/utils/text-highlight';
 
 interface QuestionCardProps {
   post: ForumPost;
   onClick: () => void;
+  searchQuery?: string;
 }
 
-export function QuestionCard({ post, onClick }: QuestionCardProps) {
-  // Render rich content (HTML + KaTeX) from TiptapEditor
+export function QuestionCard({ post, onClick, searchQuery }: QuestionCardProps) {
+  // Render rich content (HTML + KaTeX) from TiptapEditor with search highlighting
   function renderRichContent(html: string) {
     if (!html) return null;
+    
+    // Apply search highlighting first if there's a search query
+    let processedHtml = html;
+    if (searchQuery && searchQuery.trim()) {
+      processedHtml = highlightHtmlContent(html, searchQuery);
+    }
+    
     const doc = document.createElement('div');
-    doc.innerHTML = html;
+    doc.innerHTML = processedHtml;
     const equationDivs = doc.querySelectorAll('div[data-type="equation"]');
     equationDivs.forEach(div => {
       const latex = div.getAttribute('latex') || '';
@@ -51,6 +60,8 @@ export function QuestionCard({ post, onClick }: QuestionCardProps) {
         return 'bg-orange-50 text-orange-800 border-orange-200';
       case 'help-wanted':
         return 'bg-red-50 text-red-800 border-red-200';
+      case 'deleted':
+        return 'bg-gray-50 text-gray-500 border-gray-300';
       default:
         return 'bg-gray-50 text-gray-800 border-gray-200';
     }
@@ -109,7 +120,7 @@ export function QuestionCard({ post, onClick }: QuestionCardProps) {
               </div>
               
               <h3 className="font-semibold text-gray-900 hover:text-blue-600 transition-colors mb-3 text-lg leading-tight">
-                {post.title}
+                {searchQuery ? highlightText(post.title, searchQuery) : post.title}
               </h3>
               
               <div className="text-sm text-gray-600 mb-4 leading-relaxed">
@@ -118,9 +129,9 @@ export function QuestionCard({ post, onClick }: QuestionCardProps) {
               
               {/* Tags */}
               <div className="flex flex-wrap gap-2 mb-4">
-                {post.tags.map((tag) => (
+                {post.tags.map((tag, index) => (
                   <Badge key={tag} variant="secondary" className="text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-2 py-1">
-                    {tag}
+                    {searchQuery ? highlightText(tag, searchQuery) : tag}
                   </Badge>
                 ))}
               </div>
@@ -142,7 +153,9 @@ export function QuestionCard({ post, onClick }: QuestionCardProps) {
                   {post.author.name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-sm text-gray-700 font-medium">{post.author.name}</span>
+              <span className="text-sm text-gray-700 font-medium">
+                {searchQuery ? highlightText(post.author.name, searchQuery) : post.author.name}
+              </span>
               {post.author.role !== 'student' && (
                 <Badge variant="outline" className={getRoleColor(post.author.role)}>
                   {post.author.role.toUpperCase()}
