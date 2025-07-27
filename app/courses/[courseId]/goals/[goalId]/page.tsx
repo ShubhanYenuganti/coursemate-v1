@@ -2263,6 +2263,17 @@ const GoalDetailPage = () => {
           </div>
           
           <div className="flex items-center gap-3">
+            {/* Add Task Button - only show in tasks view */}
+            {viewMode === 'tasks' && (
+              <button
+                onClick={() => setIsAddingTask(!isAddingTask)}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Task</span>
+              </button>
+            )}
+            
             {/* View Toggle Button */}
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
@@ -2289,16 +2300,7 @@ const GoalDetailPage = () => {
               </button>
             </div>
             
-            {/* Add Task Button - only show in tasks view */}
-            {viewMode === 'tasks' && (
-              <button
-                onClick={() => setIsAddingTask(!isAddingTask)}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Task</span>
-              </button>
-            )}
+            
           </div>
         </div>
         

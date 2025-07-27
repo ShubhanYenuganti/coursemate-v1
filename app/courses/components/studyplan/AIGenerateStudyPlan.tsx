@@ -35,7 +35,7 @@ interface StudyPlan {
 
 interface AIGenerateStudyPlanProps {
   courseId: string;
-  onStudyPlanGenerated: (studyPlan: StudyPlan) => void;
+  onStudyPlanGenerated: (studyPlan: StudyPlan, targetDate?: Date) => void;
   onStartGenerating?: () => void;
 }
 
@@ -48,6 +48,7 @@ const AIGenerateStudyPlan: React.FC<AIGenerateStudyPlanProps> = ({
   const [selectedMaterial, setSelectedMaterial] = useState<string>('');
   const [goalTitle, setGoalTitle] = useState('');
   const [goalDescription, setGoalDescription] = useState('');
+  const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingMaterials, setIsLoadingMaterials] = useState(true);
 
@@ -113,7 +114,8 @@ const AIGenerateStudyPlan: React.FC<AIGenerateStudyPlanProps> = ({
         body: JSON.stringify({
           goal_title: goalTitle,
           goal_description: goalDescription,
-          document_filename: selectedMaterial
+          document_filename: selectedMaterial,
+          end_date: endDate ? endDate.toISOString().split('T')[0] : undefined
         })
       });
 
@@ -126,7 +128,7 @@ const AIGenerateStudyPlan: React.FC<AIGenerateStudyPlanProps> = ({
       
       if (data.success) {
         toast.success('Study plan generated successfully!');
-        onStudyPlanGenerated(data.study_plan);
+        onStudyPlanGenerated(data.study_plan, endDate);
       } else {
         throw new Error(data.error || 'Failed to generate study plan');
       }
@@ -233,6 +235,26 @@ const AIGenerateStudyPlan: React.FC<AIGenerateStudyPlanProps> = ({
             rows={3}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+        </div>
+
+        {/* Target Date */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Target Completion Date
+          </label>
+          <input
+            type="date"
+            value={endDate ? endDate.toISOString().split('T')[0] : ''}
+            onChange={(e) => {
+              const newDate = e.target.value ? new Date(e.target.value) : undefined;
+              setEndDate(newDate);
+            }}
+            min={new Date().toISOString().split('T')[0]}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            The AI will create a study plan that fits within this timeframe
+          </p>
         </div>
 
         {/* Generate Button */}

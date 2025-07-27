@@ -298,6 +298,12 @@ export function CalendarScheduler() {
   const [showEditSubtaskModal, setShowEditSubtaskModal] = useState(false);
   const [editSubtaskData, setEditSubtaskData] = useState<any>(null);
 
+  /** Simplified Scheduling States */
+  const [schedulingMode, setSchedulingMode] = useState(false);
+  const [schedulingSubtaskData, setSchedulingSubtaskData] = useState<any>(null);
+  const [showScheduleConfirmModal, setShowScheduleConfirmModal] = useState(false);
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<{start: Date, end: Date} | null>(null);
+
   /** Expanded Courses States */
   const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
   const [goalsByCourse, setGoalsByCourse] = useState<Record<string, Goal[]>>({});
@@ -461,6 +467,27 @@ export function CalendarScheduler() {
       }
 
       setIsCreatingSubtask(false);
+      
+      // Handle simplified scheduling flow
+      if (schedulingMode && schedulingSubtaskData) {
+        const startTime = new Date(createSubtaskStart.date);
+        startTime.setHours(createSubtaskStart.hour, createSubtaskStart.minute, 0, 0);
+        
+        const endTime = new Date(createSubtaskEnd?.date || createSubtaskStart.date);
+        endTime.setHours(createSubtaskEnd?.hour || createSubtaskStart.hour, createSubtaskEnd?.minute || createSubtaskStart.minute + 30, 0, 0);
+        
+        // Ensure minimum 30-minute duration
+        if (endTime <= startTime) {
+          endTime.setTime(startTime.getTime() + 30 * 60000);
+        }
+        
+        setSelectedTimeSlot({ start: startTime, end: endTime });
+        setShowScheduleConfirmModal(true);
+        setDragPreview(null);
+        return;
+      }
+      
+      // Regular flow for creating new subtasks
       setShowCreateSubtaskModal(true);
       // Initialize modal position so the top-right corner is next to the top-left corner of where the user started the drag
       if (initialClickPosition) {
@@ -720,7 +747,7 @@ export function CalendarScheduler() {
 
       // Route back to goal detail page if goalId and courseId are available
       if (goalIdForRouting && courseIdForRouting) {
-        window.location.href = `http://localhost:3001/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
+        window.location.href = `${window.location.origin}/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
       }
     } catch (error) {
       console.error('Failed to create subtask:', error);
@@ -1088,6 +1115,11 @@ export function CalendarScheduler() {
         }
       };
       fetchGoals();
+      
+      // Route back to goal detail page if goalId and courseId are available
+      if (goalIdForRouting && courseIdForRouting) {
+        window.location.href = `${window.location.origin}/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
+      }
     } catch (err) {
       toast.error('Failed to update subtask');
     }
@@ -1547,7 +1579,7 @@ export function CalendarScheduler() {
 
       // Route back to goal detail page if goalId and courseId are available
       if (goalIdForRouting && courseIdForRouting) {
-        window.location.href = `http://localhost:3001/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
+        window.location.href = `${window.location.origin}/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
       }
     } catch (err) {
       console.error("handleAddSubtaskConfirm error", err);
@@ -1828,14 +1860,16 @@ export function CalendarScheduler() {
 
   const searchParams = useSearchParams();
 
-  // On mount or when searchParams changes, check for addSubtaskForTask param
+  // On mount or when searchParams changes, check for addSubtaskForTask or scheduleSubtaskId param
   useEffect(() => {
     if (!searchParams) return;
     
     const taskParam = searchParams.get('addSubtaskForTask');
+    const scheduleSubtaskParam = searchParams.get('scheduleSubtaskId');
     const nameParam = searchParams.get('taskName');
     const goalIdParam = searchParams.get('goalId');
     const courseIdParam = searchParams.get('courseId');
+    
     if (taskParam) {
       setPreselectedTaskId(taskParam);
       const dueDateParam = searchParams.get('taskDueDate');
@@ -1867,7 +1901,55 @@ export function CalendarScheduler() {
         window.history.replaceState({}, document.title, url.pathname + url.search);
       }
     }
-  }, [searchParams]);
+    
+    // Handle scheduling/editing existing subtask with simplified flow
+    if (scheduleSubtaskParam) {
+      const subtaskNameParam = searchParams.get('subtaskName');
+      const subtaskTypeParam = searchParams.get('subtaskType');
+      const isEditParam = searchParams.get('isEdit');
+      const currentStartTimeParam = searchParams.get('currentStartTime');
+      const currentEndTimeParam = searchParams.get('currentEndTime');
+      
+      // Store scheduling data for the simplified flow
+      setSchedulingSubtaskData({
+        subtaskId: scheduleSubtaskParam,
+        subtaskName: subtaskNameParam ? decodeURIComponent(subtaskNameParam) : '',
+        subtaskType: subtaskTypeParam || 'other',
+        isEdit: isEditParam === 'true',
+        currentStartTime: currentStartTimeParam,
+        currentEndTime: currentEndTimeParam,
+        taskId: searchParams.get('taskId') || ''
+      });
+      
+      // Store goalId and courseId for routing back
+      if (goalIdParam) {
+        setGoalIdForRouting(goalIdParam);
+      }
+      if (courseIdParam) {
+        setCourseIdForRouting(courseIdParam);
+      }
+      
+      // Show instruction banner for scheduling
+      setSchedulingMode(true);
+      
+      // Remove the params from the URL for clean UX
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('scheduleSubtaskId');
+        url.searchParams.delete('subtaskName');
+        url.searchParams.delete('subtaskType');
+        url.searchParams.delete('isEdit');
+        url.searchParams.delete('currentStartTime');
+        url.searchParams.delete('currentEndTime');
+        url.searchParams.delete('taskId');
+        url.searchParams.delete('taskDueDate');
+        url.searchParams.delete('taskName');
+        url.searchParams.delete('goalId');
+        url.searchParams.delete('courseId');
+        window.history.replaceState({}, document.title, url.pathname + url.search);
+      }
+    }
+  }, [searchParams, goalsByDate]);
 
   // When the create subtask modal opens, preselect the task if needed
   useEffect(() => {
@@ -1951,7 +2033,6 @@ export function CalendarScheduler() {
     }
   };
 
-
   const toggleGoalVisibility = (goalId: string) => {
     setGoalVisibility(prev => {
       const newValue = !(prev[goalId] ?? true); // toggle current goal
@@ -1974,6 +2055,7 @@ export function CalendarScheduler() {
         return updatedTasks;
       });
 
+      // Find the course that this goal belongs to
       // Find the course that this goal belongs to
       let parentCourseId: string | undefined;
       for (const [courseId, goals] of Object.entries(courseGoals)) {
@@ -3590,6 +3672,81 @@ export function CalendarScheduler() {
     );
   };
 
+  // Handle simplified scheduling confirmation
+  const handleScheduleConfirm = async () => {
+    if (!selectedTimeSlot || !schedulingSubtaskData) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Not authenticated');
+        return;
+      }
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      
+      const payload = {
+        subtask_descr: schedulingSubtaskData.subtaskName,
+        subtask_type: schedulingSubtaskData.subtaskType,
+        subtask_start_time: selectedTimeSlot.start.toISOString(),
+        subtask_end_time: selectedTimeSlot.end.toISOString(),
+        bypass_due_date: false
+      };
+
+      const response = await fetch(`${api}/api/goals/tasks/subtasks/${schedulingSubtaskData.subtaskId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update subtask schedule');
+      }
+
+      toast.success(schedulingSubtaskData.isEdit ? 'Time updated successfully!' : 'Subtask scheduled successfully!');
+
+      // Close modal and reset state
+      setShowScheduleConfirmModal(false);
+      setSelectedTimeSlot(null);
+      setSchedulingMode(false);
+      setSchedulingSubtaskData(null);
+
+      // Refresh goals data
+      const fetchGoals = async () => {
+        try {
+          const res = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+          const grouped = await res.json() as Record<string, Goal[]>;
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+      await fetchGoals();
+
+      // Route back to study plan
+      if (goalIdForRouting && courseIdForRouting) {
+        window.location.href = `${window.location.origin}/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
+      }
+    } catch (error) {
+      console.error('Error scheduling subtask:', error);
+      toast.error('Failed to schedule subtask. Please try again.');
+    }
+  };
+
   const loading = useAuthRedirect()
   if (loading) return <div>Loading...</div>
 
@@ -3598,9 +3755,41 @@ export function CalendarScheduler() {
    **************************************/
   return (
     <div className="flex h-screen bg-[#ffffff]">
+      {/* Scheduling Banner */}
+      {schedulingMode && schedulingSubtaskData && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-blue-50 border-b-2 border-blue-200 p-4">
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+              <div>
+                <h3 className="font-semibold text-blue-900">
+                  {schedulingSubtaskData.isEdit ? 'Edit Time for:' : 'Schedule Time for:'} {schedulingSubtaskData.subtaskName}
+                </h3>
+                <p className="text-sm text-blue-700">
+                  Click and drag on the calendar to {schedulingSubtaskData.isEdit ? 'change the' : 'select a'} time slot
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setSchedulingMode(false);
+                setSchedulingSubtaskData(null);
+                // Route back to study plan
+                if (goalIdForRouting && courseIdForRouting) {
+                  window.location.href = `${window.location.origin}/courses/${courseIdForRouting}/goals/${goalIdForRouting}`;
+                }
+              }}
+              className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      
       {/* Main Calendar - Made Smaller */}
       {/* ───────────────── Main Section ───────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden"> {/* Removed pt-20 */}
+      <div className={`flex-1 flex flex-col overflow-hidden ${schedulingMode ? 'pt-20' : ''}`}> {/* Add top padding when scheduling banner is shown */}
         <div className="flex items-center gap-4 px-6 pt-4 pb-2"> {/* Added px-6 pt-4 pb-2 for spacing */}
           <Button
             variant={currentView === "day" ? "default" : "ghost"}
@@ -4517,11 +4706,46 @@ export function CalendarScheduler() {
                           <div className={`text-sm font-medium ${currentSubtask.subtask_completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
                             {currentSubtask.subtask_descr || `Subtask ${index + 1}`}
                           </div>
-                          {currentSubtask.subtask_type && currentSubtask.subtask_type !== 'other' && (
-                            <span className="text-xs px-2 py-1 bg-gray-200 rounded text-gray-600 mt-1 inline-block">
-                              {currentSubtask.subtask_type}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            {currentSubtask.subtask_type && currentSubtask.subtask_type !== 'other' && (
+                              <span className="text-xs px-2 py-1 bg-gray-200 rounded text-gray-600">
+                                {currentSubtask.subtask_type}
+                              </span>
+                            )}
+                            {/* Schedule/Edit Time Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const isScheduled = currentSubtask.start_time && currentSubtask.end_time;
+                                const params = new URLSearchParams({
+                                  scheduleSubtaskId: currentSubtask.subtask_id,
+                                  subtaskName: encodeURIComponent(currentSubtask.subtask_descr || `Subtask ${index + 1}`),
+                                  subtaskType: currentSubtask.subtask_type || 'other',
+                                  taskId: currentSubtask.task_id || '',
+                                  taskDueDate: currentSubtask.task_due_date ? new Date(currentSubtask.task_due_date).toISOString().split('T')[0] : '',
+                                  taskName: encodeURIComponent(subtasksModal.task.task_title || ''),
+                                  goalId: currentSubtask.goal_id || '',
+                                  courseId: currentSubtask.course_id || '',
+                                  isEdit: isScheduled ? 'true' : 'false'
+                                });
+                                
+                                if (isScheduled && currentSubtask.start_time && currentSubtask.end_time) {
+                                  params.set('currentStartTime', currentSubtask.start_time);
+                                  params.set('currentEndTime', currentSubtask.end_time);
+                                }
+                                
+                                window.location.href = `/calendar?${params.toString()}`;
+                              }}
+                              className={`text-xs px-2 py-1 rounded transition-colors ${
+                                currentSubtask.start_time && currentSubtask.end_time
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                              }`}
+                              title={currentSubtask.start_time && currentSubtask.end_time ? 'Edit scheduled time' : 'Schedule time'}
+                            >
+                              {currentSubtask.start_time && currentSubtask.end_time ? 'Edit Time' : 'Schedule'}
+                            </button>
+                          </div>
                           {currentSubtask.estimatedTimeMinutes && (
                             <div className="text-xs text-gray-500 mt-1">
                               Estimated: {currentSubtask.estimatedTimeMinutes} minutes
@@ -5402,6 +5626,67 @@ export function CalendarScheduler() {
           </div>
         </div>
       )}
+      
+      {/* Scheduling Confirmation Modal */}
+      {showScheduleConfirmModal && selectedTimeSlot && schedulingSubtaskData && (
+        <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
+            <h3 className="text-xl font-semibold mb-4">
+              {schedulingSubtaskData.isEdit ? 'Confirm Time Change' : 'Confirm Schedule'}
+            </h3>
+            
+            <div className="mb-6">
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <h4 className="font-medium text-gray-900 mb-2">{schedulingSubtaskData.subtaskName}</h4>
+                <div className="text-sm text-gray-600">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    <span className="capitalize">{schedulingSubtaskData.subtaskType}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Date:</span>
+                  <span className="font-medium">{selectedTimeSlot.start.toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Time:</span>
+                  <span className="font-medium">
+                    {selectedTimeSlot.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {selectedTimeSlot.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Duration:</span>
+                  <span className="font-medium">
+                    {Math.round((selectedTimeSlot.end.getTime() - selectedTimeSlot.start.getTime()) / (1000 * 60))} minutes
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowScheduleConfirmModal(false);
+                  setSelectedTimeSlot(null);
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleScheduleConfirm}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                {schedulingSubtaskData.isEdit ? 'Update Time' : 'Schedule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {showSettings && (
         <div className="fixed inset-0 z-[9999] bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-8 relative">

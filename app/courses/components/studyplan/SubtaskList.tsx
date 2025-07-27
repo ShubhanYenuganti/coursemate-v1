@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Circle, Clock, BookOpen, Brain, Target, FileText, Zap, Trash2, Edit, Plus, AlertTriangle, Play, MessageCircle } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
 import { Subtask } from './types';
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -540,6 +541,25 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
     }
   };
 
+  // Helper function to get subtask type badge styling
+  const getSubtaskTypeBadge = (type: string | null | undefined) => {
+    const normalizedType = type || 'other';
+    
+    const typeStyles = {
+      reading: 'bg-blue-100 text-blue-800',
+      flashcard: 'bg-green-100 text-green-800', 
+      quiz: 'bg-purple-100 text-purple-800',
+      practice: 'bg-orange-100 text-orange-800',
+      review: 'bg-yellow-100 text-yellow-800',
+      other: 'bg-gray-100 text-gray-800'
+    };
+
+    return {
+      className: typeStyles[normalizedType as keyof typeof typeStyles] || typeStyles.other,
+      label: normalizedType.charAt(0).toUpperCase() + normalizedType.slice(1)
+    };
+  };
+
   // Render active subtask screen if activeSubtask is set
   if (activeSubtask) {
     return (
@@ -699,6 +719,13 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
                       >
                       {subtask.name}
                     </p>
+                    {/* Subtask Type Badge */}
+                    <Badge 
+                      variant="secondary" 
+                      className={`text-xs ${getSubtaskTypeBadge(subtask.type).className}`}
+                    >
+                      {getSubtaskTypeBadge(subtask.type).label}
+                    </Badge>
                       {isSubtaskOverdue(subtask) && !subtask.completed && (
                         <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-medium">
                           Overdue
@@ -708,6 +735,42 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1">
+                {/* Schedule/Edit Time Button */}
+                <button
+                  onClick={() => {
+                    const dueDateForUrl = taskDueDate ? new Date(taskDueDate).toISOString().split('T')[0] : '';
+                    const isScheduled = subtask.start_time && subtask.end_time;
+                    
+                    const params = new URLSearchParams({
+                      scheduleSubtaskId: subtask.id,
+                      subtaskName: encodeURIComponent(subtask.name),
+                      subtaskType: subtask.type || 'other',
+                      taskId: taskId,
+                      taskDueDate: dueDateForUrl,
+                      taskName: encodeURIComponent(taskName || ''),
+                      goalId: goalId || '',
+                      courseId: courseId || '',
+                      isEdit: isScheduled ? 'true' : 'false'
+                    });
+                    
+                    if (isScheduled && subtask.start_time && subtask.end_time) {
+                      // Add existing timing data for editing
+                      params.set('currentStartTime', subtask.start_time);
+                      params.set('currentEndTime', subtask.end_time);
+                    }
+                    
+                    router.push(`/calendar?${params.toString()}`);
+                  }}
+                  className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                    subtask.start_time && subtask.end_time
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                  }`}
+                  title={subtask.start_time && subtask.end_time ? 'Edit scheduled time' : 'Schedule time'}
+                >
+                  {subtask.start_time && subtask.end_time ? 'Edit Time' : 'Schedule'}
+                </button>
+
                 {/* Feedback button for time data - only show when subtask is completed */}
                 {subtask.completed && (
                   <button
