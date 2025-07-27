@@ -11,8 +11,8 @@ import { EditorContent, useEditor, Extension } from "@tiptap/react";
 import { Node } from '@tiptap/core';
 const Equation = Node.create({
   name: 'equation',
-  group: 'block',
-  atom: true,
+  group: 'inline',
+  inline: true,
   addAttributes() {
     return {
       latex: {
@@ -66,7 +66,7 @@ import { Bold, Italic, Underline as UnderlineIcon, Code, List as ListIcon, ListO
 
 interface TiptapEditorProps {
   value: string;
-  onChange: (content: string) => void;
+  onChange: (content: string, latexBlocks?: string[]) => void;
   onCancel?: () => void;
   placeholder?: string;
   className?: string;
@@ -101,7 +101,18 @@ export default function TiptapEditor({ value, onChange, onCancel, placeholder = 
     ],
     content: value,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      // Extract all raw LaTeX blocks from the document
+      const latexBlocks: string[] = [];
+      const traverse = (node: any) => {
+        if (node.type && node.type.name === 'equation' && node.attrs?.latex) {
+          latexBlocks.push(node.attrs.latex);
+        }
+        if (node.content && Array.isArray(node.content)) {
+          node.content.forEach(traverse);
+        }
+      };
+      traverse(editor.state.doc.toJSON());
+      onChange(editor.getHTML(), latexBlocks);
     },
     editorProps: {
       attributes: {
@@ -144,17 +155,41 @@ export default function TiptapEditor({ value, onChange, onCancel, placeholder = 
           if (url) editor.chain().focus().setLink({ href: url }).run();
         }} className={editor.isActive('link') ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:bg-white hover:shadow-sm'} title="Link"><LinkIcon className="w-4 h-4" /></Button>
       <div className="relative">
-        <Button type="button" size="sm" variant="ghost" onClick={() => setShowCustomEquationModal(true)} className="hover:bg-white hover:shadow-sm" title="Equation (LaTeX)">$$</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setShowCustomEquationModal(v => !v)} className="hover:bg-white hover:shadow-sm" title="Equation (LaTeX)">$$</Button>
         {showCustomEquationModal && (
-          <div className="fixed inset-0 z-20 flex items-center justify-center bg-black bg-opacity-30">
-            <div className="bg-white rounded-lg shadow-lg p-6 min-w-[320px]">
-              <h3 className="text-lg font-semibold mb-2">Insert Equation</h3>
+          <>
+            {/* Overlay to block editor interaction and handle click-away */}
+            <div
+              className="fixed inset-0 bg-transparent z-40"
+              style={{ pointerEvents: 'auto' }}
+              onClick={() => setShowCustomEquationModal(false)}
+            />
+            {/* Popup always above overlay */}
+            <div
+              className="absolute left-0 mt-2 z-50 w-80 bg-white border border-gray-200 rounded-lg shadow-lg p-4"
+              tabIndex={-1}
+              onMouseDown={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-base font-semibold mb-2">Insert Equation</h3>
               <input
                 type="text"
                 className="w-full border border-gray-300 rounded px-2 py-1 mb-2 font-mono"
                 value={customLatex}
                 onChange={e => setCustomLatex(e.target.value)}
                 placeholder="Enter LaTeX here..."
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    insertLatexBlock(customLatex);
+                    setCustomLatex('');
+                    setShowCustomEquationModal(false);
+                  }
+                  if (e.key === 'Escape') {
+                    setShowCustomEquationModal(false);
+                  }
+                }}
               />
               <div className="flex gap-2 justify-end">
                 <Button type="button" size="sm" variant="ghost" onClick={() => setShowCustomEquationModal(false)}>Cancel</Button>
@@ -162,7 +197,7 @@ export default function TiptapEditor({ value, onChange, onCancel, placeholder = 
               </div>
               <div className="mt-2 text-gray-500 text-xs">Example: <span className="font-mono">\int_a^b f(x) dx</span></div>
             </div>
-          </div>
+          </>
         )}
       </div>
         {onCancel && (

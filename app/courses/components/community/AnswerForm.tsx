@@ -7,12 +7,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import TiptapEditor from './TiptapEditor';
 
 interface AnswerFormProps {
-  onSubmit: (content: string) => void;
+onSubmit: (content: string, latexBlocks?: string[]) => void;
   onCancel: () => void;
 }
 
 export function AnswerForm({ onSubmit, onCancel }: AnswerFormProps) {
   const [content, setContent] = useState('');
+  const [latexBlocks, setLatexBlocks] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,8 +22,9 @@ export function AnswerForm({ onSubmit, onCancel }: AnswerFormProps) {
 
     setIsSubmitting(true);
     try {
-      await onSubmit(content.trim());
+      await onSubmit(content.trim(), latexBlocks);
       setContent('');
+      setLatexBlocks([]);
     } catch (error) {
       console.error('Error submitting answer:', error);
     } finally {
@@ -31,13 +33,26 @@ export function AnswerForm({ onSubmit, onCancel }: AnswerFormProps) {
   };
 
   // Count text content (excluding HTML tags) for character count
+  // Each equation counts as 1 character
   const getTextContent = (html: string) => {
     const div = document.createElement('div');
     div.innerHTML = html;
     return div.textContent || div.innerText || '';
   };
 
-  const textLength = getTextContent(content).length;
+  // Improved character count: each equation node counts as 1 character, all other text is counted normally
+  const countEquations = (html: string) => {
+    // Count all equation nodes in the HTML
+    const matches = html.match(/<div[^>]*data-type=["']equation["'][^>]*>(.*?)<\/div>/g) || [];
+    return matches.length;
+  };
+  const removeEquationsFromHTML = (html: string) => {
+    // Remove all equation nodes from the HTML
+    return html.replace(/<div[^>]*data-type=["']equation["'][^>]*>(.*?)<\/div>/g, '');
+  };
+  const equationCount = countEquations(content);
+  const textContentLength = getTextContent(removeEquationsFromHTML(content)).length;
+  const textLength = textContentLength + equationCount;
 
   return (
     <Card className="bg-white border-gray-200 shadow-lg rounded-2xl">
@@ -45,7 +60,10 @@ export function AnswerForm({ onSubmit, onCancel }: AnswerFormProps) {
         <form onSubmit={handleSubmit} className="space-y-6">
           <TiptapEditor
             value={content}
-            onChange={setContent}
+            onChange={(html: string, latexBlocksFromEditor?: string[]) => {
+              setContent(html);
+              setLatexBlocks(latexBlocksFromEditor || []);
+            }}
             onCancel={onCancel}
             placeholder={`Share your knowledge and help the community...
 

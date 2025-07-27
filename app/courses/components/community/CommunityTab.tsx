@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { QuestionFeed } from './QuestionFeed';
 import { CreatePostModal } from './CreatePostModal';
 import { CommunitySearch } from './CommunitySearch';
+import { communityApi, CommunityPost as ApiCommunityPost } from '@/lib/api/community';
+import { useAuth } from '@/app/context/AuthContext';
 
 interface CommunityTabProps {
   courseId: string;
@@ -21,7 +23,7 @@ export interface ForumPost {
   id: string;
   title: string;
   content: string;
-  type: 'question' | 'discussion' | 'study-group' | 'resource-sharing' | 'help-wanted';
+  type: 'question' | 'discussion' | 'study-group' | 'resource-sharing' | 'help-wanted' | 'deleted';
   author: {
     id: string;
     name: string;
@@ -46,6 +48,7 @@ export interface ForumAnswer {
   id: string;
   postId: string;
   content: string;
+  latexBlocks?: string[];
   author: {
     id: string;
     name: string;
@@ -63,169 +66,91 @@ export interface ForumAnswer {
 
 export default function CommunityTab({ courseId }: CommunityTabProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('recent');
   const [activeTab, setActiveTab] = useState('all');
 
-  // Mock data for development
+  // Load posts from the API
   useEffect(() => {
-    const mockPosts: ForumPost[] = [
-      {
-        id: '1',
-        title: 'How do I approach the binary search tree assignment?',
-        content: 'I\'m having trouble understanding how to implement the insert method for BST. Can someone explain the recursive approach?',
-        type: 'question',
-        author: {
-          id: 'user1',
-          name: 'Alice Johnson',
-          role: 'student',
-          avatar: '/placeholder-user.jpg',
-          reputation: 125
-        },
-        createdAt: '2024-03-15T10:30:00Z',
-        updatedAt: '2024-03-15T10:30:00Z',
-        tags: ['data-structures', 'binary-tree', 'help-needed'],
-        upvotes: 12,
-        downvotes: 1,
-        answerCount: 3,
-        viewCount: 45,
-        isPinned: false,
-        isResolved: true,
-        hasAcceptedAnswer: true,
-        lastActivity: '2024-03-15T14:22:00Z'
-      },
-      {
-        id: '2',
-        title: 'Free online resources for Data Structures practice',
-        content: 'I found some amazing free resources for practicing data structures problems. LeetCode, HackerRank, and this GitHub repo with 200+ problems. Would love to hear what others are using!',
-        type: 'resource-sharing',
-        author: {
-          id: 'user5',
-          name: 'Sarah Kim',
-          role: 'ta',
-          avatar: '/placeholder-user.jpg',
-          reputation: 890
-        },
-        createdAt: '2024-03-14T09:00:00Z',
-        updatedAt: '2024-03-14T09:00:00Z',
-        tags: ['resources', 'practice', 'helpful'],
-        upvotes: 28,
-        downvotes: 0,
-        answerCount: 12,
-        viewCount: 156,
-        isPinned: true,
-        isResolved: false,
-        hasAcceptedAnswer: false,
-        lastActivity: '2024-03-14T16:45:00Z'
-      },
-      {
-        id: '3',
-        title: 'Study group for Algorithm Design patterns?',
-        content: 'Anyone interested in forming a study group to go over the algorithm design patterns? We could meet twice a week via Discord to discuss problems and solutions. I\'m thinking Tuesdays and Thursdays 7-8 PM EST.',
-        type: 'study-group',
-        author: {
-          id: 'user2',
-          name: 'Mike Chen',
-          role: 'student',
-          avatar: '/placeholder-user.jpg',
-          reputation: 245
-        },
-        createdAt: '2024-03-13T15:20:00Z',
-        updatedAt: '2024-03-13T15:20:00Z',
-        tags: ['study-group', 'algorithms', 'collaboration'],
-        upvotes: 15,
-        downvotes: 0,
-        answerCount: 8,
-        viewCount: 67,
-        isPinned: false,
-        isResolved: false,
-        hasAcceptedAnswer: false,
-        lastActivity: '2024-03-15T11:30:00Z'
-      },
-      {
-        id: '4',
-        title: 'Quick question about Big O notation',
-        content: 'Is O(n log n) better or worse than O(n²)? I keep getting confused about this.',
-        type: 'question',
-        author: {
-          id: 'user3',
-          name: 'Emma Davis',
-          role: 'student',
-          avatar: '/placeholder-user.jpg',
-          reputation: 67
-        },
-        createdAt: '2024-03-15T08:15:00Z',
-        updatedAt: '2024-03-15T08:15:00Z',
-        tags: ['big-o', 'complexity', 'theory'],
-        upvotes: 6,
-        downvotes: 0,
-        answerCount: 2,
-        viewCount: 23,
-        isPinned: false,
-        isResolved: true,
-        hasAcceptedAnswer: true,
-        lastActivity: '2024-03-15T09:45:00Z'
-      },
-      {
-        id: '5',
-        title: 'Looking for a study buddy for final project',
-        content: 'Working on the final project (building a web scraper) and would love to find someone to pair program with or at least bounce ideas off of. Anyone else working on something similar?',
-        type: 'help-wanted',
-        author: {
-          id: 'user4',
-          name: 'Jordan Lee',
-          role: 'student',
-          avatar: '/placeholder-user.jpg',
-          reputation: 156
-        },
-        createdAt: '2024-03-12T14:30:00Z',
-        updatedAt: '2024-03-12T14:30:00Z',
-        tags: ['final-project', 'pair-programming', 'web-scraping'],
-        upvotes: 9,
-        downvotes: 0,
-        answerCount: 4,
-        viewCount: 34,
-        isPinned: false,
-        isResolved: false,
-        hasAcceptedAnswer: false,
-        lastActivity: '2024-03-13T10:15:00Z'
+    loadPosts();
+  }, [courseId, sortBy, selectedCategory, searchQuery]);
+
+  const loadPosts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Don't send "my-posts" or "deleted" as a type filter since they're special filters
+      const typeFilter = selectedCategory !== 'all' && selectedCategory !== 'my-posts' && selectedCategory !== 'deleted'
+        ? selectedCategory as ApiCommunityPost['type'] 
+        : undefined;
+      
+      const response = await communityApi.getPosts(courseId, {
+        sort: sortBy as 'recent' | 'popular' | 'answered',
+        type: typeFilter,
+        per_page: 50,
+        include_deleted: selectedCategory === 'deleted',
+        search: searchQuery.trim() || undefined
+      });
+
+      // Convert API response to ForumPost format
+      let forumPosts: ForumPost[] = response.posts.map(post => ({
+        ...post,
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+        lastActivity: post.lastActivity
+      }));
+
+      // Filter for "my-posts" on the frontend
+      if (selectedCategory === 'my-posts' && user) {
+        forumPosts = forumPosts.filter(post => post.author.id === user.id);
       }
-    ];
 
-    // Simulate loading
-    setTimeout(() => {
-      setPosts(mockPosts);
+      setPosts(forumPosts);
+    } catch (err) {
+      console.error('Error loading posts:', err);
+      setError('Failed to load community posts');
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, [courseId]);
+    }
+  };
 
-  const handleCreatePost = (newPost: Omit<ForumPost, 'id' | 'createdAt' | 'updatedAt' | 'lastActivity' | 'upvotes' | 'downvotes' | 'answerCount' | 'viewCount'>) => {
-    const post: ForumPost = {
-      ...newPost,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      lastActivity: new Date().toISOString(),
-      upvotes: 0,
-      downvotes: 0,
-      answerCount: 0,
-      viewCount: 0,
-    };
-    setPosts(prev => [post, ...prev]);
-    setShowCreateModal(false);
+  const handleCreatePost = async (postData: Omit<ForumPost, 'id' | 'createdAt' | 'updatedAt' | 'lastActivity' | 'upvotes' | 'downvotes' | 'answerCount' | 'viewCount'>) => {
+    try {
+      setError(null);
+      
+      const createData = {
+        title: postData.title,
+        content: postData.content,
+        type: postData.type,
+        tags: postData.tags,
+        isPinned: postData.isPinned
+      };
+
+      const response = await communityApi.createPost(courseId, createData);
+      
+      // Add the new post to the beginning of the posts array
+      const newPost: ForumPost = {
+        ...response.post,
+        lastActivity: response.post.createdAt
+      };
+      
+      setPosts(prev => [newPost, ...prev]);
+      setShowCreateModal(false);
+    } catch (err) {
+      console.error('Error creating post:', err);
+      setError('Failed to create post');
+    }
   };
 
   const filteredPosts = posts.filter(post => {
-    const matchesSearch = searchQuery === '' || 
-      post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    const matchesCategory = selectedCategory === 'all' || post.type === selectedCategory;
+    // Only apply tab filtering since search and category filtering is done on backend
     const matchesTab = activeTab === 'all' || 
       (activeTab === 'help' && (post.type === 'question' || post.type === 'help-wanted')) ||
       (activeTab === 'popular' && (post.upvotes - post.downvotes) >= 5) ||
@@ -234,7 +159,7 @@ export default function CommunityTab({ courseId }: CommunityTabProps) {
       (activeTab === 'study-groups' && post.type === 'study-group') ||
       (activeTab === 'resources' && post.type === 'resource-sharing');
     
-    return matchesSearch && matchesCategory && matchesTab;
+    return matchesTab;
   });
 
   const sortedPosts = [...filteredPosts].sort((a, b) => {
@@ -404,10 +329,17 @@ export default function CommunityTab({ courseId }: CommunityTabProps) {
 
           {/* Posts */}
           <TabsContent value={activeTab} className="mt-0">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+                {error}
+              </div>
+            )}
+            
             <QuestionFeed 
               posts={sortedPosts}
               loading={loading}
               onPostClick={handlePostClick}
+              searchQuery={searchQuery}
             />
           </TabsContent>
         </Tabs>
