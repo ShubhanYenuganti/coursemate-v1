@@ -31,6 +31,7 @@ export interface Goal {
     google_calendar_id?: string | null;
     // Conflicting subtask
     is_conflicting: boolean;
+    has_substasks?: boolean; // For UI purposes, to indicate if this goal has subtasks
 }
 
 export type GoalsByDate = Record<string, Goal[]>

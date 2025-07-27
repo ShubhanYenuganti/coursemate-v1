@@ -82,6 +82,8 @@ def calendar_callback():
         
     try:
         sync_google_events(user, full_sync=True)
+        user.calendar_synced = True
+        db.session.commit()
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception("initial Google Calendar sync failed")
@@ -571,7 +573,7 @@ def sync_subtask_to_google_calendar(user: User, subtask: Goal, course_title: Opt
         
         # Prepare event data
         event_data = {
-            'summary': subtask.subtask_descr,
+            'summary': f"{subtask.subtask_descr} ({'Completed' if subtask.subtask_completed else 'Incomplete'})",
             'description': event_description,
             'start': {
                 'dateTime': start_time_str,
@@ -883,3 +885,34 @@ def cleanup_google_calendar_events():
     except Exception as e:
         current_app.logger.error(f"Error during cleanup: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@calendar_bp.route("/api/calendar/disconnect", methods=["POST"])
+@jwt_required()
+def disconnect_google_calendar():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    try:
+        # Remove all Google Calendar-related events
+        google_goals = Goal.query.filter_by(user_id=user.id, goal_id="Google Calendar").all()
+        for goal in google_goals:
+            print(f"🗑️  Deleting Google Calendar goal: {goal.goal_descr} (ID: {goal.id})")
+            db.session.delete(goal)
+
+        # Reset only calendar-specific tokens
+        user.google_access_token = None
+        user.token_expiry = None
+        user.google_sync_tokens = {}
+        user.calendar_synced = False
+        user.calendar_sync_in_progress = False
+
+        db.session.commit()
+        print(f"✅ Google Calendar disconnected but login refresh token retained for user {user.id}")
+        return jsonify({"message": "Google Calendar disconnected successfully"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Failed to disconnect Google Calendar: {e}")
+        raise e
