@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Upload, File, Trash2, Eye, Download, AlertCircle, CheckCircle, Loader2, Pin, Edit2, Save, X } from 'lucide-react';
+import { Upload, File, Trash2, Eye, Download, AlertCircle, CheckCircle, Loader2, Pin, Edit2, Save, X, Brain } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,18 @@ import dynamic from 'next/dynamic';
 const AnnotatablePDFViewer = dynamic(
   () => import('@/components/courses/AnnotatablePDFViewer'),
   { ssr: false, loading: () => <div className="flex items-center justify-center p-8">Loading PDF viewer...</div> }
+);
+
+// Dynamically import the QuizViewer
+const QuizViewer = dynamic(
+  () => import('../QuizViewer'),
+  { ssr: false, loading: () => <div className="flex items-center justify-center p-8">Loading quiz...</div> }
+);
+
+// Dynamically import the FlashcardViewer
+const FlashcardViewer = dynamic(
+  () => import('../FlashcardViewer'),
+  { ssr: false, loading: () => <div className="flex items-center justify-center p-8">Loading flashcards...</div> }
 );
 
 interface UploadedFile {
@@ -47,6 +59,10 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [quizData, setQuizData] = useState<any>(null);
+  const [showQuizViewer, setShowQuizViewer] = useState(false);
+  const [flashcardData, setFlashcardData] = useState<any>(null);
+  const [showFlashcardViewer, setShowFlashcardViewer] = useState(false);
   const [pinnedFiles, setPinnedFiles] = useState<Set<string>>(new Set());
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [editedFilename, setEditedFilename] = useState('');
@@ -110,6 +126,68 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
   useEffect(() => {
     fetchFiles();
   }, [courseId]);
+
+  // Load quiz data from backend endpoint to avoid CORS issues
+  const loadQuizData = async (materialId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const api = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5173";
+      const endpoint = `${api}/api/courses/${courseId}/materials/${materialId}/quiz-data`;
+      
+      console.log('Loading quiz data from backend:', endpoint);
+      const response = await fetch(endpoint, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      console.log('Response status:', response.status, 'OK:', response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Response error:', errorText);
+        throw new Error(`Failed to load quiz data: ${response.status} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Quiz data loaded successfully:', data);
+      setQuizData(data.quiz_data);
+      setShowQuizViewer(true);
+    } catch (error) {
+      console.error('Error loading quiz data:', error);
+      setError('Failed to load quiz data');
+    }
+  };
+
+  // Load flashcard data from backend endpoint
+  const loadFlashcardData = async (materialId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const api = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5173";
+      const endpoint = `${api}/api/courses/${courseId}/materials/${materialId}/flashcards`;
+      
+      console.log('Loading flashcard data from backend:', endpoint);
+      const response = await fetch(endpoint, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      console.log('Response status:', response.status, 'OK:', response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Response error:', errorText);
+        throw new Error(`Failed to load flashcard data: ${response.status} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Flashcard data loaded successfully:', data);
+      setFlashcardData(data.flashcards_data);
+      setShowFlashcardViewer(true);
+    } catch (error) {
+      console.error('Error loading flashcard data:', error);
+      setError('Failed to load flashcard data');
+    }
+  };
 
   // Handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,6 +293,8 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
   const getFileTypeFromName = (filename?: string, fileType?: string) => {
     // First try to use the file_type from database
     if (fileType) {
+      if (fileType.toLowerCase() === 'quiz') return 'QUIZ';
+      if (fileType.toLowerCase() === 'flashcards') return 'FLASHCARDS';
       return fileType.toUpperCase();
     }
     
@@ -242,6 +322,8 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
   // Preview modal component
   const isImage = (url: string) => /\.png|\.jpe?g|\.gif|\.bmp|\.webp/i.test(url);
   const isPDF = (url: string) => url.toLowerCase().includes('.pdf');
+  const isQuiz = (file: UploadedFile) => file.file_type === 'quiz' || file.content_type === 'quiz';
+  const isFlashcard = (file: UploadedFile) => file.file_type === 'flashcards' || file.content_type === 'flashcards';
 
   const PreviewModal: React.FC<{ url: string | null; onClose: () => void }> = ({ url, onClose }) => {
     if (!url) return null;
@@ -594,7 +676,15 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
                             className="w-10 h-10 object-cover rounded border border-gray-200" 
                           />
                         ) : (
-                          <File className="w-5 h-5 text-blue-600" />
+                          <>
+                            {isQuiz(file) ? (
+                              <Brain className="w-5 h-5 text-purple-600" />
+                            ) : isFlashcard(file) ? (
+                              <Brain className="w-5 h-5 text-green-600" />
+                            ) : (
+                              <File className="w-5 h-5 text-blue-600" />
+                            )}
+                          </>
                         )}
                         
                         <div className="flex-1">
@@ -652,7 +742,15 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
                           </div>
                           <div className="flex items-center gap-4 text-sm text-gray-500">
                             <span>Uploaded {formatDate(file.uploaded_at || file.created_at || '')}</span>
-                            <Badge variant="outline">{getFileTypeFromName(file.filename, file.file_type)}</Badge>
+                            <Badge 
+                              variant={isQuiz(file) || isFlashcard(file) ? "default" : "outline"}
+                              className={
+                                isQuiz(file) ? "bg-purple-600 hover:bg-purple-700" : 
+                                isFlashcard(file) ? "bg-green-600 hover:bg-green-700" : ""
+                              }
+                            >
+                              {getFileTypeFromName(file.filename, file.file_type)}
+                            </Badge>
                           </div>
                         </div>
                       </div>
@@ -662,7 +760,15 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setPreviewUrl(file.url)}
+                        onClick={() => {
+                          if (isQuiz(file)) {
+                            loadQuizData(file.id);
+                          } else if (isFlashcard(file)) {
+                            loadFlashcardData(file.id);
+                          } else {
+                            setPreviewUrl(file.url);
+                          }
+                        }}
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
@@ -725,6 +831,44 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
         url={previewUrl}
         onClose={() => setPreviewUrl(null)}
       />
+
+      {/* Quiz Viewer Modal */}
+      {showQuizViewer && quizData && (
+        <Portal>
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto overflow-hidden">
+              <div className="h-full overflow-y-auto">
+                <QuizViewer 
+                  quizData={quizData} 
+                  onClose={() => {
+                    setShowQuizViewer(false);
+                    setQuizData(null);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* Flashcard Viewer Modal */}
+      {showFlashcardViewer && flashcardData && (
+        <Portal>
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto overflow-hidden">
+              <div className="h-full overflow-y-auto">
+                <FlashcardViewer 
+                  flashcardData={flashcardData} 
+                  onClose={() => {
+                    setShowFlashcardViewer(false);
+                    setFlashcardData(null);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
 
       {/* Delete Confirmation Modal */}
       {showConfirmModal && fileToDelete && (

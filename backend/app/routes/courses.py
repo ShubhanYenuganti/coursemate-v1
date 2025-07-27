@@ -5,6 +5,7 @@ from app.models.user import User
 from app.init import db
 from datetime import datetime
 import os
+import uuid
 from werkzeug.utils import secure_filename
 from app.utils.s3 import upload_file_to_s3, list_files_in_s3, delete_file_from_s3, get_presigned_url
 from app.utils.llama_index_service import insert_placeholder_embedding, LlamaIndexService
@@ -888,3 +889,281 @@ def migrate_existing_materials_to_db(course_id):
         migrated.append(filename)
     db.session.commit()
     return jsonify({'success': True, 'migrated': migrated, 'count': len(migrated)}), 200
+
+@courses_bp.route('/<course_id>/materials/save-quiz', methods=['POST'])
+@jwt_required()
+def save_quiz_as_material(course_id):
+    """Save generated quiz as a material in the database"""
+    current_user_id = get_jwt_identity()
+    combo_id = f"{course_id}+{current_user_id}"
+    
+    try:
+        print(f"DEBUG: Save quiz endpoint called for course {course_id} by user {current_user_id}")
+        data = request.get_json()
+        print(f"DEBUG: Received data: {data is not None}")
+        
+        if not data:
+            print("ERROR: No data provided")
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        required_fields = ['quiz_data', 'material_name']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'{field} is required'}), 400
+        
+        quiz_data = data.get('quiz_data')
+        material_name = data.get('material_name')
+        print(f"DEBUG: Quiz data type: {type(quiz_data)}, Material name: {material_name}")
+        
+        # Create a JSON file content for the quiz
+        import json
+        quiz_content = json.dumps(quiz_data, indent=2)
+        print(f"DEBUG: Quiz content length: {len(quiz_content)}")
+        
+        # Generate a unique filename for the quiz
+        quiz_filename = f"quiz_{uuid.uuid4()}.json"
+        print(f"DEBUG: Generated filename: {quiz_filename}")
+        
+        # Save to S3 with quiz content
+        from app.utils.s3 import upload_file_to_s3
+        from io import BytesIO
+        
+        file_buffer = BytesIO(quiz_content.encode('utf-8'))
+        file_buffer.seek(0)
+        
+        s3_path = f"courses/{combo_id}/materials/{quiz_filename}"
+        print(f"DEBUG: Uploading to S3 path: {s3_path}")
+        
+        # Use the S3 upload function which will set the correct content type
+        s3_url = upload_file_to_s3(file_buffer, s3_path)
+        print(f"DEBUG: S3 upload result: {s3_url}")
+        
+        if not s3_url:
+            print("ERROR: Failed to upload to S3")
+            return jsonify({'error': 'Failed to upload quiz to storage'}), 500
+        
+        # Create database record
+        material = UserCourseMaterial(
+            user_id=current_user_id,
+            course_id=combo_id,
+            file_path=s3_path,
+            material_name=material_name,
+            is_pinned=False,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            file_type='quiz',
+            file_size=len(quiz_content),
+            original_filename=f"{material_name}.json"
+        )
+        
+        db.session.add(material)
+        print("DEBUG: Added material to session")
+        db.session.commit()
+        print("DEBUG: Committed to database")
+        
+        # Return the saved material data
+        result = material.to_dict()
+        presigned_url = get_presigned_url(result['file_path']) if result['file_path'] else None
+        result['url'] = presigned_url
+        print(f"DEBUG: Generated presigned URL: {presigned_url}")
+        print(f"DEBUG: Returning success response")
+        
+        return jsonify({
+            'success': True,
+            'material': result,
+            'message': 'Quiz saved successfully as material'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERROR: Exception in save_quiz_as_material: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to save quiz: {str(e)}'}), 500
+
+@courses_bp.route('/<course_id>/materials/<material_id>/quiz-data', methods=['GET'])
+@jwt_required()
+def get_quiz_data(course_id, material_id):
+    """Fetch quiz data from S3 through backend to avoid CORS issues"""
+    current_user_id = get_jwt_identity()
+    combo_id = f"{course_id}+{current_user_id}"
+    
+    try:
+        print(f"DEBUG: Getting quiz data for material {material_id} in course {course_id}")
+        
+        # Find the material in the database
+        material = UserCourseMaterial.query.filter_by(
+            id=material_id,
+            user_id=current_user_id,
+            course_id=combo_id,
+            file_type='quiz'
+        ).first()
+        
+        if not material:
+            return jsonify({'error': 'Quiz not found or unauthorized'}), 404
+        
+        print(f"DEBUG: Found material with file_path: {material.file_path}")
+        
+        # Download the quiz data from S3
+        from app.utils.s3 import download_file_from_s3
+        import json
+        
+        quiz_content = download_file_from_s3(material.file_path)
+        if not quiz_content:
+            return jsonify({'error': 'Failed to load quiz data from storage'}), 500
+        
+        # Parse the JSON content
+        quiz_data = json.loads(quiz_content)
+        print(f"DEBUG: Successfully loaded quiz data")
+        
+        return jsonify({
+            'success': True,
+            'quiz_data': quiz_data,
+            'material_name': material.material_name
+        }), 200
+        
+    except Exception as e:
+        print(f"ERROR: Exception in get_quiz_data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to load quiz data: {str(e)}'}), 500
+
+@courses_bp.route('/<course_id>/materials/save-flashcards', methods=['POST'])
+@jwt_required()
+def save_flashcards_as_material(course_id):
+    """Save generated flashcards as a material in the database"""
+    current_user_id = get_jwt_identity()
+    combo_id = f"{course_id}+{current_user_id}"
+    
+    try:
+        print(f"DEBUG: Save flashcards endpoint called for course {course_id} by user {current_user_id}")
+        data = request.get_json()
+        print(f"DEBUG: Received data: {data is not None}")
+        
+        if not data:
+            print("ERROR: No data provided")
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        required_fields = ['flashcards_data', 'material_name']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'{field} is required'}), 400
+        
+        flashcards_data = data.get('flashcards_data')
+        material_name = data.get('material_name')
+        print(f"DEBUG: Flashcards data type: {type(flashcards_data)}, Material name: {material_name}")
+        
+        # Create a JSON file content for the flashcards
+        import json
+        flashcards_content = json.dumps(flashcards_data, indent=2)
+        print(f"DEBUG: Flashcards content length: {len(flashcards_content)}")
+        
+        # Generate a unique filename for the flashcards
+        flashcards_filename = f"flashcards_{uuid.uuid4()}.json"
+        print(f"DEBUG: Generated filename: {flashcards_filename}")
+        
+        # Save to S3 with flashcards content
+        from app.utils.s3 import upload_file_to_s3
+        from io import BytesIO
+        
+        file_buffer = BytesIO(flashcards_content.encode('utf-8'))
+        file_buffer.seek(0)
+        
+        s3_path = f"courses/{combo_id}/materials/{flashcards_filename}"
+        print(f"DEBUG: Uploading to S3 path: {s3_path}")
+        
+        # Use the S3 upload function which will set the correct content type
+        s3_url = upload_file_to_s3(file_buffer, s3_path)
+        print(f"DEBUG: S3 upload result: {s3_url}")
+        
+        if not s3_url:
+            print("ERROR: Failed to upload to S3")
+            return jsonify({'error': 'Failed to upload flashcards to storage'}), 500
+        
+        # Create database record
+        material = UserCourseMaterial(
+            user_id=current_user_id,
+            course_id=combo_id,
+            file_path=s3_path,
+            material_name=material_name,
+            is_pinned=False,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            file_type='flashcards',
+            file_size=len(flashcards_content),
+            original_filename=f"{material_name}.json"
+        )
+        
+        db.session.add(material)
+        print("DEBUG: Added material to session")
+        db.session.commit()
+        print("DEBUG: Committed to database")
+        
+        # Return the saved material data
+        result = material.to_dict()
+        presigned_url = get_presigned_url(result['file_path']) if result['file_path'] else None
+        result['url'] = presigned_url
+        print(f"DEBUG: Generated presigned URL: {presigned_url}")
+        print(f"DEBUG: Returning success response")
+        
+        return jsonify({
+            'success': True,
+            'material': result,
+            'message': 'Flashcards saved successfully as material'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERROR: Exception in save_flashcards_as_material: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to save flashcards: {str(e)}'}), 500
+
+@courses_bp.route('/<course_id>/materials/<material_id>/flashcards', methods=['GET'])
+@jwt_required()
+def get_flashcards_data(course_id, material_id):
+    """Get flashcards data from a saved material"""
+    current_user_id = get_jwt_identity()
+    combo_id = f"{course_id}+{current_user_id}"
+    
+    try:
+        print(f"DEBUG: Get flashcards data endpoint called for material {material_id}")
+        
+        # Find the material
+        material = UserCourseMaterial.query.filter_by(
+            id=material_id,
+            user_id=current_user_id,
+            course_id=combo_id,
+            file_type='flashcards'
+        ).first()
+        
+        if not material:
+            return jsonify({'error': 'Flashcards material not found'}), 404
+        
+        print(f"DEBUG: Found material: {material.material_name}")
+        
+        # Download the file from S3
+        from app.utils.s3 import download_file_from_s3
+        file_content = download_file_from_s3(material.file_path)
+        
+        if not file_content:
+            return jsonify({'error': 'Failed to load flashcards from storage'}), 500
+        
+        # Parse the JSON content
+        import json
+        flashcards_data = json.loads(file_content)
+        print(f"DEBUG: Loaded flashcards data successfully")
+        
+        return jsonify({
+            'success': True,
+            'flashcards_data': flashcards_data,
+            'material_name': material.material_name
+        }), 200
+        
+    except Exception as e:
+        print(f"ERROR: Exception in get_flashcards_data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to load flashcards data: {str(e)}'}), 500
