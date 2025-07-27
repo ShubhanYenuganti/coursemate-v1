@@ -1,6 +1,8 @@
 "use client"
 
 import React from 'react';
+import 'katex/dist/katex.min.css';
+import katex from 'katex';
 import { ChevronUp, ChevronDown, MessageSquare, Eye, Clock, CheckCircle2, Pin, User, Tag } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +15,19 @@ interface QuestionCardProps {
 }
 
 export function QuestionCard({ post, onClick }: QuestionCardProps) {
+  // Render rich content (HTML + KaTeX) from TiptapEditor
+  function renderRichContent(html: string) {
+    if (!html) return null;
+    const doc = document.createElement('div');
+    doc.innerHTML = html;
+    const equationDivs = doc.querySelectorAll('div[data-type="equation"]');
+    equationDivs.forEach(div => {
+      const latex = div.getAttribute('latex') || '';
+      div.innerHTML = katex.renderToString(latex, { throwOnError: false });
+      div.className = 'latex-block bg-gray-50 border border-gray-200 rounded px-4 py-2 my-2 text-lg';
+    });
+    return <div dangerouslySetInnerHTML={{ __html: doc.innerHTML }} />;
+  }
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -97,9 +112,9 @@ export function QuestionCard({ post, onClick }: QuestionCardProps) {
                 {post.title}
               </h3>
               
-              <p className="text-sm text-gray-600 line-clamp-2 mb-4 leading-relaxed">
-                {post.content}
-              </p>
+              <div className="text-sm text-gray-600 mb-4 leading-relaxed">
+                {renderRichContent(post.content)}
+              </div>
               
               {/* Tags */}
               <div className="flex flex-wrap gap-2 mb-4">

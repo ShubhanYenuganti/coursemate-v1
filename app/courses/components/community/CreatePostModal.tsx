@@ -5,7 +5,7 @@ import { X, Send, Hash, MessageSquare, Users, BookOpen, HandHeart, HelpCircle } 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Select from 'react-select';
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import TiptapEditor from './TiptapEditor';
@@ -21,7 +21,14 @@ interface CreatePostModalProps {
 export function CreatePostModal({ isOpen, onClose, onSubmit, courseId }: CreatePostModalProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [type, setType] = useState<'question' | 'discussion' | 'study-group' | 'resource-sharing' | 'help-wanted'>('question');
+  const postTypeOptions = [
+    { value: 'question', label: 'Question', icon: <MessageSquare className="w-4 h-4 text-blue-600" />, description: 'Ask for help or clarification' },
+    { value: 'discussion', label: 'Discussion', icon: <Users className="w-4 h-4 text-emerald-600" />, description: 'Start a general discussion' },
+    { value: 'study-group', label: 'Study Group', icon: <BookOpen className="w-4 h-4 text-violet-600" />, description: 'Organize study sessions' },
+    { value: 'resource-sharing', label: 'Resource Sharing', icon: <HandHeart className="w-4 h-4 text-amber-600" />, description: 'Share helpful materials' },
+    { value: 'help-wanted', label: 'Help Wanted', icon: <HelpCircle className="w-4 h-4 text-rose-600" />, description: 'Looking for collaboration' },
+  ];
+  const [type, setType] = useState<{ value: string; label: string; icon: React.ReactNode; description: string }>(postTypeOptions[0]);
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,7 +36,7 @@ export function CreatePostModal({ isOpen, onClose, onSubmit, courseId }: CreateP
   const resetForm = () => {
     setTitle('');
     setContent('');
-    setType('question');
+    setType(postTypeOptions[0]);
     setTags([]);
     setNewTag('');
     setIsSubmitting(false);
@@ -60,11 +67,11 @@ export function CreatePostModal({ isOpen, onClose, onSubmit, courseId }: CreateP
       const post: Omit<ForumPost, 'id' | 'createdAt' | 'updatedAt' | 'lastActivity' | 'upvotes' | 'downvotes' | 'answerCount' | 'viewCount'> = {
         title: title.trim(),
         content: content.trim(),
-        type,
+        type: type.value as ForumPost['type'],
         author: {
           id: 'current-user',
           name: 'Current User',
-          role: 'student'
+          role: 'student' as ForumPost['author']['role'],
         },
         tags,
         isPinned: false,
@@ -81,39 +88,8 @@ export function CreatePostModal({ isOpen, onClose, onSubmit, courseId }: CreateP
     }
   };
 
-  const getPostTypeIcon = (postType: string) => {
-    switch (postType) {
-      case 'question':
-        return <MessageSquare className="w-4 h-4" />;
-      case 'discussion':
-        return <Users className="w-4 h-4" />;
-      case 'study-group':
-        return <BookOpen className="w-4 h-4" />;
-      case 'resource-sharing':
-        return <HandHeart className="w-4 h-4" />;
-      case 'help-wanted':
-        return <HelpCircle className="w-4 h-4" />;
-      default:
-        return <MessageSquare className="w-4 h-4" />;
-    }
-  };
-
-  const getPostTypeDescription = (postType: string) => {
-    switch (postType) {
-      case 'question':
-        return 'Ask for help or clarification on course topics';
-      case 'discussion':
-        return 'Start a general discussion or share ideas';
-      case 'study-group':
-        return 'Organize or join study groups with peers';
-      case 'resource-sharing':
-        return 'Share helpful resources, links, or materials';
-      case 'help-wanted':
-        return 'Looking for study buddies or collaboration';
-      default:
-        return '';
-    }
-  };
+  // Helper to get description for selected type
+  const getPostTypeDescription = (typeObj: typeof postTypeOptions[0]) => typeObj?.description || '';
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -133,63 +109,26 @@ export function CreatePostModal({ isOpen, onClose, onSubmit, courseId }: CreateP
             <label className="text-sm font-semibold text-slate-700">
               Post Type *
             </label>
-            <Select value={type} onValueChange={(value: any) => setType(value)}>
-              <SelectTrigger className="w-full h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl bg-white/80 backdrop-blur-sm">
+            <Select
+              options={postTypeOptions}
+              value={type}
+              onChange={option => setType(option as typeof postTypeOptions[0])}
+              formatOptionLabel={(option: any) => (
                 <div className="flex items-center gap-3">
-                  {getPostTypeIcon(type)}
-                  <SelectValue placeholder="Select post type" />
+                  {option.icon}
+                  <span className="font-medium">{option.label}</span>
+                  <span className="text-xs text-slate-500 ml-2">{option.description}</span>
                 </div>
-              </SelectTrigger>
-              <SelectContent className="bg-white/95 backdrop-blur-md border-slate-200 rounded-xl shadow-xl">
-                <SelectItem value="question" className="py-3 px-4 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <MessageSquare className="w-4 h-4 text-blue-600" />
-                    <div>
-                      <div className="font-medium">Question</div>
-                      <div className="text-xs text-slate-500">Ask for help or clarification</div>
-                    </div>
-                  </div>
-                </SelectItem>
-                <SelectItem value="discussion" className="py-3 px-4 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Users className="w-4 h-4 text-emerald-600" />
-                    <div>
-                      <div className="font-medium">Discussion</div>
-                      <div className="text-xs text-slate-500">Start a general discussion</div>
-                    </div>
-                  </div>
-                </SelectItem>
-                <SelectItem value="study-group" className="py-3 px-4 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <BookOpen className="w-4 h-4 text-violet-600" />
-                    <div>
-                      <div className="font-medium">Study Group</div>
-                      <div className="text-xs text-slate-500">Organize study sessions</div>
-                    </div>
-                  </div>
-                </SelectItem>
-                <SelectItem value="resource-sharing" className="py-3 px-4 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <HandHeart className="w-4 h-4 text-amber-600" />
-                    <div>
-                      <div className="font-medium">Resource Sharing</div>
-                      <div className="text-xs text-slate-500">Share helpful materials</div>
-                    </div>
-                  </div>
-                </SelectItem>
-                <SelectItem value="help-wanted" className="py-3 px-4 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <HelpCircle className="w-4 h-4 text-rose-600" />
-                    <div>
-                      <div className="font-medium">Help Wanted</div>
-                      <div className="text-xs text-slate-500">Looking for collaboration</div>
-                    </div>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              )}
+              classNamePrefix="react-select"
+              className="w-full"
+              placeholder="Select post type"
+              isSearchable={false}
+              getOptionValue={option => option.value}
+              getOptionLabel={option => option.label}
+            />
             <p className="text-sm text-slate-600">
-              {getPostTypeDescription(type)}
+              {type.description}
             </p>
           </div>
 
@@ -200,32 +139,21 @@ export function CreatePostModal({ isOpen, onClose, onSubmit, courseId }: CreateP
             </label>
             <Input
               id="title"
-              placeholder="What's your question or topic?"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Enter a concise title for your post"
+              className="w-full"
+              maxLength={100}
               required
-              className="w-full h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl bg-white/80 backdrop-blur-sm text-base"
-              maxLength={200}
             />
-            <div className="text-xs text-slate-500 text-right">
-              {title.length}/200 characters
-            </div>
           </div>
-
-          {/* Content */}
+          {/* Content Editor */}
           <div className="space-y-2">
-            <label htmlFor="content" className="text-sm font-semibold text-slate-700">
-              Content *
-            </label>
             <TiptapEditor
               value={content}
               onChange={setContent}
               placeholder={`Provide more details about your question or topic...
-
-Use the toolbar to:
-• Format your text with bold, italic, and underline
-• Add code blocks and LaTeX formulas
-• Create lists and insert links`}
+\nUse the toolbar to:\n• Format your text with bold, italic, and underline\n• Add code blocks and LaTeX formulas\n• Create lists and insert links`}
               className="min-h-[200px]"
             />
             <div className="text-xs text-slate-500 flex justify-between">
@@ -299,8 +227,8 @@ Use the toolbar to:
               disabled={!title.trim() || !content.trim() || isSubmitting}
               className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-2.5"
             >
-              {getPostTypeIcon(type)}
-              {isSubmitting ? 'Creating...' : `Create ${type.charAt(0).toUpperCase() + type.slice(1)}`}
+              {type.icon}
+              {isSubmitting ? 'Creating...' : `Create ${type.label}`}
             </Button>
           </div>
         </form>

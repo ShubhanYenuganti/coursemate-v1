@@ -1,6 +1,8 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
+import 'katex/dist/katex.min.css';
+import katex from 'katex';
 import { ArrowLeft, ChevronUp, ChevronDown, MessageSquare, Eye, Clock, CheckCircle2, Pin, User, Tag, Reply, MoreVertical } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -18,6 +20,12 @@ interface QuestionDetailProps {
 }
 
 export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) {
+  // Helper to detect raw LaTeX (starts with \ or $)
+  function isRawLatex(str: string) {
+    if (!str) return false;
+    const trimmed = str.trim();
+    return trimmed.startsWith('\\') || trimmed.startsWith('$');
+  }
   const [answers, setAnswers] = useState<ForumAnswer[]>([
     {
       id: '1',
@@ -105,11 +113,12 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
     }
   };
 
-  const handleAddAnswer = (content: string) => {
+  const handleAddAnswer = (content: string, latexBlocks?: string[]) => {
     const newAnswer: ForumAnswer = {
       id: Date.now().toString(),
       postId: post.id,
       content,
+      latexBlocks: latexBlocks || [],
       author: {
         id: 'current-user',
         name: 'You',
@@ -305,8 +314,20 @@ export function QuestionDetail({ post, onBack, courseId }: QuestionDetailProps) 
 
                   {/* Content */}
                   <div className="flex-1">
-                    <div className="prose prose-sm max-w-none mb-4">
-                      <div className="text-gray-700 prose prose-sm max-w-none mb-4" dangerouslySetInnerHTML={{ __html: answer.content }} />
+                    <div className="ProseMirror text-gray-700 max-w-none mb-4">
+                      {/* Render answer content, including equation nodes as in TiptapEditor */}
+                      {(() => {
+                        // Parse the answer HTML and replace equation nodes with KaTeX output
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(answer.content, 'text/html');
+                        const equationDivs = doc.querySelectorAll('div[data-type="equation"]');
+                        equationDivs.forEach(div => {
+                          const latex = div.getAttribute('latex') || '';
+                          div.innerHTML = katex.renderToString(latex, { throwOnError: false });
+                          div.className = 'latex-block bg-gray-50 border border-gray-200 rounded px-4 py-2 my-2 text-lg';
+                        });
+                        return <div dangerouslySetInnerHTML={{ __html: doc.body.innerHTML }} />;
+                      })()}
                     </div>
 
                     <div className="flex items-center justify-between">

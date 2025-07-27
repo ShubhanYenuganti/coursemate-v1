@@ -46,6 +46,7 @@ export interface ForumAnswer {
   id: string;
   postId: string;
   content: string;
+  latexBlocks?: string[];
   author: {
     id: string;
     name: string;

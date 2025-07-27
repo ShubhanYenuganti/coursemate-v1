@@ -1,6 +1,22 @@
+@import 'katex/dist/katex.min.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Ensure KaTeX styles are always applied */
+.katex, .katex * {
+  all: unset;
+  font-family: 'KaTeX_Main', 'Times New Roman', Times, serif !important;
+  font-size: 1em !important;
+  line-height: normal !important;
+  color: inherit !important;
+}
+
+/* Re-apply KaTeX CSS for answer cards in case of style isolation */
+.answer-card .katex {
+  font-size: 1.2em;
+  color: #222;
+}
 
 @layer base {
   /* Default color scheme (Blue) */
