@@ -204,6 +204,27 @@ class CourseService {
     return this.handleResponse(response);
   }
 
+  async getCourseReviews(courseId: string) {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/reviews/course/${courseId}`, {
+        method: "GET",
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem("token")}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch course reviews");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(error);
+      throw new Error("Failed to fetch course reviews");
+    }
+  }
+
   async uploadBanner(courseId: string, file: File): Promise<{ message: string; course: CourseData }> {
     const formData = new FormData();
     formData.append('file', file);

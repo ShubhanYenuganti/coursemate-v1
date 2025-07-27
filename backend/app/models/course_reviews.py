@@ -37,6 +37,12 @@ class CourseReview(db.Model):
             'posted': self.posted.isoformat() if self.posted else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+        
+    def to_dict_with_user(self):
+        return {
+            **self.to_dict(),
+            "user_name": self.user.name if self.user else None
+        }
 
     def __repr__(self):
         return f"<CourseReview {self.combo_id}>"

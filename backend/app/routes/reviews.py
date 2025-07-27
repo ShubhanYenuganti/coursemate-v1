@@ -1,3 +1,4 @@
+from app.models.user import User
 from flask import Blueprint, request, jsonify
 from app.init import db
 from app.models.course_reviews import CourseReview
@@ -19,8 +20,13 @@ def get_review_by_user_id(user_id):
     if not current_user:
         return jsonify({"msg": "User not authenticated"}), 401
 
-    reviews = CourseReview.query.filter_by(user_id=user_id).all()
-    return jsonify([review.to_dict() for review in reviews]), 200
+    reviews = (
+        db.session.query(CourseReview)
+        .join(User, CourseReview.user_id == User.id)
+        .filter(CourseReview.user_id == user_id)
+        .all()
+    )
+    return jsonify([review.to_dict_with_user() for review in reviews]), 200
 
 # Get review by course_id
 @course_reviews_bp.route('/reviews/course/<course_id>', methods=['GET'])
@@ -30,9 +36,13 @@ def get_review_by_course_id(course_id):
     if not current_user:
         return jsonify({"msg": "User not authenticated"}), 401
     
-    reviews = CourseReview.query.filter_by(course_id=course_id).all()
-    return jsonify([review.to_dict() for review in reviews]), 200
-
+    reviews = (
+        db.session.query(CourseReview)
+        .join(User, CourseReview.user_id == User.id)
+        .filter(CourseReview.course_id == course_id)
+        .all()
+    )
+    return jsonify([review.to_dict_with_user() for review in reviews]), 200
 # Post a new review
 @course_reviews_bp.route('/reviews', methods=['POST'])
 @jwt_required()

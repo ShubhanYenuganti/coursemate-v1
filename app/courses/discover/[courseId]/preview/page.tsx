@@ -20,29 +20,29 @@ const tabs: Tab[] = [
 ]
 
 // Mock reviews data
-const mockReviews = [
-  {
-    id: 1,
-    author: "Sarah Johnson",
-    rating: 5,
-    date: "2024-03-15",
-    content: "This course exceeded my expectations! The content is well-structured and the instructor explains complex concepts in a way that's easy to understand.",
-  },
-  {
-    id: 2,
-    author: "Michael Chen",
-    rating: 4,
-    date: "2024-03-10",
-    content: "Great course with practical examples. The only improvement I'd suggest is adding more hands-on exercises.",
-  },
-  {
-    id: 3,
-    author: "Emma Rodriguez",
-    rating: 5,
-    date: "2024-03-05",
-    content: "The best course I've taken on this subject. The resources provided are comprehensive and the community is very supportive.",
-  },
-]
+// const mockReviews = [
+//   {
+//     id: 1,
+//     author: "Sarah Johnson",
+//     rating: 5,
+//     date: "2024-03-15",
+//     content: "This course exceeded my expectations! The content is well-structured and the instructor explains complex concepts in a way that's easy to understand.",
+//   },
+//   {
+//     id: 2,
+//     author: "Michael Chen",
+//     rating: 4,
+//     date: "2024-03-10",
+//     content: "Great course with practical examples. The only improvement I'd suggest is adding more hands-on exercises.",
+//   },
+//   {
+//     id: 3,
+//     author: "Emma Rodriguez",
+//     rating: 5,
+//     date: "2024-03-05",
+//     content: "The best course I've taken on this subject. The resources provided are comprehensive and the community is very supportive.",
+//   },
+// ]
 
 // Add mock resources data at the top after mockReviews
 const mockResources = [
@@ -87,6 +87,7 @@ const CoursePreviewPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isOwnedByUser, setIsOwnedByUser] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>("description");
+  const [reviews, setReviews] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -98,6 +99,11 @@ const CoursePreviewPage: React.FC = () => {
         console.log('Is owned by user:', data.is_owned_by_user); // Debug log
         setCourse(data);
         setIsOwnedByUser(data.is_owned_by_user || false);
+
+        // Fetch course reviews after course is loaded
+        const reviewData = await courseService.getCourseReviews(courseId);
+        setReviews(reviewData);
+        console.log('Reviews data:', reviewData); // Debug log
       } catch (err) {
         setError('Course not found or failed to load.');
         console.error(err);
@@ -134,9 +140,8 @@ const CoursePreviewPage: React.FC = () => {
     return Array.from({ length: 5 }).map((_, index) => (
       <Star
         key={index}
-        className={`h-4 w-4 ${
-          index < rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-        }`}
+        className={`h-4 w-4 ${index < rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+          }`}
       />
     ))
   }
@@ -181,7 +186,7 @@ const CoursePreviewPage: React.FC = () => {
                 <p className="text-gray-600">External resources and materials for this course</p>
               </div>
             </div>
-            
+
             {mockResources.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -203,23 +208,22 @@ const CoursePreviewPage: React.FC = () => {
                         {resource.type}
                       </span>
                     </div>
-                    
+
                     {/* Title */}
                     <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">
                       {resource.title}
                     </h4>
-                    
+
                     {/* Rating */}
                     <div className="flex items-center gap-2 mb-3">
                       <div className="flex">
                         {Array.from({ length: 5 }).map((_, index) => (
                           <Star
                             key={index}
-                            className={`h-4 w-4 ${
-                              index < Math.round((resource.credibility_score + resource.relevance_score) / 2 * 5)
-                                ? "fill-yellow-400 text-yellow-400" 
+                            className={`h-4 w-4 ${index < Math.round((resource.credibility_score + resource.relevance_score) / 2 * 5)
+                                ? "fill-yellow-400 text-yellow-400"
                                 : "text-gray-300"
-                            }`}
+                              }`}
                           />
                         ))}
                       </div>
@@ -227,12 +231,12 @@ const CoursePreviewPage: React.FC = () => {
                         {((resource.credibility_score + resource.relevance_score) / 2 * 5).toFixed(1)}/5
                       </span>
                     </div>
-                    
+
                     {/* Description */}
                     <p className="text-sm text-gray-600 mb-4 line-clamp-3">
                       {resource.description}
                     </p>
-                    
+
                     {/* Progress Indicators */}
                     <div className="space-y-2 mb-4">
                       <div className="flex justify-between text-xs">
@@ -240,24 +244,24 @@ const CoursePreviewPage: React.FC = () => {
                         <span className="text-green-700">{Math.round(resource.credibility_score * 100)}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-1.5">
-                        <div 
-                          className="bg-green-500 h-1.5 rounded-full" 
+                        <div
+                          className="bg-green-500 h-1.5 rounded-full"
                           style={{ width: `${resource.credibility_score * 100}%` }}
                         ></div>
                       </div>
-                      
+
                       <div className="flex justify-between text-xs">
                         <span className="text-blue-700 font-medium">Relevance</span>
                         <span className="text-blue-700">{Math.round(resource.relevance_score * 100)}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-1.5">
-                        <div 
-                          className="bg-blue-500 h-1.5 rounded-full" 
+                        <div
+                          className="bg-blue-500 h-1.5 rounded-full"
                           style={{ width: `${resource.relevance_score * 100}%` }}
                         ></div>
                       </div>
                     </div>
-                    
+
                     {/* Action Button */}
                     <a
                       href={resource.url}
@@ -268,7 +272,7 @@ const CoursePreviewPage: React.FC = () => {
                       <FileText className="h-4 w-4" />
                       Visit Resource
                     </a>
-                    
+
                     {/* Added Date */}
                     <p className="text-xs text-gray-400 mt-3 text-center">
                       Added {resource.addedAt}
@@ -289,17 +293,25 @@ const CoursePreviewPage: React.FC = () => {
       case "reviews":
         return (
           <div className="space-y-6">
-            {mockReviews.map((review) => (
-              <div key={review.id} className="bg-gray-50 p-6 rounded-lg">
+            {reviews.map((review) => (
+              <div key={review.combo_id} className="bg-gray-50 p-6 rounded-lg">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-gray-800">{review.author}</h4>
-                  <span className="text-sm text-gray-500">{review.date}</span>
+                  <h4 className="font-semibold text-gray-800">{review.user_name}</h4>
+                  <span className="text-sm text-gray-500">
+                    {new Intl.DateTimeFormat("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "numeric",
+                    }).format(new Date(review.updated_at))}
+                  </span>
                 </div>
                 <div className="flex items-center mb-3">
                   {renderStars(review.rating)}
                   <span className="ml-2 text-sm text-gray-600">({review.rating}/5)</span>
                 </div>
-                <p className="text-gray-700">{review.content}</p>
+                <p className="text-gray-700">{review.review_text}</p>
               </div>
             ))}
           </div>
@@ -365,11 +377,10 @@ const CoursePreviewPage: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 py-4 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === tab.id
+                className={`flex items-center space-x-2 py-4 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
                     ? "border-purple-500 text-purple-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                  }`}
               >
                 {tab.icon}
                 <span>{tab.label}</span>
