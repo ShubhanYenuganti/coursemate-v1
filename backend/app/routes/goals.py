@@ -2,7 +2,7 @@ from collections import defaultdict
 import re
 from urllib.parse import unquote
 from flask import Blueprint, request, jsonify, current_app, g
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 import uuid
 from app.models.goal import Goal
 from app.models.course import Course
@@ -153,7 +153,9 @@ def get_course_goals(course_id):
             course = Course.query.filter_by(id=raw_id, user_id=user_id).first()
 
         if not course:
-            return jsonify({'error': 'Course not found or you do not have access'}), 404
+            return jsonify({
+                'error': 'Course not found or you do not have access'
+            }), 404
 
         # Get all rows for this course using combo_id
         goals = Goal.query.filter_by(course_id=course.combo_id, user_id=user_id).all()
@@ -342,6 +344,13 @@ def create_goal(course_id):
         
         db.session.commit()
         
+        # Queue Google Calendar sync for any tasks created (excluding placeholders)
+        if rows_to_add:
+            # Get unique task IDs from created rows (excluding placeholders)
+            task_ids = set(row.task_id for row in rows_to_add if row.task_id != 'placeholder')
+            for task_id in task_ids:
+                queue_google_calendar_sync("sync", user_id, task_id, course_id)
+        
         # Return the created rows
         result = [row.to_dict() for row in rows_to_add]
         return jsonify(result), 201
@@ -518,6 +527,13 @@ def update_goal(goal_id):
         
         db.session.commit()
         
+        # Queue Google Calendar sync for all tasks in this goal if due_date changed
+        if 'due_date' in data:
+            # Get all unique task IDs for this goal (excluding placeholders)
+            task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
+            for task_id in task_ids:
+                queue_google_calendar_sync("sync", user_id, task_id, goals[0].course_id)
+        
         # Get the updated rows
         updated_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
         result = [goal.to_dict() for goal in updated_goals]
@@ -602,28 +618,34 @@ def get_goal_tasks(goal_id):
         current_app.logger.error(f"Error getting tasks: {str(e)}")
         return jsonify({'error': 'An error occurred while getting tasks'}), 500
 
+
 @goals_bp.route('/api/goals/<goal_id>/tasks', methods=['PUT'])
 @jwt_required()
 def update_goal_tasks(goal_id):
     print("Entered update_goal_tasks for goal_id:", goal_id)
     try:
+        # Get current user from JWT
         user_id = get_jwt_identity()
-
+        
+        # Get all rows for this goal
         goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
+        
         if not goals:
             print("No goals found for goal_id:", goal_id)
             return jsonify({'error': 'Goal not found or you do not have access'}), 404
-
+        
         data = request.get_json()
         if not data or 'tasks' not in data:
             print("No tasks in data for goal_id:", goal_id, "data:", data)
             return jsonify({'error': 'Tasks are required'}), 400
-
+        
         existing_task_ids = {goal.task_id for goal in goals}
+        
+        # Track which tasks are in the update
         updated_task_ids = set()
         conflicting_subtasks = set()
         bypass = data.get('bypass')
-
+        
         if not bypass:
             for task_data in data['tasks']:
                 task_id = task_data.get('task_id')
@@ -663,11 +685,13 @@ def update_goal_tasks(goal_id):
         for task_data in data['tasks']:
             task_id = task_data.get('task_id')
             print('Received task_due_date:', task_data.get('task_due_date'))
-
+            
             if task_id and task_id in existing_task_ids:
+                # Update existing task
                 updated_task_ids.add(task_id)
                 task_rows = [g for g in goals if g.task_id == task_id]
-
+                
+                # Update task fields
                 for task_row in task_rows:
                     for field in ['task_title', 'task_descr', 'task_completed']:
                         if field in task_data:
@@ -677,15 +701,18 @@ def update_goal_tasks(goal_id):
                         if task_data['task_due_date']:
                             try:
                                 if isinstance(task_data['task_due_date'], str):
+                                    # Handle different date formats
                                     if 'T' in task_data['task_due_date']:
-                                        task_due_date = datetime.fromisoformat(task_data['task_due_date'].replace('Z', '+00:00'))
+                                        task_row.task_due_date = datetime.fromisoformat(task_data['task_due_date'].replace('Z', '+00:00'))
                                     else:
-                                        task_due_date = datetime.fromisoformat(task_data['task_due_date'] + 'T00:00:00')
+                                        # Assume YYYY-MM-DD format
+                                        task_row.task_due_date = datetime.fromisoformat(task_data['task_due_date'] + 'T00:00:00')
                                 else:
-                                    task_due_date = task_data['task_due_date']
-                                task_row.task_due_date = task_due_date
+                                    task_row.task_due_date = task_data['task_due_date']
+                                print(f"Updated task_due_date for task {task_id}: {task_row.task_due_date}")
                             except Exception as e:
                                 current_app.logger.error(f"Error parsing task_due_date: {task_data['task_due_date']}, error: {e}")
+                                # Keep existing value if parsing fails
                         else:
                             task_row.task_due_date = None
                             print(f"Set task_due_date to None for task {task_id}")
@@ -703,20 +730,24 @@ def update_goal_tasks(goal_id):
                                 print(f"⚠️  Skipping Google Calendar sync for subtask {subtask.subtask_id}: No start/end times")
 
                 if 'subtasks' in task_data:
+                    # Get existing subtask IDs for this task
                     existing_subtask_ids = {g.subtask_id for g in task_rows}
                     updated_subtask_ids = set()
-
+                    
                     for subtask_data in task_data['subtasks']:
                         subtask_id = subtask_data.get('subtask_id')
-
+                        
                         if subtask_id and subtask_id in existing_subtask_ids:
+                            # Update existing subtask
                             updated_subtask_ids.add(subtask_id)
                             subtask_row = next((g for g in task_rows if g.subtask_id == subtask_id), None)
+                            
                             if subtask_row:
                                 for field in ['subtask_descr', 'subtask_type', 'subtask_completed']:
                                     if field in subtask_data:
                                         setattr(subtask_row, field, subtask_data[field])
                         else:
+                            # Create new subtask
                             new_subtask = Goal(
                                 user_id=user_id,
                                 course_id=goals[0].course_id,
@@ -735,17 +766,19 @@ def update_goal_tasks(goal_id):
                                 subtask_completed=subtask_data.get('subtask_completed', False),
                                 subtask_order=subtask_data.get('subtask_order', None)
                             )
+                            print(f"Created new subtask with task_due_date: {task_rows[0].task_due_date}")
                             db.session.add(new_subtask)
-
+                    
+                    # Delete subtasks that weren't in the update
                     for g in task_rows:
                         if g.subtask_id not in updated_subtask_ids:
                             db.session.delete(g)
             else:
-                new_task_id = task_id or str(uuid.uuid4())
-                subtasks = task_data.get('subtasks', [])
-
-                if subtasks:
-                    for subtask_data in subtasks:
+                # Create new task with subtasks
+                new_task_id = task_data.get('task_id', str(uuid.uuid4()))
+                
+                if 'subtasks' in task_data and task_data['subtasks']:
+                    for subtask_data in task_data['subtasks']:
                         new_subtask = Goal(
                             user_id=user_id,
                             course_id=goals[0].course_id,
@@ -766,7 +799,8 @@ def update_goal_tasks(goal_id):
                         )
                         db.session.add(new_subtask)
                 else:
-                    default_subtask = Goal(
+                    # Create task with default subtask
+                    new_subtask = Goal(
                         user_id=user_id,
                         course_id=goals[0].course_id,
                         goal_id=goal_id,
@@ -784,7 +818,21 @@ def update_goal_tasks(goal_id):
                         subtask_completed=False,
                         subtask_order=0
                     )
-                    db.session.add(default_subtask)
+                    db.session.add(new_subtask)
+        
+        # Instead of deleting tasks that weren't in the update, we'll keep them
+        # This allows for incremental additions without losing existing data
+        
+            # After all updates, check if ALL tasks for the goal are completed (excluding placeholders)
+            all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
+            all_tasks_completed = True if all_task_ids else False
+            for tid in all_task_ids:
+                task_rows = [g for g in goals if g.task_id == tid]
+                if not all(g.task_completed for g in task_rows):
+                    all_tasks_completed = False
+                    break
+            for g in goals:
+                g.goal_completed = all_tasks_completed
 
         all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
         all_tasks_completed = bool(all_task_ids) and all(
@@ -793,15 +841,26 @@ def update_goal_tasks(goal_id):
         )
         for g in goals:
             g.goal_completed = all_tasks_completed
-
+        
         db.session.commit()
-
+        
+        # Queue Google Calendar sync for all updated tasks
+        updated_task_ids = set()
+        for task_data in data['tasks']:
+            task_id = task_data.get('task_id')
+            if task_id and task_id in existing_task_ids:
+                updated_task_ids.add(task_id)
+        
+        # Sync all updated tasks to Google Calendar
         for task_id in updated_task_ids:
             queue_google_calendar_sync("sync", user_id, task_id, goals[0].course_id)
-
+        
+        # Get the updated rows
         updated_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
-        return jsonify([goal.to_dict() for goal in updated_goals]), 200
-
+        result = [goal.to_dict() for goal in updated_goals]
+        
+        return jsonify(result), 200
+        
     except SQLAlchemyError as e:
         db.session.rollback()
         current_app.logger.error(f"Database error: {str(e)}")
@@ -1096,6 +1155,9 @@ def update_subtask(subtask_id):
             except Exception as e:
                 current_app.logger.error(f"Error parsing end_time: {data['subtask_end_time']}, error: {e}")
         
+        if 'time_spent_seconds' in data:
+            subtask.task_actual_time_seconds = data['time_spent_seconds']
+        
         if 'subtask_completed' in data:
             subtask.subtask_completed = data['subtask_completed']
             
@@ -1125,7 +1187,7 @@ def update_subtask(subtask_id):
             
             # Check if all tasks are completed
             all_tasks_completed = all(task_completion_map.values())
-            
+        
             # Update goal completion status for all rows
             for row in goal_rows:
                 row.goal_completed = all_tasks_completed
@@ -1147,13 +1209,7 @@ def update_subtask(subtask_id):
         # Return success immediately - Google Calendar sync will happen in background
         return jsonify({
             "message": "Subtask updated successfully",
-            "subtask": {
-                "subtask_id": subtask.subtask_id,
-                "subtask_descr": subtask.subtask_descr,
-                "subtask_completed": subtask.subtask_completed,
-                "subtask_order": subtask.subtask_order,
-                "updated_at": subtask.updated_at.isoformat() if subtask.updated_at else None
-            }
+            "subtask": subtask.to_dict()
         }), 200
         
     except SQLAlchemyError as e:
@@ -1326,6 +1382,206 @@ def create_subtask(task_id):
         current_app.logger.error(f"Error creating subtask: {str(e)}")
         return jsonify({'error': 'An error occurred while creating the subtask'}), 500
 
+# Canvas-style time tracking endpoints
+@goals_bp.route('/api/goals/tasks/subtasks/<subtask_id>/start-engagement', methods=['POST'])
+@jwt_required()
+def start_subtask_engagement(subtask_id):
+    """Start tracking engagement for a subtask (Canvas-style)"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Get the subtask row
+        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
+        
+        if not subtask:
+            return jsonify({'error': 'Subtask not found or you do not have access'}), 404
+        
+        # If this is a resume (we have previous engagement data), accumulate the time
+        if subtask.subtask_engagement_start and subtask.subtask_engagement_end and subtask.subtask_total_active_minutes:
+            # Calculate time from the previous session
+            previous_session_time = subtask.subtask_total_active_minutes
+            # Keep the accumulated time and set new start time
+            subtask.subtask_total_active_minutes = previous_session_time
+        else:
+            # First time starting, initialize to 0
+            subtask.subtask_total_active_minutes = 0.0
+        
+        # Set engagement start time to now (for the new session)
+        subtask.subtask_engagement_start = datetime.now(timezone.utc)
+        subtask.subtask_last_interaction = datetime.now(timezone.utc)
+        subtask.subtask_engagement_end = None  # Clear the end time for the new session
+        subtask.updated_at = datetime.now(timezone.utc)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Subtask engagement started",
+            "subtask": subtask.to_dict()
+        }), 200
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error starting subtask engagement: {str(e)}")
+        return jsonify({'error': 'An error occurred while starting engagement'}), 500
+
+@goals_bp.route('/api/goals/tasks/subtasks/<subtask_id>/update-interaction', methods=['POST'])
+@jwt_required()
+def update_subtask_interaction(subtask_id):
+    """Update last interaction time for a subtask (Canvas-style)"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Get the subtask row
+        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
+        
+        if not subtask:
+            return jsonify({'error': 'Subtask not found or you do not have access'}), 404
+        
+        # Update last interaction time
+        subtask.subtask_last_interaction = datetime.now(timezone.utc)
+        subtask.updated_at = datetime.now(timezone.utc)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Subtask interaction updated",
+            "subtask": subtask.to_dict()
+        }), 200
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating subtask interaction: {str(e)}")
+        return jsonify({'error': 'An error occurred while updating interaction'}), 500
+
+@goals_bp.route('/api/goals/tasks/subtasks/<subtask_id>/end-engagement', methods=['POST'])
+@jwt_required()
+def end_subtask_engagement(subtask_id):
+    """End engagement tracking for a subtask and calculate total time (Canvas-style)"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Get the subtask row
+        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
+        
+        if not subtask:
+            return jsonify({'error': 'Subtask not found or you do not have access'}), 404
+        
+        # Set engagement end time to now
+        subtask.subtask_engagement_end = datetime.now(timezone.utc)
+        subtask.updated_at = datetime.now(timezone.utc)
+        
+        # Calculate total active time if we have start and end times
+        if subtask.subtask_engagement_start and subtask.subtask_engagement_end:
+            time_diff = subtask.subtask_engagement_end - subtask.subtask_engagement_start
+            current_session_minutes = time_diff.total_seconds() / 60.0  # Convert to minutes
+            
+            # Accumulate with previous sessions
+            previous_total = subtask.subtask_total_active_minutes or 0.0
+            subtask.subtask_total_active_minutes = previous_total + current_session_minutes
+        
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Subtask engagement ended",
+            "subtask": subtask.to_dict()
+        }), 200
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error ending subtask engagement: {str(e)}")
+        return jsonify({'error': 'An error occurred while ending engagement'}), 500
+
+@goals_bp.route('/api/goals/tasks/subtasks/<subtask_id>/time-data', methods=['GET'])
+@jwt_required()
+def get_subtask_time_data(subtask_id):
+    """Get Canvas-style time data for a subtask"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Get the subtask row
+        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
+        
+        if not subtask:
+            return jsonify({'error': 'Subtask not found or you do not have access'}), 404
+        
+        # Format the time data similar to Canvas
+        time_data = {
+            "subtask_id": subtask.subtask_id,
+            "subtask_name": subtask.subtask_descr,
+            "started": subtask.subtask_engagement_start.isoformat() if subtask.subtask_engagement_start else None,
+            "last_changed": subtask.subtask_last_interaction.isoformat() if subtask.subtask_last_interaction else None,
+            "total_time_minutes": subtask.subtask_total_active_minutes or 0.0,
+            "is_currently_engaged": subtask.subtask_engagement_start and not subtask.subtask_engagement_end
+        }
+        
+        return jsonify(time_data), 200
+        
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error getting subtask time data: {str(e)}")
+        return jsonify({'error': 'An error occurred while getting time data'}), 500
+
+
+@goals_bp.route('/api/goals/tasks/subtasks/<subtask_id>/set-completion-time', methods=['POST'])
+@jwt_required()
+def set_subtask_completion_time(subtask_id):
+    """Manually set completion time for a subtask when no engagement tracking was used"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Get the subtask row
+        subtask = Goal.query.filter_by(subtask_id=subtask_id, user_id=user_id).first()
+        
+        if not subtask:
+            return jsonify({'error': 'Subtask not found or you do not have access'}), 404
+        
+        # Get completion time from request
+        data = request.get_json()
+        completion_time_minutes = data.get('completion_time_minutes')
+        
+        if not completion_time_minutes or completion_time_minutes <= 0:
+            return jsonify({'error': 'Valid completion time is required'}), 400
+        
+        # Set the completion time
+        subtask.subtask_total_active_minutes = completion_time_minutes
+        subtask.subtask_engagement_start = datetime.now(timezone.utc) - timedelta(minutes=completion_time_minutes)
+        subtask.subtask_last_interaction = datetime.now(timezone.utc)
+        subtask.subtask_engagement_end = datetime.now(timezone.utc)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Completion time set successfully',
+            'completion_time_minutes': completion_time_minutes
+        }), 200
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error setting completion time: {str(e)}")
+        return jsonify({'error': 'An error occurred while setting completion time'}), 500
+
 
 @goals_bp.route('/api/goals/<goal_id>/create-empty-task', methods=['POST'])
 @jwt_required()
@@ -1372,6 +1628,8 @@ def create_empty_task(goal_id):
         db.session.add(new_task)
         db.session.commit()
         
+        # Queue Google Calendar sync in background
+        queue_google_calendar_sync("sync", user_id, new_task.task_id, new_task.course_id)
         
         # Return success immediately - Google Calendar sync will happen in background
         return jsonify({
@@ -1571,7 +1829,7 @@ def update_task(task_id):
         db.session.rollback()
         current_app.logger.error(f"Error updating task: {str(e)}")
         return jsonify({'error': 'An error occurred while updating the task'}), 500
-    
+
 @goals_bp.route("/api/goals/<goal_id>/create-task", methods=["POST"])
 @jwt_required()
 def create_task(goal_id):
@@ -1582,7 +1840,7 @@ def create_task(goal_id):
         existing_goals = Goal.query.filter_by(goal_id=goal_id, user_id=user_id).all()
         if not existing_goals:
             return jsonify({'error': 'Goal not found or you do not have access'}), 404
-
+        
         data = request.get_json()
         if not data or 'task_title' not in data or 'task_due_date' not in data:
             return jsonify({'error': 'Task title and due date are required'}), 400
@@ -1606,18 +1864,18 @@ def create_task(goal_id):
                 subtask_type = subtask.get('subtask_type', 'other')
                 subtask_completed = subtask.get('subtask_completed', False)
                 new_row = Goal(
-                    user_id=user_id,
+            user_id=user_id,
                     course_id=ref_goal.course_id,
                     goal_id=goal_id,
                     goal_descr=ref_goal.goal_descr,
                     due_date=task_due_date,
                     task_due_date=task_due_date,
                     goal_completed=ref_goal.goal_completed,
-                    task_id=task_id,
+            task_id=task_id,
                     task_title=task_title,
                     task_descr=task_descr,
                     task_completed=task_completed,
-                    subtask_id=str(uuid.uuid4()),
+            subtask_id=str(uuid.uuid4()),
                     subtask_descr=subtask_descr,
                     subtask_type=subtask_type,
                     subtask_completed=subtask_completed,

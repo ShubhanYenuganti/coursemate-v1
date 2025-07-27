@@ -1,7 +1,7 @@
 """Add onboarded field to users
 
 Revision ID: 20240605_onboarded
-Revises: <last_revision_id>
+Revises: 1234567890cd
 Create Date: 2024-06-05
 
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '20240605_onboarded'
-down_revision = '<last_revision_id>'
+down_revision = '1234567890cd'
 branch_labels = None
 depends_on = None
 

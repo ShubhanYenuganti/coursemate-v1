@@ -168,7 +168,9 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
       {/* Banner Header as horizontal bar extending sidebar's top border */}
       <div className="bg-white border-b border-gray-200 flex items-center px-8 py-4 sticky top-0 z-10 flex-shrink-0">
         <h2 className="text-3xl font-bold text-gray-800 truncate mr-4">{course.title}</h2>
+        {tabLabel !== 'Study Plan' && (
         <span className="text-xl text-gray-500 font-medium">- {tabLabel}</span>
+        )}
       </div>
       <div className={`${activeTab === 'ai' ? 'flex-1 flex flex-col min-h-0' : 'mx-auto p-8 pb-24'} ${activeTab === 'ai' ? 'max-w-7xl mx-auto' : 'max-w-5xl'}`}>
         <div className={activeTab === 'ai' ? 'p-8 pb-4 flex-shrink-0' : ''}>

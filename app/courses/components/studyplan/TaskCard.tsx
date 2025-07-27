@@ -1,9 +1,10 @@
 "use client";
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Calendar, Clock, Edit, Play, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar, Clock, Edit, Play, Trash2, MessageCircle } from 'lucide-react';
 import { TaskWithProgress } from './types';
-import SubtaskList from './SubtaskList';
+import { SubtaskList } from './SubtaskList';
 import TaskEditorModal from './TaskEditorModal';
+import { Portal } from '../../../../components/Portal';
 
 interface TaskCardProps {
   task: TaskWithProgress;
@@ -17,6 +18,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted,
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const getProgressColor = (progress: number) => {
     if (progress >= 80) return 'bg-green-500';
@@ -59,6 +61,17 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted,
     setIsDeleteConfirmOpen(false);
   };
 
+  function formatTime(seconds: number) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return [
+      h > 0 ? `${h}h` : null,
+      m > 0 ? `${m}m` : null,
+      `${s}s`
+    ].filter(Boolean).join(' ');
+  }
+
   return (
     <>
       <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
@@ -99,36 +112,47 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted,
           </div>
 
           <div className="flex items-center gap-2 ml-4">
+              {/* Start icon button (replace Play button) */}
               <button
-              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="Continue Task"
+                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Start Task"
+                // Add onClick logic if you want to start the task here
               >
                 <Play className="w-4 h-4" />
               </button>
-            <button
-              onClick={() => setIsEditorOpen(true)}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-              title="Edit Task"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleDeleteClick}
-              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-              title="Delete Task"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-            >
-              {isExpanded ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </button>
+              {/* Edit, Delete, Expand buttons ... */}
+              <button
+                onClick={() => setIsEditorOpen(true)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                title="Edit Task"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleDeleteClick}
+                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                title="Delete Task"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+              >
+                {isExpanded ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </button>
+              {/* Feedback icon button */}
+              <button
+                onClick={() => setFeedbackOpen(true)}
+                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                title="Feedback"
+              >
+                <MessageCircle className="w-4 h-4" />
+              </button>
           </div>
         </div>
 
@@ -239,6 +263,30 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onTaskUpdated, onTaskDeleted,
             </div>
           </div>
         </div>
+      )}
+
+      {feedbackOpen && (
+        <Portal>
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]" onClick={() => setFeedbackOpen(false)}>
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-xs w-full relative" onClick={e => e.stopPropagation()}>
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600" onClick={() => setFeedbackOpen(false)}>
+                <span className="text-xl">&times;</span>
+              </button>
+              <h3 className="text-lg font-semibold mb-2 text-center">Feedback</h3>
+              {task.subtasks && task.subtasks.filter(s => s.completed && s.timeSpentSeconds).length > 0 ? (
+                <ul className="text-sm text-gray-700 space-y-2">
+                  {task.subtasks.filter(s => s.completed && s.timeSpentSeconds).map(s => (
+                    <li key={s.id}>
+                      <span className="font-medium">{s.name}</span> took <span className="text-blue-600 font-semibold">{formatTime(s.timeSpentSeconds!)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-center text-gray-500">No feedback available at the moment.</p>
+              )}
+            </div>
+          </div>
+        </Portal>
       )}
     </>
   );
