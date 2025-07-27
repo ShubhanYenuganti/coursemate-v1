@@ -1,12 +1,12 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { jwtDecode } from 'jwt-decode';
 
 interface User {
     id: string;
     name: string;
     email: string;
+    profilePictureUrl?: string;
 }
 
 interface IAuthContext {
@@ -29,19 +29,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (token) {
-            try {
-                const decodedToken: any = jwtDecode(token);
-                // The 'sub' claim in a JWT often holds the user ID.
-                // You might need to adjust this based on your JWT structure.
+            // Fetch user info from API instead of decoding JWT
+            fetch('/api/users/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error('Failed to fetch user info');
+                }
+            })
+            .then(userData => {
                 setUser({
-                    id: decodedToken.sub, 
-                    name: decodedToken.name || 'User', 
-                    email: decodedToken.email || ''
+                    id: userData.id,
+                    name: userData.name || 'User',
+                    email: userData.email || '',
+                    profilePictureUrl: userData.profile_picture_url
                 });
-            } catch (error) {
-                console.error("Failed to decode JWT:", error);
+            })
+            .catch(error => {
+                console.error("Failed to fetch user info:", error);
                 setUser(null);
-            }
+            });
         }
     }, []);
 
