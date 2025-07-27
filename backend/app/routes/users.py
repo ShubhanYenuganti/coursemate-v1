@@ -20,6 +20,7 @@ def get_me():
         'year': user.year,
         'major': user.major,
         'onboarded': user.onboarded,
+        'calendar_synced': user.calendar_synced,
     })
 
 @users_bp.route('/', methods=['GET'])

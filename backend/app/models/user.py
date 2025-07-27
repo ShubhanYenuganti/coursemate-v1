@@ -42,6 +42,7 @@ class User(db.Model):
     
     # In app/models/user.py
     calendar_sync_in_progress = db.Column(db.Boolean, default=False)
+    calendar_synced = db.Column(db.Boolean, default=False)
     
     # Friend relationships
     sent_friend_requests = relationship('Friend', foreign_keys='Friend.requester_id', back_populates='requester', lazy='dynamic')
