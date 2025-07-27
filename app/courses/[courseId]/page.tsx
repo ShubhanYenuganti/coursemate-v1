@@ -13,6 +13,7 @@ import NewAIChatInterface from "../components/ai-chat/NewAIChatInterface";
 import { StudyPlanTab } from "../components/studyplan";
 import EnrolledUsersList from '../components/EnrolledUsersList';
 import LeaveCourseButton from '../components/LeaveCourseButton';
+import CommunityTab from '../components/community/CommunityTab';
 
 // helper to map subject to icon
 const getSubjectIcon = (subject: string) => {
@@ -148,7 +149,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     ),
     ai: <NewAIChatInterface courseId={course.comboId} materialsDbId={course.dbId} />,
     study: <StudyPlanTab courseId={course.dbId} />,
-    community: <div className="text-center text-gray-400">[Community tab coming soon]</div>,
+    community: <CommunityTab courseId={course.dbId} />,
     progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
   };
   const tabContent = tabContentMap[activeTab];

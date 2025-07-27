@@ -1,4 +1,6 @@
 from collections import defaultdict
+import re
+from urllib.parse import unquote
 from flask import Blueprint, request, jsonify, current_app, g
 from datetime import date, datetime, timezone, timedelta
 import uuid
@@ -136,11 +138,20 @@ goals_bp = Blueprint('goals', __name__)
 def get_course_goals(course_id):
     """Get all goals for a specific course"""
     try:
-        # Get current user from JWT
         user_id = get_jwt_identity()
-        
-        # Check if course exists and belongs to the user
-        course = Course.query.filter_by(id=course_id, user_id=user_id).first()
+        raw_id = unquote(course_id)
+        print(f"Decoded ID from URL: '{raw_id}'")
+
+        # Define a pattern for UUID+UUID (combo_id)
+        combo_pattern = re.compile(r'^[0-9a-fA-F\-]{36}\+[0-9a-fA-F\-]{36}$')
+
+        if combo_pattern.match(raw_id):
+            # It's a combo_id
+            course = Course.query.filter_by(combo_id=raw_id, user_id=user_id).first()
+        else:
+            # It's a plain UUID (Course.id)
+            course = Course.query.filter_by(id=raw_id, user_id=user_id).first()
+
         if not course:
             return jsonify({
                 'error': 'Course not found or you do not have access'
@@ -858,7 +869,28 @@ def update_goal_tasks(goal_id):
         db.session.rollback()
         current_app.logger.error(f"Error updating tasks: {str(e)}")
         return jsonify({'error': 'An error occurred while updating tasks'}), 500
-
+    
+@goals_bp.route('/api/goals/<task_id>', methods = ['GET'])
+@jwt_required()
+def get_task_by_id(task_id):
+    """Get a specific task by its ID"""
+    try:
+        # Get current user from JWT
+        user_id = get_jwt_identity()
+        
+        # Find the task
+        task = Goal.query.filter_by(task_id=task_id, user_id=user_id).first()
+        if not task:
+            return jsonify({'error': 'Task not found or you do not have access'}), 404
+        
+        return jsonify(task.to_dict()), 200
+        
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error getting task: {str(e)}")
+        return jsonify({'error': 'An error occurred while getting the task'}), 500
 
 @goals_bp.route('/api/goals/<goal_id>/save-tasks', methods=['POST'])
 @jwt_required()
@@ -1047,7 +1079,7 @@ def delete_subtask(subtask_id):
                 for row in remaining_subtasks:
                     row.task_completed = False
                     row.updated_at = datetime.utcnow()
-                db.session.commit()
+        db.session.commit()
         
         # Queue the specific subtask event deletion from Google Calendar
         if subtask.google_event_id and subtask.sync_status == "Synced":
