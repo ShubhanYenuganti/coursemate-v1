@@ -5,7 +5,6 @@ import { useState } from "react";
 import { Fragment } from "react";
 import 'katex/dist/katex.min.css';
 import './TiptapEditor.css'; // Add custom styles for lists and equation blocks
-import './TiptapEditor.css'; // Add custom styles for lists and equation blocks
 import katex from 'katex';
 import { EditorContent, useEditor, Extension } from "@tiptap/react";
 // Custom Equation Node for KaTeX
