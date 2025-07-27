@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Calendar, Clock, Edit, Play, Trash2, MessageCircle } from 'lucide-react';
 import { TaskWithProgress } from './types';
-import SubtaskList from './SubtaskList';
+import { SubtaskList } from './SubtaskList';
 import TaskEditorModal from './TaskEditorModal';
 import { Portal } from '../../../../components/Portal';
 

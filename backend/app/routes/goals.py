@@ -627,14 +627,14 @@ def update_goal_tasks(goal_id):
         if not data or 'tasks' not in data:
             print("No tasks in data for goal_id:", goal_id, "data:", data)
             return jsonify({'error': 'Tasks are required'}), 400
-
+        
         existing_task_ids = {goal.task_id for goal in goals}
         
         # Track which tasks are in the update
         updated_task_ids = set()
         conflicting_subtasks = set()
         bypass = data.get('bypass')
-
+        
         if not bypass:
             for task_data in data['tasks']:
                 task_id = task_data.get('task_id')
@@ -674,7 +674,7 @@ def update_goal_tasks(goal_id):
         for task_data in data['tasks']:
             task_id = task_data.get('task_id')
             print('Received task_due_date:', task_data.get('task_due_date'))
-
+            
             if task_id and task_id in existing_task_ids:
                 # Update existing task
                 updated_task_ids.add(task_id)
@@ -822,8 +822,6 @@ def update_goal_tasks(goal_id):
                     break
             for g in goals:
                 g.goal_completed = all_tasks_completed
-        
-                    db.session.add(default_subtask)
 
         all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
         all_tasks_completed = bool(all_task_ids) and all(
@@ -832,7 +830,7 @@ def update_goal_tasks(goal_id):
         )
         for g in goals:
             g.goal_completed = all_tasks_completed
-
+        
         db.session.commit()
         
         # Queue Google Calendar sync for all updated tasks

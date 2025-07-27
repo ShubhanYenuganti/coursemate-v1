@@ -33,4 +33,4 @@ def downgrade():
         batch_op.drop_column('subtask_total_active_minutes')
         batch_op.drop_column('subtask_engagement_end')
         batch_op.drop_column('subtask_engagement_start')
-    # ### end Alembic commands ### 
+    # ### end Alembic commands ###
