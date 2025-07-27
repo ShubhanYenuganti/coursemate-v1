@@ -8,6 +8,7 @@ export interface Goal {
   customScheduleDays?: number[]; // Array of day numbers (0-6, where 0 is Sunday)
   createdAt: string;
   updatedAt: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
 }
 
 export interface Task {
@@ -36,8 +37,15 @@ export interface Subtask {
   updatedAt: string;
   task_due_date?: string;
   subtask_order?: number;
-  start_time: string;
-  end_time: string;
+  start_time?: string; // ISO string for scheduled start time
+  end_time?: string;   // ISO string for scheduled end time
+  timeSpentSeconds?: number; // Actual time spent on this subtask (in seconds)
+  
+  // Canvas-style time tracking fields
+  subtask_engagement_start?: string; // ISO string for when user first started working on subtask
+  subtask_engagement_end?: string;   // ISO string for when user finished working on subtask
+  subtask_total_active_minutes?: number; // Total time spent (like Canvas's "time questions were on-screen")
+  subtask_last_interaction?: string; // ISO string for last time user interacted with subtask
   has_conflict?: boolean;
 }
 

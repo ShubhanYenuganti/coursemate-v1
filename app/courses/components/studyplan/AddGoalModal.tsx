@@ -1,8 +1,9 @@
 "use client";
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Target, Calendar, Clock, Repeat } from 'lucide-react';
+import { X, Target, Calendar, Clock, Repeat, Brain, Sparkles } from 'lucide-react';
 import { Goal, GoalWithProgress } from './types';
 import { Portal } from '../../../../components/Portal';
+import AIGenerateStudyPlan from './AIGenerateStudyPlan';
 
 interface AddGoalModalProps {
   isOpen: boolean;
@@ -17,16 +18,21 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
     targetDate: '',
     workMinutesPerDay: 60,
     frequency: 'daily' as 'daily' | 'weekly' | 'custom',
-    customScheduleDays: [] as number[]
+    customScheduleDays: [] as number[],
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'critical'
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [creationMode, setCreationMode] = useState<'manual' | 'ai'>('manual');
+  const [isAIGenerating, setIsAIGenerating] = useState(false);
 
   // Reset form when modal is closed or opened
   useEffect(() => {
     if (!isOpen) {
       setFormData(initialFormData);
       setErrors({});
+      setCreationMode('manual');
+      setIsAIGenerating(false);
     }
   }, [isOpen]);
 
@@ -100,6 +106,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
       workMinutesPerDay: formData.workMinutesPerDay,
       frequency: formData.frequency,
       customScheduleDays: formData.frequency === 'custom' ? formData.customScheduleDays : undefined,
+      priority: formData.priority,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -125,6 +132,17 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
     handleInputChange('customScheduleDays', newDays);
   };
 
+  const handleStudyPlanGenerated = async (studyPlan: any) => {
+    setIsAIGenerating(false);
+    // The AI generation will create the goal directly in the backend
+    // We just need to close the modal and refresh the goals list
+    onClose();
+  };
+
+  const handleAIGenerateStart = () => {
+    setIsAIGenerating(true);
+  };
+
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   if (!isOpen) return null;
@@ -136,14 +154,14 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
         style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
-        <div className="bg-white rounded-lg max-w-lg w-full max-h-[80vh] overflow-y-auto m-2 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto m-2 shadow-xl" onClick={e => e.stopPropagation()}>
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                 <Target className="w-4 h-4 text-blue-600" />
               </div>
-              <h2 className="text-xl font-semibold text-gray-800">Add New Goal</h2>
+              <h2 className="text-xl font-semibold text-gray-800">Create New Goal</h2>
             </div>
             <button
               onClick={onClose}
@@ -153,163 +171,240 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, courseId, 
             </button>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* Goal Title */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Goal Title
-              </label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => handleInputChange('title', e.target.value)}
-                placeholder="e.g., Final Exam Preparation"
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.title ? 'border-red-500' : 'border-gray-300'
+          {/* Creation Mode Buttons */}
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCreationMode('manual')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  creationMode === 'manual'
+                    ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent'
                 }`}
-                required
-              />
-              {errors.title && (
-                <p className="text-red-500 text-sm mt-1">{errors.title}</p>
-              )}
-            </div>
-
-            {/* Target Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="w-4 h-4 inline mr-1" />
-                Target Date
-              </label>
-              <input
-                type="date"
-                value={formData.targetDate}
-                onChange={(e) => handleInputChange('targetDate', e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.targetDate ? 'border-red-500' : 'border-gray-300'
+              >
+                <Target className="w-4 h-4" />
+                <span>Manual Creation</span>
+              </button>
+              <button
+                onClick={() => setCreationMode('ai')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  creationMode === 'ai'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-red-600 text-white hover:bg-green-700'
                 }`}
-                required
-              />
-              {errors.targetDate && (
-                <p className="text-red-500 text-sm mt-1">{errors.targetDate}</p>
-              )}
+              >
+                <Brain className="w-4 h-4" />
+                <span>AI Generate Plan</span>
+              </button>
             </div>
+          </div>
 
-            {/* Work Time Per Day */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Clock className="w-4 h-4 inline mr-1" />
-                Daily Study Time (minutes)
-              </label>
-              <input
-                type="number"
-                value={formData.workMinutesPerDay}
-                onChange={(e) => handleInputChange('workMinutesPerDay', parseInt(e.target.value) || 0)}
-                min="15"
-                max="480"
-                step="15"
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.workMinutesPerDay ? 'border-red-500' : 'border-gray-300'
-                }`}
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {Math.round(formData.workMinutesPerDay / 60 * 10) / 10} hours per day
-              </p>
-              {errors.workMinutesPerDay && (
-                <p className="text-red-500 text-sm mt-1">{errors.workMinutesPerDay}</p>
-              )}
-            </div>
-
-            {/* Frequency */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Repeat className="w-4 h-4 inline mr-1" />
-                Study Frequency
-              </label>
-              <div className="space-y-3">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="frequency"
-                    value="daily"
-                    checked={formData.frequency === 'daily'}
-                    onChange={(e) => handleInputChange('frequency', e.target.value as 'daily')}
-                    className="mr-2"
-                  />
-                  <span>Daily</span>
-                </label>
-                
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="frequency"
-                    value="weekly"
-                    checked={formData.frequency === 'weekly'}
-                    onChange={(e) => handleInputChange('frequency', e.target.value as 'weekly')}
-                    className="mr-2"
-                  />
-                  <span>Weekly</span>
-                </label>
-                
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="frequency"
-                    value="custom"
-                    checked={formData.frequency === 'custom'}
-                    onChange={(e) => handleInputChange('frequency', e.target.value as 'custom')}
-                    className="mr-2"
-                  />
-                  <span>Custom Days</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Custom Days */}
-            {formData.frequency === 'custom' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Days
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {dayNames.map((day, index) => (
-                    <label key={index} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.customScheduleDays.includes(index)}
-                        onChange={() => handleCustomDayToggle(index)}
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-700">{day}</span>
-                    </label>
-                  ))}
+          {/* Content */}
+          <div className="p-6">
+            {isAIGenerating && (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+                  <span className="text-lg text-green-600 font-semibold">AI is generating your study plan...</span>
+                  <p className="text-gray-600 mt-2">This may take a few moments</p>
                 </div>
-                {errors.customScheduleDays && (
-                  <p className="text-red-500 text-sm mt-1">{errors.customScheduleDays}</p>
-                )}
               </div>
             )}
 
-            {/* Actions */}
-            <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!isFormValid}
-                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Create Goal
-              </button>
-            </div>
-          </form>
+            {creationMode === 'manual' && !isAIGenerating && (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Goal Title */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Goal Title
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => handleInputChange('title', e.target.value)}
+                    placeholder="e.g., Final Exam Preparation"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.title ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    required
+                  />
+                  {errors.title && (
+                    <p className="text-red-500 text-sm mt-1">{errors.title}</p>
+                  )}
+                </div>
+
+                {/* Priority */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: 'low', color: 'bg-gray-300', border: 'border-gray-400', label: 'Low' },
+                      { value: 'medium', color: 'bg-blue-400', border: 'border-blue-500', label: 'Medium' },
+                      { value: 'high', color: 'bg-orange-400', border: 'border-orange-500', label: 'High' },
+                      { value: 'critical', color: 'bg-red-500', border: 'border-red-600', label: 'Critical' }
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleInputChange('priority', opt.value)}
+                        className={`flex items-center gap-1 px-3 py-1 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-${opt.color.split('-')[1]}-400
+                          ${formData.priority === opt.value ? `${opt.color} text-white ${opt.border}` : 'bg-white text-gray-700 border-gray-300'}`}
+                        aria-label={opt.label}
+                      >
+                        <span className={`inline-block w-3 h-3 rounded-full mr-1 ${opt.color}`}></span>
+                        <span className="text-xs font-semibold">{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Target Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Calendar className="w-4 h-4 inline mr-1" />
+                    Target Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.targetDate}
+                    onChange={(e) => handleInputChange('targetDate', e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.targetDate ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    required
+                  />
+                  {errors.targetDate && (
+                    <p className="text-red-500 text-sm mt-1">{errors.targetDate}</p>
+                  )}
+                </div>
+
+                {/* Work Time Per Day */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Clock className="w-4 h-4 inline mr-1" />
+                    Daily Study Time (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.workMinutesPerDay}
+                    onChange={(e) => handleInputChange('workMinutesPerDay', parseInt(e.target.value) || 0)}
+                    min="15"
+                    max="480"
+                    step="15"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.workMinutesPerDay ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {Math.round(formData.workMinutesPerDay / 60 * 10) / 10} hours per day
+                  </p>
+                  {errors.workMinutesPerDay && (
+                    <p className="text-red-500 text-sm mt-1">{errors.workMinutesPerDay}</p>
+                  )}
+                </div>
+
+                {/* Frequency */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Repeat className="w-4 h-4 inline mr-1" />
+                    Study Frequency
+                  </label>
+                  <div className="space-y-3">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="frequency"
+                        value="daily"
+                        checked={formData.frequency === 'daily'}
+                        onChange={(e) => handleInputChange('frequency', e.target.value as 'daily')}
+                        className="mr-2"
+                      />
+                      <span>Daily</span>
+                    </label>
+                    
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="frequency"
+                        value="weekly"
+                        checked={formData.frequency === 'weekly'}
+                        onChange={(e) => handleInputChange('frequency', e.target.value as 'weekly')}
+                        className="mr-2"
+                      />
+                      <span>Weekly</span>
+                    </label>
+                    
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="frequency"
+                        value="custom"
+                        checked={formData.frequency === 'custom'}
+                        onChange={(e) => handleInputChange('frequency', e.target.value as 'custom')}
+                        className="mr-2"
+                      />
+                      <span>Custom Days</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Custom Days */}
+                {formData.frequency === 'custom' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Days
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {dayNames.map((day, index) => (
+                        <label key={index} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={formData.customScheduleDays.includes(index)}
+                            onChange={() => handleCustomDayToggle(index)}
+                            className="mr-2"
+                          />
+                          <span className="text-sm text-gray-700">{day}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {errors.customScheduleDays && (
+                      <p className="text-red-500 text-sm mt-1">{errors.customScheduleDays}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!isFormValid}
+                    className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Create Goal
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {creationMode === 'ai' && !isAIGenerating && (
+              <div>
+                <AIGenerateStudyPlan
+                  courseId={courseId}
+                  onStudyPlanGenerated={handleStudyPlanGenerated}
+                  onStartGenerating={handleAIGenerateStart}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Portal>

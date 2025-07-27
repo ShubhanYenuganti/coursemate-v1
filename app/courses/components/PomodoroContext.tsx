@@ -15,13 +15,13 @@ interface PomodoroState {
 
 const PomodoroContext = createContext<PomodoroState | undefined>(undefined);
 
-const WORK_DURATION = 25 * 60; // 25 minutes
-const SHORT_BREAK = 5 * 60; // 5 minutes
-const LONG_BREAK = 30 * 60; // 30 minutes
+const WORK_DURATION = 15; // 15 seconds for demo
+const SHORT_BREAK = 15; // 15 seconds for demo
+const LONG_BREAK = 15; // 15 seconds for demo
 const TOTAL_CYCLES = 3;
 
-export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isRunning, setIsRunning] = useState(false);
+export const PomodoroProvider: React.FC<{ children: React.ReactNode; autoStart?: boolean }> = ({ children, autoStart = false }) => {
+  const [isRunning, setIsRunning] = useState(autoStart);
   const [currentCycle, setCurrentCycle] = useState(0);
   const [mode, setMode] = useState<'work' | 'short-break' | 'long-break'>('work');
   const [timeLeft, setTimeLeft] = useState(WORK_DURATION);
@@ -50,6 +50,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const handleCycleEnd = () => {
     if (mode === 'work') {
+      setCurrentCycle(c => c + 1); // Increment cycle immediately after work session
       if (currentCycle < TOTAL_CYCLES - 1) {
         setMode('short-break');
         setTimeLeft(SHORT_BREAK);
@@ -58,11 +59,10 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setTimeLeft(LONG_BREAK);
       }
     } else if (mode === 'short-break') {
-      setCurrentCycle(c => c + 1);
       setMode('work');
       setTimeLeft(WORK_DURATION);
     } else if (mode === 'long-break') {
-      setCurrentCycle(0);
+      setCurrentCycle(0); // Reset cycles so all circles are unfilled
       setMode('work');
       setTimeLeft(WORK_DURATION);
       setIsRunning(false);

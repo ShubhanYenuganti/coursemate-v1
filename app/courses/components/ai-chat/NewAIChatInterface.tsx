@@ -22,14 +22,14 @@ const NewAIChatInterface: React.FC<NewAIChatInterfaceProps> = ({ courseId, mater
         <p className="text-gray-600 mt-1">Chat with your AI tutor and manage study materials</p>
       </div>
       
-      <div className="flex-1 p-6 min-h-0">
+      <div className="flex-1 min-h-0 min-w-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-          <TabsList className="grid w-full grid-cols-2 max-w-md flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-2 flex-shrink-0 mx-6 mt-6">
             <TabsTrigger value="chat">AI Chat</TabsTrigger>
             <TabsTrigger value="generate">Generate</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="chat" className="flex-1 mt-6 min-h-0">
+          <TabsContent value="chat" className="flex-1 mt-6 min-h-0 px-6">
             <ConversationChatInterface courseId={courseId} />
           </TabsContent>
           

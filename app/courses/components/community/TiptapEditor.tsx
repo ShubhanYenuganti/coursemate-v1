@@ -5,7 +5,6 @@ import { useState } from "react";
 import { Fragment } from "react";
 import 'katex/dist/katex.min.css';
 import './TiptapEditor.css'; // Add custom styles for lists and equation blocks
-import './TiptapEditor.css'; // Add custom styles for lists and equation blocks
 import katex from 'katex';
 import { EditorContent, useEditor, Extension } from "@tiptap/react";
 // Custom Equation Node for KaTeX
@@ -76,7 +75,6 @@ interface TiptapEditorProps {
 export default function TiptapEditor({ value, onChange, onCancel, placeholder = "Start writing...", className = "" }: TiptapEditorProps) {
   // All hooks must be called before any return
   const lowlightInstance = createLowlight(common);
-  // Removed dropdown, only use custom equation modal
   const [showCustomEquationModal, setShowCustomEquationModal] = useState(false);
   const [customLatex, setCustomLatex] = useState('');
   const commonEquations = [

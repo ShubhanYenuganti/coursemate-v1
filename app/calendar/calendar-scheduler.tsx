@@ -111,7 +111,7 @@ export function CalendarScheduler() {
         if (!res.ok) return;
         const data = await res.json();
         if (!isUnmounted) setSyncing(!!data.calendar_sync_in_progress);
-      } catch {}
+      } catch { }
     };
     pollSyncStatus();
     interval = setInterval(pollSyncStatus, 2000);
@@ -137,7 +137,16 @@ export function CalendarScheduler() {
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [courseVisibility, setCourseVisibility] = useState<Record<string, boolean>>({});
+  const [goalVisibility, setGoalVisibility] = useState<Record<string, boolean>>({});
+  const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
+  const [tasksByGoal, setTasksByGoal] = useState<Record<string, Goal[]>>({});
+  const [loadingTasks, setLoadingTasks] = useState<Record<string, boolean>>({});
+  const [taskVisibility, setTaskVisibility] = useState<Record<string, boolean>>({});
   const [filteredGoals, setFilteredGoals] = useState<Goal[]>([]);
+
+  // User Calendar Sync State
+  const [googleCalendarStatus, setGoogleCalendarStatus] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   // Add task modal state
   const [userCourses, setUserCourses] = useState<any[]>([]);
@@ -186,13 +195,6 @@ export function CalendarScheduler() {
     position: { x: number; y: number };
   } | null>(null);
 
-  /** Delete confirmation modal state */
-  const [deleteModal, setDeleteModal] = useState<{
-    isOpen: boolean;
-    task: Goal | null;
-    position: { x: number; y: number };
-  } | null>(null);
-
   /** Subtask delete confirmation modal state */
   const [deleteSubtaskModal, setDeleteSubtaskModal] = useState<{
     isOpen: boolean;
@@ -213,13 +215,13 @@ export function CalendarScheduler() {
     position: { x: number; y: number };
   } | null>(null);
 
-  /** Undo state for deleted tasks */
-  const [deletedTask, setDeletedTask] = useState<Goal | null>(null);
-  const [showUndoToast, setShowUndoToast] = useState(false);
-
   /** Undo state for deleted subtasks */
   const [deletedSubtask, setDeletedSubtask] = useState<Goal | null>(null);
   const [showUndoSubtaskToast, setShowUndoSubtaskToast] = useState(false);
+
+  /** Undo state for rescheduled subtasks */
+  const [rescheduledSubtask, setRescheduledSubtask] = useState<Goal | null>(null);
+  const [showRescheduleSubtaskToast, setShowRescheduleSubtaskToast] = useState(false);
 
   /** Drag target state for responsive shading */
   const [dragTargetHour, setDragTargetHour] = useState<number | null>(null);
@@ -242,6 +244,18 @@ export function CalendarScheduler() {
   const [showCreateSubtaskModal, setShowCreateSubtaskModal] = useState(false);
   const [createSubtaskModalPosition, setCreateSubtaskModalPosition] = useState({ x: 0, y: 0 });
   const [availableTasks, setAvailableTasks] = useState<Record<string, string>>({});
+  const [sidebarTasks, setSidebarTasks] = useState<{
+    overdue: Record<string, Goal[]>;
+    upcoming: Record<string, Goal[]>;
+    future: Record<string, Goal[]>;
+    completed: Record<string, Goal[]>;
+  }>({
+    overdue: {},
+    upcoming: {},
+    future: {},
+    completed: {}
+  });
+
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [preselectedTaskId, setPreselectedTaskId] = useState<string | null>(null);
   const [showBanner, setShowBanner] = useState(false);
@@ -283,6 +297,10 @@ export function CalendarScheduler() {
   /** Edit Subtask Modal */
   const [showEditSubtaskModal, setShowEditSubtaskModal] = useState(false);
   const [editSubtaskData, setEditSubtaskData] = useState<any>(null);
+
+  /** Expanded Courses States */
+  const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
+  const [goalsByCourse, setGoalsByCourse] = useState<Record<string, Goal[]>>({});
   /** Helpers */
   const weekDates = getWeekDates(currentDate) // Sunday‑based week
 
@@ -768,6 +786,10 @@ export function CalendarScheduler() {
 
   const performSubtaskDrop = async (subtask: Goal, targetDate: Date, targetHour: number, targetMinute: number = 0, bypass = false) => {
     try {
+      // Save original subtask
+      setRescheduledSubtask(subtask)
+      setShowRescheduleSubtaskToast(true)
+
       // Calculate new start and end times based on drop location in local timezone
       const newStartTime = new Date(
         targetDate.getFullYear(),
@@ -791,6 +813,7 @@ export function CalendarScheduler() {
       const token = localStorage.getItem("token");
       if (!token) return alert("Please log in first.");
 
+
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
       let payload: any = {
         subtask_start_time: newStartTime.toISOString(),
@@ -810,6 +833,7 @@ export function CalendarScheduler() {
       });
 
       if (!res.ok) {
+        setRescheduledSubtask(null)
         throw new Error(`Failed to update subtask: ${res.status}`);
       }
 
@@ -841,6 +865,12 @@ export function CalendarScheduler() {
       };
 
       await fetchGoals();
+
+      // Auto-hide undo toast after 5 seconds
+      setTimeout(() => {
+        setShowRescheduleSubtaskToast(false);
+        setRescheduledSubtask(null);
+      }, 5000);
 
       toast.success(`Subtask moved to ${targetDate.toLocaleDateString()} at ${targetHour}:${targetMinute.toString().padStart(2, '0')}`);
 
@@ -1311,27 +1341,6 @@ export function CalendarScheduler() {
     setHoveredTask(null);
   }
 
-  const handleDeleteConfirm = async () => {
-    if (deleteModal?.task) {
-      // Close the modal immediately
-      setDeleteModal(null);
-      // Also close the overflow events modal if it's open
-      if (overflowEvents) {
-        setOverflowEvents(null);
-      }
-      // Then handle the deletion
-      await handleTaskDelete(deleteModal.task);
-    }
-  }
-
-  const handleDeleteCancel = () => {
-    setDeleteModal(null);
-    // Also close the overflow events modal if it's open
-    if (overflowEvents) {
-      setOverflowEvents(null);
-    }
-  }
-
   const handleSubtaskDeleteConfirm = async () => {
     if (deleteSubtaskModal?.subtask) {
       // Close the modal immediately
@@ -1546,86 +1555,6 @@ export function CalendarScheduler() {
     }
   }
 
-  const handleUndoDelete = async () => {
-    if (!deletedTask) return;
-
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return alert("Please log in first.");
-
-      // Recreate the task using the create-task endpoint
-      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const payload = {
-        task_title: deletedTask.task_title,
-        task_descr: deletedTask.task_descr || '',
-        task_due_date: deletedTask.task_due_date || deletedTask.due_date,
-        subtasks: deletedTask.subtasks?.map((subtask: any, index: number) => ({
-          subtask_descr: subtask.subtask_descr,
-          subtask_type: subtask.subtask_type || 'other',
-          subtask_completed: subtask.subtask_completed || false,
-          subtask_order: index,
-          estimatedTimeMinutes: subtask.estimatedTimeMinutes
-        })) || [{
-          subtask_descr: 'Default Subtask',
-          subtask_type: 'other',
-          subtask_completed: false,
-          subtask_order: 0
-        }]
-      };
-
-      const res = await fetch(`${api}/api/goals/${deletedTask.goal_id}/create-task`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to restore task: ${res.status}`);
-      }
-
-      // Refresh the goals data to show the restored task
-      const fetchGoals = async () => {
-        try {
-          const token =
-            typeof window !== "undefined" ? localStorage.getItem("token") : null;
-          if (!token) return console.warn("No JWT in localStorage");
-
-          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-          const res = await fetch(`${api}/api/goals/subtasks`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) throw new Error(`Request failed ${res.status}`);
-
-          const grouped = await res.json() as Record<string, Goal[]>;
-          // Filter out placeholder tasks from each date group
-          const filteredGrouped: Record<string, Goal[]> = {};
-          Object.keys(grouped).forEach(key => {
-            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-          });
-          setGoalsByDate(filteredGrouped);
-          const ordered = Object.keys(filteredGrouped)
-            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
-            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
-          setSortedGoalsByDate(ordered);
-        } catch (err) {
-          console.error("fetchGoals error", err);
-        }
-      };
-
-      await fetchGoals();
-
-      setShowUndoToast(false);
-      setDeletedTask(null);
-      toast.success("Task restored successfully");
-    } catch (err) {
-      console.error("handleUndoDelete error", err);
-      toast.error("Failed to restore task");
-    }
-  }
-
   const handleSubtaskDelete = async (subtask: Goal) => {
     try {
       const token = localStorage.getItem("token");
@@ -1817,6 +1746,86 @@ export function CalendarScheduler() {
     }
   }
 
+  const handleUndoSubtaskSchedule = async () => {
+    if (!rescheduledSubtask) return
+
+    // reupdate subtask back to its original start and end times
+    try {
+      // Call the update_subtask endpoint
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      let payload: any = {
+        subtask_start_time: rescheduledSubtask.start_time,
+        subtask_end_time: rescheduledSubtask.end_time,
+        bypass_due_date: rescheduledSubtask.is_conflicting
+      };
+
+      console.log("Payload", payload)
+
+      const res = await fetch(`${api}/api/goals/tasks/subtasks/${rescheduledSubtask.subtask_id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to update subtask: ${res.status}`);
+      }
+
+      // Refresh the goals data to show the updated subtask
+      const fetchGoals = async () => {
+        try {
+          const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+
+          const grouped = await res.json() as Record<string, Goal[]>;
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      await fetchGoals();
+
+      const start = new Date(rescheduledSubtask.start_time!);
+      toast.success(`Subtask restored to ${start.toLocaleDateString()} at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+
+      // Reset undo state
+      setShowRescheduleSubtaskToast(false);
+      setRescheduledSubtask(null)
+
+      // Close the overflow modal if it's open
+      if (overflowEvents) {
+        setOverflowEvents(null);
+      }
+    } catch (error) {
+      console.error('Failed to undo subtask move:', error);
+      toast.error('Failed to undo subtask move');
+    } finally {
+      setDragOverDate(null);
+    }
+  };
+
   const searchParams = useSearchParams();
 
   // On mount or when searchParams changes, check for addSubtaskForTask param
@@ -1874,7 +1883,6 @@ export function CalendarScheduler() {
     }
   }, [addSubtaskModal, preselectedTaskId]);
 
-  // Global keyboard event listener for delete confirmation
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       if ((event.key === 'Delete' || event.key === 'Backspace') && hoveredTask && hoveredTask.goal_id !== "Google Calendar") {
@@ -1884,13 +1892,6 @@ export function CalendarScheduler() {
           setDeleteSubtaskModal({
             isOpen: true,
             subtask: hoveredTask,
-            position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-          });
-        } else {
-          // For task events (without subtask_id), use task deletion modal
-          setDeleteModal({
-            isOpen: true,
-            task: hoveredTask,
             position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
           });
         }
@@ -1904,112 +1905,206 @@ export function CalendarScheduler() {
   }, [hoveredTask]);
 
   const toggleCourseVisibility = (courseId: string) => {
+    const newVisibility = !(courseVisibility[courseId] ?? true);
+
     setCourseVisibility(prev => ({
       ...prev,
-      [courseId]: !prev[courseId]
+      [courseId]: newVisibility
     }));
-  }
 
-  const handleTaskDelete = async (task: Goal) => {
+    const goals = courseGoals[courseId];
+    if (goals) {
+      // Toggle goal visibility
+      const newGoalVisibility = { ...goalVisibility };
+      // To collect all task_ids across all goals
+      const taskIdsToUpdate: string[] = [];
+
+      for (const goal of goals) {
+        newGoalVisibility[goal.goal_id] = newVisibility;
+
+        // Grab all valid tasks for this goal
+        const tasks = tasksByGoal[goal.goal_id] || [];
+        for (const task of tasks) {
+          if (
+            task.task_id !== 'placeholder' &&
+            task.subtask_id !== 'placeholder'
+          ) {
+            taskIdsToUpdate.push(task.task_id);
+          }
+        }
+      }
+
+      setGoalVisibility(newGoalVisibility);
+
+      // Toggle associated task visibility
+      setTaskVisibility(prev => {
+        const updated = { ...prev };
+        for (const taskId of taskIdsToUpdate) {
+          updated[taskId] = newVisibility;
+        }
+        return updated;
+      });
+    }
+  };
+
+
+  const toggleGoalVisibility = (goalId: string) => {
+    setGoalVisibility(prev => {
+      const newValue = !(prev[goalId] ?? true); // toggle current goal
+      const updated = { ...prev, [goalId]: newValue };
+
+      // Set all associated tasks ON/OFF
+      const tasksForGoal = tasksByGoal[goalId] || [];
+      setTaskVisibility(prevTasks => {
+        const updatedTasks = { ...prevTasks };
+        for (const task of tasksForGoal) {
+          if (
+            task.task_id !== 'placeholder' &&
+            task.subtask_id !== 'placeholder'
+          ) {
+            updatedTasks[task.task_id] = newValue;
+          }
+        }
+        return updatedTasks;
+      });
+
+      // Find the course that this goal belongs to
+      let parentCourseId: string | undefined;
+      for (const [courseId, goals] of Object.entries(courseGoals)) {
+        if (goals.some(goal => goal.goal_id === goalId)) {
+          parentCourseId = courseId;
+          break;
+        }
+      }
+
+      if (!parentCourseId) return updated;
+
+      const courseGoalList = courseGoals[parentCourseId];
+      if (!courseGoalList) return updated;
+
+      const goalIds = courseGoalList.map(goal => goal.goal_id);
+      const anyVisible = goalIds.some(id => updated[id] !== false);
+
+      // Sync course visibility
+      setCourseVisibility(prevCourses => ({
+        ...prevCourses,
+        [parentCourseId!]: anyVisible
+      }));
+
+      return updated;
+    });
+  };
+
+
+
+  const toggleTaskVisibility = (taskId: string) => {
+    setTaskVisibility(prev => {
+      const newValue = !(prev[taskId] ?? true); // toggle current task
+
+      // Find the goal that contains this task
+      let updatedGoalVisibility = { ...goalVisibility };
+
+      for (const [goalId, tasks] of Object.entries(tasksByGoal)) {
+        const taskIds = tasks.map(t => t.task_id);
+        if (taskIds.includes(taskId)) {
+          if (newValue) {
+            // If this task is being turned on, make sure the goal is also visible
+            updatedGoalVisibility[goalId] = true;
+          } else {
+            // If this task is being turned off, check if all other tasks are off
+            const otherTasksOn = taskIds.some(
+              id => id !== taskId && (prev[id] ?? true)
+            );
+            if (!otherTasksOn) {
+              updatedGoalVisibility[goalId] = false;
+            }
+          }
+          break; // only one goal will match
+        }
+      }
+
+      setGoalVisibility(updatedGoalVisibility);
+
+      return { ...prev, [taskId]: newValue };
+    });
+  };
+
+
+  const handleLoadCourseGoals = async (courseId: string) => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return alert("Please log in first.");
 
-      // Store the deleted task for undo functionality
-      setDeletedTask(task);
-      setShowUndoToast(true);
-
-      // Store original state for potential rollback
-      const originalSelectedGoal = selectedGoal;
-      const originalGoalsByDate = goalsByDate;
-      const originalSortedGoalsByDate = sortedGoalsByDate;
-
-      // Greedy optimistic update - immediately remove the task from UI
-      setSelectedGoal((prev) => {
-        if (!prev || prev.task_id !== task.task_id) return prev;
-        return null; // Close the task modal
-      });
-
-      // Remove all instances of this task from all date groups
-      setGoalsByDate((prev) => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach(dateKey => {
-          updated[dateKey] = updated[dateKey].filter(goal => goal.task_id !== task.task_id);
-        });
-        return updated;
-      });
-
-      setSortedGoalsByDate((prev) => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach(dateKey => {
-          updated[dateKey] = updated[dateKey].filter(goal => goal.task_id !== task.task_id);
-        });
-        return updated;
-      });
-
-      // Call the delete_task route
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const res = await fetch(`${api}/api/goals/${task.goal_id}/tasks/${task.task_id}`, {
-        method: "DELETE",
+      const encodedCourseId = encodeURIComponent(courseId);
+      console.log("Fetching course goals for:", encodedCourseId);
+
+
+      const res = await fetch(`${api}/api/courses/${encodedCourseId}/goals`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error(`Failed to load course goals: ${res.status}`);
+
+      const courseGoals = await res.json();
+      console.log(`Loaded goals for course ${courseId}:`, courseGoals);
+      return courseGoals;
+
+    } catch (error) {
+      console.error("Error loading course goals:", error);
+    }
+  }
+
+  const fetchTasksForGoal = async (goalId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      setLoadingTasks(prev => ({ ...prev, [goalId]: true }));
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+
+      const res = await fetch(`${api}/api/goals/${goalId}/tasks`, {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
         },
       });
 
       if (!res.ok) {
-        // If API call fails, revert the optimistic updates
-        console.error("Task deletion failed, reverting changes");
-        setSelectedGoal(originalSelectedGoal);
-        setGoalsByDate(originalGoalsByDate);
-        setSortedGoalsByDate(originalSortedGoalsByDate);
-        setDeletedTask(null);
-        setShowUndoToast(false);
-        throw new Error(`Failed to delete task: ${res.status}`);
+        throw new Error(`Failed to fetch tasks: ${res.status}`);
       }
 
-      // If successful, refresh the data to ensure consistency with server
-      const fetchGoals = async () => {
-        try {
-          const token =
-            typeof window !== "undefined" ? localStorage.getItem("token") : null;
-          if (!token) return console.warn("No JWT in localStorage");
-
-          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-          const res = await fetch(`${api}/api/goals/subtasks`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) throw new Error(`Request failed ${res.status}`);
-
-          const grouped = await res.json() as Record<string, Goal[]>;
-          // Filter out placeholder tasks from each date group
-          const filteredGrouped: Record<string, Goal[]> = {};
-          Object.keys(grouped).forEach(key => {
-            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
-          });
-          setGoalsByDate(filteredGrouped);
-          const ordered = Object.keys(filteredGrouped)
-            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
-            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
-          setSortedGoalsByDate(ordered);
-        } catch (err) {
-          console.error("fetchGoals error", err);
-        }
-      };
-
-      // Refresh the goals data to ensure consistency
-      await fetchGoals();
-
-      // Auto-hide undo toast after 5 seconds
-      setTimeout(() => {
-        setShowUndoToast(false);
-        setDeletedTask(null);
-      }, 5000);
-
-      toast.success("Task deleted successfully");
+      const tasks = await res.json();
+      setTasksByGoal(prev => ({ ...prev, [goalId]: tasks }));
     } catch (err) {
-      console.error("handleTaskDelete error", err);
-      toast.error("Failed to delete task");
+      console.error("Error fetching tasks for goal:", err);
+      toast.error("Failed to load tasks for goal");
+    } finally {
+      setLoadingTasks(prev => ({ ...prev, [goalId]: false }));
+    }
+  };
+
+  const fetchCalendarStatus = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Please log in first.");
+
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      const res = await fetch(`${api}/api/users/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error(`Failed to fetch user info: ${res.status}`);
+      const userInfo = await res.json();
+      const status = userInfo.calendar_synced || false; // Default to disabled if not
+      setGoogleCalendarStatus(status);
+    } catch (error) {
+      console.error("Error fetching Google Calendar status:", error);
+      setGoogleCalendarStatus(false); // Default to false on error
     }
   }
 
@@ -2206,12 +2301,37 @@ export function CalendarScheduler() {
           updateCourseTitles(courseIds, token, courses).then(setCourses);
           console.log('Courses set with colors:', courses);
 
-          // Initialize all courses as visible by default
-          const initialVisibility: Record<string, boolean> = {};
-          courseIds.forEach(courseId => {
-            initialVisibility[courseId] = true;
-          });
-          setCourseVisibility(initialVisibility);
+          // Only set all visible if not already present in localStorage
+          const storedCourseVis = localStorage.getItem('courseVisibility');
+          if (!storedCourseVis) {
+            const initialVisibilityCourse: Record<string, boolean> = {};
+            courseIds.forEach(courseId => {
+              initialVisibilityCourse[courseId] = true;
+            });
+            setCourseVisibility(initialVisibilityCourse);
+          }
+
+          const storedGoalVis = localStorage.getItem('goalVisibility');
+          if (!storedGoalVis) {
+            const initialVisibilityGoal: Record<string, boolean> = {};
+            Object.values(grouped).flat().forEach(goal => {
+              initialVisibilityGoal[goal.goal_id] = true;
+            });
+            setGoalVisibility(initialVisibilityGoal);
+          }
+
+          const storedTaskVis = localStorage.getItem('taskVisibility');
+          if (!storedTaskVis) {
+            const initialVisibilityTask: Record<string, boolean> = {};
+            Object.values(grouped).flat().forEach(goal => {
+              goal.tasks?.forEach(task => {
+                if (task.task_id !== 'placeholder' && task.subtask_id !== 'placeholder') {
+                  initialVisibilityTask[task.task_id] = true;
+                }
+              });
+            });
+            setTaskVisibility(initialVisibilityTask);
+          }
         } catch (err) {
           console.error("fetchGoals error", err);
         }
@@ -2383,12 +2503,71 @@ export function CalendarScheduler() {
     window.location.href = `${apiBase}/api/calendar/auth?token=${token}`;
   };
 
+  const handleDisconnectCalendar = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return alert("Please log in first.");
+
+    try {
+      setDisconnecting(true);
+
+      const res = await fetch(`${process.env.BACKEND_URL}/api/calendar/disconnect`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Disconnect failed");
+
+      await fetchCalendarStatus(); // refresh status after disconnect
+      toast.success("Google Calendar disconnected successfully");
+
+      // Refresh the goals data to show the updated subtask
+      const fetchGoals = async () => {
+        try {
+          const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!token) return console.warn("No JWT in localStorage");
+
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          const res = await fetch(`${api}/api/goals/subtasks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Request failed ${res.status}`);
+
+          const grouped = await res.json() as Record<string, Goal[]>;
+          const filteredGrouped: Record<string, Goal[]> = {};
+          Object.keys(grouped).forEach(key => {
+            filteredGrouped[key] = grouped[key].filter(goal => goal.task_id !== 'placeholder');
+          });
+          setGoalsByDate(filteredGrouped);
+          const ordered = Object.keys(filteredGrouped)
+            .sort((a, b) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : new Date(a).getTime() - new Date(b).getTime()))
+            .reduce((acc, k) => { acc[k] = filteredGrouped[k]; return acc; }, {} as Record<string, Goal[]>);
+          setSortedGoalsByDate(ordered);
+        } catch (err) {
+          console.error("fetchGoals error", err);
+        }
+      };
+
+      await fetchGoals();
+
+    } catch (err) {
+      console.error("Disconnect error:", err);
+      alert("Failed to disconnect");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+
   const handleSyncAll = async () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Not authenticated");
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-  
+
       // Call the new Google Calendar sync endpoint
       const response = await fetch(`${api}/api/calendar/sync`, {
         method: "POST",
@@ -2397,12 +2576,12 @@ export function CalendarScheduler() {
           "Content-Type": "application/json"
         }
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
-  
+
       // Poll until backend reports sync is done
       let done = false;
       while (!done) {
@@ -2414,12 +2593,12 @@ export function CalendarScheduler() {
             const data = await res.json();
             if (!data.calendar_sync_in_progress) done = true;
           }
-        } catch {}
+        } catch { }
         if (!done) await new Promise(r => setTimeout(r, 1000));
       }
-  
+
       toast.success("Google Calendar sync completed successfully");
-  
+
       // Refresh the goals data to show any new events from Google Calendar
       const fetchGoals = async () => {
         try {
@@ -2459,15 +2638,15 @@ export function CalendarScheduler() {
           console.error("fetchGoals error", err);
         }
       };
-  
+
       // Refresh the goals data
       fetchGoals();
-  
+
     } catch (err: any) {
       toast.error("Sync failed: " + (err.message || err));
     }
   };
-  
+
   // Fetch user courses for add task modal
   const fetchUserCourses = async () => {
     try {
@@ -2573,9 +2752,22 @@ export function CalendarScheduler() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({tasks: tasksData})
+        body: JSON.stringify({ tasks: tasksData })
       });
+
       if (!res.ok) throw new Error(`Failed to create task: ${res.status}`);
+      const result = await res.json();
+      const created = result[0]
+      console.log("Task created successfully", created);
+
+      if (created?.task_id) {
+        setAvailableTasks(prev => (
+          {
+            ...prev,
+            [created.task_title]: created.task_id
+          }
+        ))
+      }
 
       // Refresh goals data to show the newly created task
       const fetchGoals = async () => {
@@ -2777,12 +2969,37 @@ export function CalendarScheduler() {
         updateCourseTitles(courseIds, token, courses).then(setCourses);
         console.log('Courses set with colors:', courses);
 
-        // Initialize all courses as visible by default
-        const initialVisibility: Record<string, boolean> = {};
-        courseIds.forEach(courseId => {
-          initialVisibility[courseId] = true;
-        });
-        setCourseVisibility(initialVisibility);
+        // Only set all visible if not already present in localStorage
+        const storedCourseVis = localStorage.getItem('courseVisibility');
+        if (!storedCourseVis) {
+          const initialVisibilityCourse: Record<string, boolean> = {};
+          courseIds.forEach(courseId => {
+            initialVisibilityCourse[courseId] = true;
+          });
+          setCourseVisibility(initialVisibilityCourse);
+        }
+
+        const storedGoalVis = localStorage.getItem('goalVisibility');
+        if (!storedGoalVis) {
+          const initialVisibilityGoal: Record<string, boolean> = {};
+          Object.values(grouped).flat().forEach(goal => {
+            initialVisibilityGoal[goal.goal_id] = true;
+          });
+          setGoalVisibility(initialVisibilityGoal);
+        }
+
+        const storedTaskVis = localStorage.getItem('taskVisibility');
+        if (!storedTaskVis) {
+          const initialVisibilityTask: Record<string, boolean> = {};
+          Object.values(grouped).flat().forEach(goal => {
+            goal.tasks?.forEach(task => {
+              if (task.task_id !== 'placeholder' && task.subtask_id !== 'placeholder') {
+                initialVisibilityTask[task.task_id] = true;
+              }
+            });
+          });
+          setTaskVisibility(initialVisibilityTask);
+        }
       } catch (err) {
         console.error("fetchGoals error", err);
       }
@@ -2928,19 +3145,71 @@ export function CalendarScheduler() {
   }, [overflowEvents, selectedGoal, goalDisplayPosition]);
 
   console.log(sortedGoalsByDate)
-  // Filter goals based on course visibility
+
+  // Restore courseVisibility and goalVisibility from localStorage on mount
   useEffect(() => {
+    try {
+      const storedCourseVis = localStorage.getItem('courseVisibility');
+      if (storedCourseVis) {
+        setCourseVisibility(JSON.parse(storedCourseVis));
+      }
+    } catch (err) {
+      console.error('Failed to restore courseVisibility:', err);
+    }
+    try {
+      const storedGoalVis = localStorage.getItem('goalVisibility');
+      if (storedGoalVis) {
+        setGoalVisibility(JSON.parse(storedGoalVis));
+      }
+    } catch (err) {
+      console.error('Failed to restore goalVisibility:', err);
+    }
+    try {
+      const storedTaskVis = localStorage.getItem('taskVisibility');
+      if (storedTaskVis) {
+        setTaskVisibility(JSON.parse(storedTaskVis));
+      }
+    } catch (err) {
+      console.error('Failed to restore taskVisibility:', err);
+    }
+  }, []);
+
+
+  // Persist courseVisibility, goalVisibility, and taskVisibility to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('courseVisibility', JSON.stringify(courseVisibility));
+    } catch (err) {
+      console.error('Failed to persist courseVisibility:', err);
+    }
+    try {
+      localStorage.setItem('goalVisibility', JSON.stringify(goalVisibility));
+    } catch (err) {
+      console.error('Failed to persist goalVisibility:', err);
+    }
+    try {
+      localStorage.setItem('taskVisibility', JSON.stringify(taskVisibility));
+    } catch (err) {
+      console.error('Failed to persist taskVisibility:', err);
+    }
+    // Show all tasks regardless of visibility toggles
     const allGoals = Object.values(goalsByDate).flat();
-    const filtered = allGoals.filter(goal => courseVisibility[goal.course_id] !== false);
-    setFilteredGoals(filtered);
-  }, [goalsByDate, courseVisibility]);
+    setFilteredGoals(allGoals);
+  }, [goalsByDate, courseVisibility, goalVisibility, taskVisibility]);
+
+  useEffect(() => {
+    if (showSettings) {
+      fetchCalendarStatus();
+    }
+  }, [showSettings]);
+
 
   /** Return the list of subtasks whose start_time and end_time fall on that calendar day (local time) */
   const getGoalsForDate = (date: Date): Goal[] => {
     // Always check all events, regardless of backend grouping
     const allGoals = Object.values(goalsByDate).flat();
     return allGoals.filter(goal => {
-      if (!goal.start_time || !goal.end_time || courseVisibility[goal.course_id] === false) return false;
+      if (!goal.start_time || !goal.end_time || courseVisibility[goal.course_id] === false || goalVisibility[goal.goal_id] === false || taskVisibility[goal.task_id] === false) return false;
       // Convert UTC start_time to local time
       const start = new Date(goal.start_time);
       return (
@@ -3009,74 +3278,123 @@ export function CalendarScheduler() {
     return groupedByTaskDueDate;
   };
 
+  useEffect(() => {
+    fetchAvailableTasks();
+  }, []);
+
+  useEffect(() => {
+    const runCategorization = async () => {
+      if (!availableTasks || filteredGoals.length === 0) return;
+      await categorizeTasks();
+    };
+    runCategorization();
+  }, [availableTasks, filteredGoals]); // ← include filteredGoals here
+
   // Helper functions to categorize tasks
-  const categorizeTasks = () => {
+  const categorizeTasks = async () => {
     const today = startOfToday();
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay()); // Sunday
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6); // Saturday
 
-    const overdue: { [date: string]: Goal[] } = {};
-    const upcoming: { [date: string]: Goal[] } = {};
-    const future: { [date: string]: Goal[] } = {};
-    const completed: { [date: string]: Goal[] } = {};
+    const overdue: Record<string, Goal[]> = {};
+    const upcoming: Record<string, Goal[]> = {};
+    const future: Record<string, Goal[]> = {};
+    const completed: Record<string, Goal[]> = {};
 
-    console.log("=== SIDEBAR GROUPING DEBUG ===");
-    console.log("filteredGoals:", filteredGoals);
-    console.log("Today:", today.toISOString());
-    console.log("Week start:", weekStart.toISOString());
-    console.log("Week end:", weekEnd.toISOString());
+    // === Stage 1: Categorize filteredGoals ===
+    const grouped = groupTasksByTaskDueDate(filteredGoals);
+    console.log("🔍 Filtered Goals (raw):", grouped);
 
-    // Use the new helper function to group by task_due_date
-    const filteredGoalsByDate = groupTasksByTaskDueDate(filteredGoals);
-
-    Object.entries(filteredGoalsByDate).forEach(([date, goals]) => {
+    for (const [date, goals] of Object.entries(grouped)) {
       const taskDate = new Date(date + 'T00:00:00');
+      const completedGoals = goals.filter(g => g.task_completed);
+      const incompleteGoals = goals.filter(g => !g.task_completed);
 
-      console.log("Processing date group:", date, "with", goals.length, "goals");
-      console.log("  Task date:", taskDate.toISOString());
-      console.log("  Goals:", goals.map(g => ({
-        task_id: g.task_id,
-        subtask_id: g.subtask_id,
-        task_title: g.task_title,
-        task_completed: g.task_completed
-      })));
-
-      // Separate completed tasks
-      const completedGoals = goals.filter(goal => goal.task_completed);
-      const incompleteGoals = goals.filter(goal => !goal.task_completed);
-
-      console.log("  Completed goals:", completedGoals.length);
-      console.log("  Incomplete goals:", incompleteGoals.length);
-
-      if (completedGoals.length > 0) {
-        completed[date] = completedGoals;
-        console.log("  → Added to completed section");
-      }
-
+      if (completedGoals.length > 0) completed[date] = completedGoals;
       if (incompleteGoals.length > 0) {
-        if (taskDate < today) {
-          overdue[date] = incompleteGoals;
-          console.log("  → Added to overdue section");
-        } else if (taskDate >= today && taskDate <= weekEnd) {
-          upcoming[date] = incompleteGoals;
-          console.log("  → Added to upcoming section");
-        } else {
-          future[date] = incompleteGoals;
-          console.log("  → Added to future section");
-        }
+        if (taskDate < today) overdue[date] = incompleteGoals;
+        else if (taskDate <= weekEnd) upcoming[date] = incompleteGoals;
+        else future[date] = incompleteGoals;
       }
+    }
+
+    // === Stage 2: Detect uncategorized availableTasks and fetch them ===
+
+    // Build set of task_ids that are already categorized
+    const categorizedTaskIds = new Set<string>();
+    [overdue, upcoming, future, completed].forEach(section => {
+      Object.values(section).flat().forEach(task => {
+        if (task.task_id) categorizedTaskIds.add(task.task_id);
+      });
     });
 
-    console.log("Final categorization:");
-    console.log("  Overdue:", Object.keys(overdue));
-    console.log("  Upcoming:", Object.keys(upcoming));
-    console.log("  Future:", Object.keys(future));
-    console.log("  Completed:", Object.keys(completed));
+    // Only now use availableTasks
+    const missingTaskEntries = Object.entries(availableTasks).filter(
+      ([_, taskId]) => !categorizedTaskIds.has(taskId)
+    );
 
-    return { overdue, upcoming, future, completed };
+    console.log("🚨 Missing task IDs:", missingTaskEntries.map(([title]) => `${title}`));
+
+    for (const [title, taskId] of missingTaskEntries) {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) continue;
+
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const res = await fetch(`${api}/api/goals/${taskId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!res.ok) {
+          console.warn(`❌ Could not fetch metadata for task ${taskId}`);
+          continue;
+        }
+
+        const fullTask = await res.json();
+
+        const goal: Goal = {
+          ...fullTask,
+          task_id: fullTask.task_id || taskId,
+          task_title: fullTask.task_title || title,
+          subtask_id: null,             // explicitly no subtask
+          subtask_descr: null,
+          subtask_completed: false,
+          subtask_order: null,
+          created_at: fullTask.created_at || new Date().toISOString(),
+          has_substasks: false,
+        };
+
+
+        const dateStr = goal.task_due_date || goal.due_date;
+        const taskDate = dateStr ? new Date(dateStr + 'T00:00:00') : startOfToday();
+        const key = dateStr ? getDateKeyFromDateString(dateStr) : getLocalDateKey(new Date());
+
+        if (goal.task_completed) {
+          if (!completed[key]) completed[key] = [];
+          completed[key].push(goal);
+        } else if (taskDate < today) {
+          if (!overdue[key]) overdue[key] = [];
+          overdue[key].push(goal);
+        } else if (taskDate <= weekEnd) {
+          if (!upcoming[key]) upcoming[key] = [];
+          upcoming[key].push(goal);
+        } else {
+          if (!future[key]) future[key] = [];
+          future[key].push(goal);
+        }
+
+        console.log(`✅ Recovered and categorized '${title}' (${taskId})`);
+      } catch (err) {
+        console.error(`❌ Error resolving task ${taskId}:`, err);
+      }
+    }
+
+    // Update state
+    setSidebarTasks({ overdue, upcoming, future, completed });
   };
+
 
   const renderTaskSection = (title: string, tasks: { [date: string]: Goal[] }, sectionKey: string, color: string) => {
     const taskEntries = Object.entries(tasks);
@@ -3183,7 +3501,7 @@ export function CalendarScheduler() {
                               </div>
 
                               {/* View Subtasks Button */}
-                              {group.totalSubtasks && group.totalSubtasks >= 1 && (
+                              {group.hasSubtasks && group.totalSubtasks >= 1 && (
                                 <div className="mt-2">
                                   <button
                                     onClick={(e) => {
@@ -3422,17 +3740,16 @@ export function CalendarScheduler() {
           <>
             {/* Categorized Tasks */}
             <div className="space-y-4">
-              {(() => {
-                const { overdue, upcoming, future, completed } = categorizeTasks();
-                return (
-                  <>
-                    {renderTaskSection("Overdue", overdue, "overdue", "#ef4444")}
-                    {renderTaskSection("This Week", upcoming, "upcoming", "#10b981")}
-                    {renderTaskSection("Future", future, "future", "#3b82f6")}
-                    {renderTaskSection("Completed", completed, "completed", "#0a80ed")}
-                  </>
-                );
-              })()}
+              {!sidebarTasks ? (
+                <div className="text-sm text-gray-500">Loading tasks...</div>
+              ) : (
+                <>
+                  {renderTaskSection("Overdue", sidebarTasks.overdue, "overdue", "#ef4444")}
+                  {renderTaskSection("This Week", sidebarTasks.upcoming, "upcoming", "#10b981")}
+                  {renderTaskSection("Future", sidebarTasks.future, "future", "#3b82f6")}
+                  {renderTaskSection("Completed", sidebarTasks.completed, "completed", "#0a80ed")}
+                </>
+              )}
             </div>
           </>
         ) : (
@@ -3444,36 +3761,172 @@ export function CalendarScheduler() {
                   {courses.map((course) => {
                     const courseEventCount = filteredGoals.filter(goal => goal.course_id === course.course_id).length;
                     const isVisible = courseVisibility[course.course_id] !== false;
+                    const isExpanded = expandedCourses[course.course_id];
 
                     return (
-                      <div key={course.course_id} className="flex items-center justify-between p-3 rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] transition-colors">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: course.color }} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-[#18181b] truncate">
-                              {course.course_title === course.course_id ? (
-                                <span className="text-gray-400">Loading...</span>
-                              ) : (
-                                course.course_title
-                              )}
-                            </div>
-                            <div className="text-xs text-[#71717a] mt-1">
-                              {courseEventCount} event{courseEventCount !== 1 ? 's' : ''}
+                      <div
+                        key={course.course_id}
+                        className="rounded-lg bg-[#f8f9fa] hover:bg-[#f0f0f0] transition-colors"
+                      >
+                        {/* Shared clickable container for course title + toggle */}
+                        <div
+                          className="flex items-center justify-between p-3 cursor-pointer"
+                          onClick={async () => {
+                            setExpandedCourses(prev => ({
+                              ...prev,
+                              [course.course_id]: !isExpanded
+                            }));
+
+                            if (!isExpanded && !courseGoals[course.course_id]) {
+                              const goals = await handleLoadCourseGoals(course.course_id);
+                              setCourseGoals(prev => ({ ...prev, [course.course_id]: goals }));
+                            }
+                          }}
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-[#18181b] truncate">
+                                {course.course_title === course.course_id ? (
+                                  <span className="text-gray-400">Loading...</span>
+                                ) : (
+                                  course.course_title
+                                )}
+                              </div>
+                              <div className="text-xs text-[#71717a] mt-1">
+                                {courseEventCount} event{courseEventCount !== 1 ? 's' : ''}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center gap-2 prevent-course-click">
+                            <Switch
+                              checked={isVisible}
+                              onCheckedChange={() => toggleCourseVisibility(course.course_id)}
+                              className="ml-2"
+                            />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={isVisible}
-                            onCheckedChange={() => toggleCourseVisibility(course.course_id)}
-                            className="ml-2"
-                          />
-                          <Eye className={`w-4 h-4 ${isVisible ? 'text-blue-600' : 'text-gray-400'}`} />
-                        </div>
+
+                        {/* Goal visibility dropdown - same width & styling as parent */}
+                        {isExpanded && (
+                          <div className="bg-white px-3 pb-3 mt-2 space-y-2 border-t border-gray-200 rounded-b-lg">
+                            {courseGoals[course.course_id]?.length ? (
+                              courseGoals[course.course_id].map(goal => {
+                                const isGoalExpanded = expandedGoalId === goal.goal_id;
+                                const handleGoalClick = async () => {
+                                  if (isGoalExpanded) {
+                                    setExpandedGoalId(null);
+                                  } else {
+                                    setExpandedGoalId(goal.goal_id);
+                                    if (!tasksByGoal[goal.goal_id]) {
+                                      await fetchTasksForGoal(goal.goal_id);
+                                    }
+                                  }
+                                };
+                                return (
+                                  <div key={goal.goal_id} className="space-y-1">
+                                    <div
+                                      className="flex items-center justify-between text-sm text-[#333] bg-[#fafafa] p-2 rounded-md shadow-sm hover:bg-gray-100 cursor-pointer"
+                                      onClick={handleGoalClick}
+                                    >
+                                      <div className="truncate">
+                                        {goal.task_title || goal.goal_descr || "Untitled Goal"}
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <Switch
+                                          checked={goalVisibility[goal.goal_id] !== false}
+                                          onCheckedChange={() => toggleGoalVisibility(goal.goal_id)}
+                                        />
+                                        <ChevronDown className={`w-4 h-4 transition-transform ${isGoalExpanded ? "rotate-180" : ""}`} />
+                                      </div>
+                                    </div>
+
+                                    {/* Render Tasks under the Goal */}
+                                    {isGoalExpanded && (
+                                      <div className="ml-4 mt-2 space-y-1">
+                                        {loadingTasks[goal.goal_id] ? (
+                                          <div className="text-xs text-gray-500 italic">Loading tasks...</div>
+                                        ) : (() => {
+                                          const filteredTasks = tasksByGoal[goal.goal_id]?.filter(
+                                            task =>
+                                              task.task_id !== 'placeholder' &&
+                                              task.subtask_id !== 'placeholder'
+                                          ) || [];
+
+                                          // Group tasks by task_id
+                                          const groupedTasksMap = new Map<string, typeof filteredTasks>();
+                                          for (const task of filteredTasks) {
+                                            if (!groupedTasksMap.has(task.task_id)) {
+                                              groupedTasksMap.set(task.task_id, task); // store the first occurrence
+                                            }
+                                          }
+
+                                          const groupedTasks = Array.from(groupedTasksMap.values());
+
+                                          console.log(`Rendering grouped tasks for goal ${goal.goal_id}:`, groupedTasks.map(task => task.task_id));
+
+                                          return groupedTasks.length > 0 ? (
+                                            groupedTasks.map((task, index) => {
+                                              const subtasks = filteredTasks.filter(t => t.task_id === task.task_id); // all rows for this task_id
+
+                                              const totalSubtasks = subtasks.length;
+                                              const completedSubtasks = subtasks.filter(t => t.status === "completed").length;
+
+                                              const representativeGoal = {
+                                                ...subtasks[0],
+                                                task_title: task.task_title,
+                                                task_descr: task.task_descr,
+                                                start_time: task.start_time,
+                                                end_time: task.end_time,
+                                                course_id: task.course_id,
+                                                google_calendar_color: task.google_calendar_color,
+                                                progress: task.progress,
+                                                totalSubtasks,
+                                                completedSubtasks,
+                                                subtasks,
+                                                status: calculateStatus(subtasks[0]) // or use a custom status aggregator
+                                              };
+
+                                              return (
+                                                <div
+                                                  key={`${goal.goal_id}-${task.task_id || index}`}
+                                                  className="flex items-center justify-between text-xs text-gray-700 px-2 py-1 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer"
+                                                  onClick={(e) => openSubtasksModal(representativeGoal, e)}
+                                                >
+                                                  <div className="truncate">
+                                                    {task.task_title || "Untitled Task"}
+                                                  </div>
+                                                  <Switch
+                                                    checked={taskVisibility[task.task_id] !== false}
+                                                    onClick={e => e.stopPropagation()}
+                                                    onCheckedChange={() => toggleTaskVisibility(task.task_id)}
+                                                    className="ml-2"
+                                                  />
+                                                </div>
+                                              );
+                                            })
+
+                                          ) : (
+                                            <div className="text-xs italic text-gray-500">No tasks yet</div>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="text-sm text-gray-500 italic px-1">
+                                Loading goals...
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
+
               </>
             )}
           </>
@@ -3761,11 +4214,28 @@ export function CalendarScheduler() {
                         </div>
                         <Button
                           variant="outline"
-                          className="border-[#0a80ed] text-[#0a80ed] hover:bg-[#0a80ed] hover:text-white"
-                          onClick={handleConnectCalendar}
+                          disabled={disconnecting}
+                          className={`${googleCalendarStatus
+                              ? 'border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
+                              : 'border-[#0a80ed] text-[#0a80ed] hover:bg-[#0a80ed] hover:text-white'
+                            } flex items-center gap-2`}
+                          onClick={() => {
+                            if (googleCalendarStatus) {
+                              handleDisconnectCalendar();
+                            } else {
+                              handleConnectCalendar();
+                            }
+                          }}
                         >
-                          Connect
+                          {disconnecting && (
+                            <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 11-8 8z" />
+                            </svg>
+                          )}
+                          {disconnecting ? 'Disconnecting...' : (googleCalendarStatus ? 'Disconnect' : 'Connect')}
                         </Button>
+
                       </div>
 
                       <div className="flex items-center justify-between p-4 border border-[#e5e8eb] rounded-lg hover:bg-[#f8f9fa] transition-colors">
@@ -4072,76 +4542,6 @@ export function CalendarScheduler() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteModal?.isOpen && deleteModal?.task && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                    <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Delete Task</h2>
-                </div>
-                <button
-                  onClick={handleDeleteCancel}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                <div className="text-center">
-                  <p className="text-gray-700 text-lg mb-4">
-                    Are you sure you want to delete this task?
-                  </p>
-                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: getEventColor(deleteModal.task) }}></div>
-                      <div className="flex-1 text-left">
-                        <h3 className="font-semibold text-gray-900">{deleteModal.task.task_title || '(untitled)'}</h3>
-                        {deleteModal.task.task_descr && (
-                          <p className="text-sm text-gray-600 mt-1">{deleteModal.task.task_descr}</p>
-                        )}
-                        {deleteModal.task.task_due_date && (
-                          <p className="text-sm text-gray-500 mt-1">
-                            Due: {new Date(deleteModal.task.task_due_date).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="flex gap-3 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={handleDeleteCancel}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteConfirm}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    Delete Task
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Subtask Delete Confirmation Modal */}
       {deleteSubtaskModal?.isOpen && deleteSubtaskModal?.subtask && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
@@ -4316,35 +4716,6 @@ export function CalendarScheduler() {
         </div>
       )}
 
-      {/* Undo Toast */}
-      {showUndoToast && deletedTask && (
-        <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
-          <div className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900">
-                  Task deleted
-                </p>
-                <p className="text-xs text-gray-600 truncate">
-                  {deletedTask.task_title || '(untitled)'}
-                </p>
-              </div>
-              <button
-                onClick={handleUndoDelete}
-                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-              >
-                Undo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Undo Subtask Toast */}
       {showUndoSubtaskToast && deletedSubtask && (
         <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
@@ -4365,6 +4736,35 @@ export function CalendarScheduler() {
               </div>
               <button
                 onClick={handleUndoSubtaskDelete}
+                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+              >
+                Undo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Show Undo Rescheduling Subtask */}
+      {showRescheduleSubtaskToast && rescheduledSubtask && (
+        <div className="fixed top-6 right-6 bg-white border border-gray-200 rounded-lg shadow-lg z-[2147483647] max-w-sm">
+          <div className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">
+                  Undo scheduling
+                </p>
+                <p className="text-xs text-gray-600 truncate">
+                  {rescheduledSubtask.subtask_descr || '(untitled)'}
+                </p>
+              </div>
+              <button
+                onClick={handleUndoSubtaskSchedule}
                 className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
               >
                 Undo
@@ -5018,4 +5418,5 @@ export function CalendarScheduler() {
     </div>
   )
 }
+
 

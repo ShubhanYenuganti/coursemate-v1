@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
-    "backend": "cd backend && python run.py",
+    "backend": "cd backend && python3 run.py",
     "dev:all": "cd backend && pip install -r requirements.txt && cd .. && concurrently \"npm run dev\" \"npm run backend\"",
     "start": "next start -p 3001"
   },
@@ -53,6 +53,7 @@
     "@types/pdfjs-dist": "^2.10.377",
     "autoprefixer": "^10.4.20",
     "axios": "^1.10.0",
+    "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
@@ -84,6 +85,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.15.32",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19",
