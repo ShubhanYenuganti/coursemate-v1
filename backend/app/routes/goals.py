@@ -519,11 +519,11 @@ def update_goal(goal_id):
             all_tasks_completed = True if all_task_ids else False
             for tid in all_task_ids:
                 task_rows = [g for g in goals if g.task_id == tid]
-                if not all(g.task_completed for g in task_rows):
-                    all_tasks_completed = False
-                    break
-            for g in goals:
-                g.goal_completed = all_tasks_completed
+                    if not all(g.task_completed for g in task_rows):
+                        all_tasks_completed = False
+                        break
+                for g in goals:
+                    g.goal_completed = all_tasks_completed
         
         db.session.commit()
         
@@ -647,8 +647,8 @@ def update_goal_tasks(goal_id):
         bypass = data.get('bypass')
         
         if not bypass:
-            for task_data in data['tasks']:
-                task_id = task_data.get('task_id')
+        for task_data in data['tasks']:
+            task_id = task_data.get('task_id')
                 task_rows = [g for g in goals if g.task_id == task_id]
                 task_due_date = None
 
@@ -834,13 +834,7 @@ def update_goal_tasks(goal_id):
             for g in goals:
                 g.goal_completed = all_tasks_completed
 
-        all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
-        all_tasks_completed = bool(all_task_ids) and all(
-            all(g.task_completed for g in goals if g.task_id == tid)
-            for tid in all_task_ids
-        )
-        for g in goals:
-            g.goal_completed = all_tasks_completed
+
         
         db.session.commit()
         
@@ -869,7 +863,7 @@ def update_goal_tasks(goal_id):
         db.session.rollback()
         current_app.logger.error(f"Error updating tasks: {str(e)}")
         return jsonify({'error': 'An error occurred while updating tasks'}), 500
-    
+
 @goals_bp.route('/api/goals/<task_id>', methods = ['GET'])
 @jwt_required()
 def get_task_by_id(task_id):

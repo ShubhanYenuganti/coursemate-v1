@@ -1830,6 +1830,8 @@ export function CalendarScheduler() {
 
   // On mount or when searchParams changes, check for addSubtaskForTask param
   useEffect(() => {
+    if (!searchParams) return;
+    
     const taskParam = searchParams.get('addSubtaskForTask');
     const nameParam = searchParams.get('taskName');
     const goalIdParam = searchParams.get('goalId');
@@ -1912,7 +1914,7 @@ export function CalendarScheduler() {
       [courseId]: newVisibility
     }));
 
-    const goals = courseGoals[courseId];
+    const goals = courseGoals[courseId as keyof typeof courseGoals];
     if (goals) {
       // Toggle goal visibility
       const newGoalVisibility = { ...goalVisibility };
@@ -1929,7 +1931,9 @@ export function CalendarScheduler() {
             task.task_id !== 'placeholder' &&
             task.subtask_id !== 'placeholder'
           ) {
-            taskIdsToUpdate.push(task.task_id);
+            if (task.task_id) {
+              taskIdsToUpdate.push(task.task_id);
+            }
           }
         }
       }
@@ -1962,7 +1966,9 @@ export function CalendarScheduler() {
             task.task_id !== 'placeholder' &&
             task.subtask_id !== 'placeholder'
           ) {
-            updatedTasks[task.task_id] = newValue;
+            if (task.task_id) {
+              updatedTasks[task.task_id] = newValue;
+            }
           }
         }
         return updatedTasks;
@@ -1971,7 +1977,7 @@ export function CalendarScheduler() {
       // Find the course that this goal belongs to
       let parentCourseId: string | undefined;
       for (const [courseId, goals] of Object.entries(courseGoals)) {
-        if (goals.some(goal => goal.goal_id === goalId)) {
+        if (goals.some((goal: any) => goal.goal_id === goalId)) {
           parentCourseId = courseId;
           break;
         }
@@ -1979,11 +1985,11 @@ export function CalendarScheduler() {
 
       if (!parentCourseId) return updated;
 
-      const courseGoalList = courseGoals[parentCourseId];
+      const courseGoalList = courseGoals[parentCourseId as keyof typeof courseGoals];
       if (!courseGoalList) return updated;
 
-      const goalIds = courseGoalList.map(goal => goal.goal_id);
-      const anyVisible = goalIds.some(id => updated[id] !== false);
+      const goalIds = courseGoalList.map((goal: any) => goal.goal_id);
+      const anyVisible = goalIds.some((id: any) => updated[id] !== false);
 
       // Sync course visibility
       setCourseVisibility(prevCourses => ({
@@ -2013,7 +2019,7 @@ export function CalendarScheduler() {
           } else {
             // If this task is being turned off, check if all other tasks are off
             const otherTasksOn = taskIds.some(
-              id => id !== taskId && (prev[id] ?? true)
+              (id: any) => id !== taskId && (prev[id] ?? true)
             );
             if (!otherTasksOn) {
               updatedGoalVisibility[goalId] = false;
@@ -2323,8 +2329,8 @@ export function CalendarScheduler() {
           const storedTaskVis = localStorage.getItem('taskVisibility');
           if (!storedTaskVis) {
             const initialVisibilityTask: Record<string, boolean> = {};
-            Object.values(grouped).flat().forEach(goal => {
-              goal.tasks?.forEach(task => {
+            Object.values(grouped).flat().forEach((goal: any) => {
+              goal.tasks?.forEach((task: any) => {
                 if (task.task_id !== 'placeholder' && task.subtask_id !== 'placeholder') {
                   initialVisibilityTask[task.task_id] = true;
                 }
@@ -2409,11 +2415,22 @@ export function CalendarScheduler() {
       if (!res.ok) {
         // If API call fails, revert the optimistic updates
         console.error("Task toggle failed, reverting changes");
+        console.error("Response status:", res.status);
+        console.error("Response status text:", res.statusText);
+        
+        // Try to get error details from response
+        try {
+          const errorData = await res.text();
+          console.error("Error response:", errorData);
+        } catch (e) {
+          console.error("Could not read error response");
+        }
+        
         setSelectedGoal(originalSelectedGoal);
         setGoalsByDate(originalGoalsByDate);
         setSortedGoalsByDate(originalSortedGoalsByDate);
 
-        throw new Error(`Request failed ${res.status}`);
+        throw new Error(`Request failed ${res.status}: ${res.statusText}`);
       }
 
       // If successful, refresh the goals data to ensure consistency with server
@@ -2991,8 +3008,8 @@ export function CalendarScheduler() {
         const storedTaskVis = localStorage.getItem('taskVisibility');
         if (!storedTaskVis) {
           const initialVisibilityTask: Record<string, boolean> = {};
-          Object.values(grouped).flat().forEach(goal => {
-            goal.tasks?.forEach(task => {
+          Object.values(grouped).flat().forEach((goal: any) => {
+            goal.tasks?.forEach((task: any) => {
               if (task.task_id !== 'placeholder' && task.subtask_id !== 'placeholder') {
                 initialVisibilityTask[task.task_id] = true;
               }
@@ -3209,7 +3226,7 @@ export function CalendarScheduler() {
     // Always check all events, regardless of backend grouping
     const allGoals = Object.values(goalsByDate).flat();
     return allGoals.filter(goal => {
-      if (!goal.start_time || !goal.end_time || courseVisibility[goal.course_id] === false || goalVisibility[goal.goal_id] === false || taskVisibility[goal.task_id] === false) return false;
+      if (!goal.start_time || !goal.end_time || courseVisibility[goal.course_id] === false || goalVisibility[goal.goal_id] === false || (goal.task_id && taskVisibility[goal.task_id] === false)) return false;
       // Convert UTC start_time to local time
       const start = new Date(goal.start_time);
       return (
@@ -3777,7 +3794,7 @@ export function CalendarScheduler() {
                               [course.course_id]: !isExpanded
                             }));
 
-                            if (!isExpanded && !courseGoals[course.course_id]) {
+                            if (!isExpanded && !courseGoals[course.course_id as keyof typeof courseGoals]) {
                               const goals = await handleLoadCourseGoals(course.course_id);
                               setCourseGoals(prev => ({ ...prev, [course.course_id]: goals }));
                             }
@@ -3809,8 +3826,8 @@ export function CalendarScheduler() {
                         {/* Goal visibility dropdown - same width & styling as parent */}
                         {isExpanded && (
                           <div className="bg-white px-3 pb-3 mt-2 space-y-2 border-t border-gray-200 rounded-b-lg">
-                            {courseGoals[course.course_id]?.length ? (
-                              courseGoals[course.course_id].map(goal => {
+                            {courseGoals[course.course_id as keyof typeof courseGoals]?.length ? (
+                              courseGoals[course.course_id as keyof typeof courseGoals].map((goal: any) => {
                                 const isGoalExpanded = expandedGoalId === goal.goal_id;
                                 const handleGoalClick = async () => {
                                   if (isGoalExpanded) {
@@ -3853,9 +3870,9 @@ export function CalendarScheduler() {
                                           ) || [];
 
                                           // Group tasks by task_id
-                                          const groupedTasksMap = new Map<string, typeof filteredTasks>();
+                                          const groupedTasksMap = new Map<string, any>();
                                           for (const task of filteredTasks) {
-                                            if (!groupedTasksMap.has(task.task_id)) {
+                                            if (task.task_id && !groupedTasksMap.has(task.task_id)) {
                                               groupedTasksMap.set(task.task_id, task); // store the first occurrence
                                             }
                                           }
@@ -3869,7 +3886,7 @@ export function CalendarScheduler() {
                                               const subtasks = filteredTasks.filter(t => t.task_id === task.task_id); // all rows for this task_id
 
                                               const totalSubtasks = subtasks.length;
-                                              const completedSubtasks = subtasks.filter(t => t.status === "completed").length;
+                                              const completedSubtasks = subtasks.filter(t => t.status === "Completed").length;
 
                                               const representativeGoal = {
                                                 ...subtasks[0],

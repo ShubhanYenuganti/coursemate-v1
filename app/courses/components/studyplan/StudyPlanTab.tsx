@@ -30,52 +30,52 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({ courseId }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch goals from the backend
-  const fetchGoals = async () => {
+    const fetchGoals = async () => {
     setLoading(true);
     try {
       const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
-      const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
-        headers: {
+        const response = await fetch(`${api}/api/courses/${courseId}/goals`, {
+          headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+          }
+        });
 
-      if (!response.ok) {
+        if (!response.ok) {
         throw new Error('Failed to fetch goals');
-      }
+        }
 
-      const data = await response.json();
-      
-      // Transform backend data to match frontend types
-      const transformedGoals: GoalWithProgress[] = data.map((goal: any) => {
+        const data = await response.json();
+        
+        // Transform backend data to match frontend types
+        const transformedGoals: GoalWithProgress[] = data.map((goal: any) => {
         console.log('Processing goal from API:', goal);
-        return {
+          return {
           id: goal.goal_id || goal.id, // Handle both ID formats
-          courseId: courseId,
-          title: goal.goal_descr,
+            courseId: courseId,
+            title: goal.goal_descr,
           targetDate: formatDate(goal.due_date || new Date().toISOString()),
           workMinutesPerDay: goal.workMinutesPerDay, 
           frequency: goal.frequency,
-          createdAt: goal.created_at,
-          updatedAt: goal.updated_at,
-          progress: goal.progress || 0,
-          totalTasks: goal.total_tasks || 0,
+            createdAt: goal.created_at,
+            updatedAt: goal.updated_at,
+            progress: goal.progress || 0,
+            totalTasks: goal.total_tasks || 0,
           completedTasks: goal.completed_tasks || 0,
           completed: goal.goal_completed || false,
           customScheduledDays: goal.customScheduleDays // Assuming backend sends this
-        };
-      });
-      
-      setGoals(transformedGoals);
-    } catch (error) {
+          };
+        });
+        
+        setGoals(transformedGoals);
+          } catch (error) {
       console.error('Error fetching goals:', error);
       // Fallback to mock data if API fails
       setGoals(getGoalsWithProgress(courseId));
       toast.error('Failed to load goals. Using sample data instead.');
-    } finally {
+      } finally {
       setLoading(false);
-    }
-  };
+      }
+    };
 
   useEffect(() => {
     fetchGoals();

@@ -1,0 +1,4 @@
+FLASK_APP=backend/run.py
+FLASK_ENV=development
+FLASK_RUN_PORT=5173
+FILE_STORAGE=LOCAL

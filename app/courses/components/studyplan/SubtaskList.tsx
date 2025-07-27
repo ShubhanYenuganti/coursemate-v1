@@ -139,7 +139,7 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
       }
     } catch (error) {
       console.error('Error updating interaction time:', error);
-    }
+      }
   };
 
   // End engagement and calculate total time
@@ -839,7 +839,7 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
           </div>
         </Portal>
       )}
-
+      
       {/* Time Data Modal */}
       {timeDataModal && (
         <Portal>
