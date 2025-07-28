@@ -6,18 +6,17 @@ from app.init import db
 class CourseReview(db.Model):
     __tablename__ = 'course_reviews'
 
-    combo_id = db.Column(db.String, primary_key=True)  # course_id + user_id combo
+    combo_id = db.Column(db.String, db.ForeignKey('courses.combo_id'), primary_key=True)
     user_id = db.Column(db.String, db.ForeignKey('users.id'), nullable=False, index=True)
-    course_id = db.Column(db.String, db.ForeignKey('courses.id'), nullable=False, index=True)
-
+    course_id = db.Column(db.String, nullable=False, index=True)  # Keep it, but don't make it a FK again
     review_text = db.Column(db.Text)
     rating = db.Column(db.Integer)
     posted = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    user = db.relationship('User', backref=db.backref('course_reviews', lazy=True, cascade='all, delete-orphan'))
-    course = db.relationship('Course', backref=db.backref('course_reviews', lazy=True, cascade='all, delete-orphan'))
+    user = db.relationship('User', backref=db.backref('course_collaborations', lazy=True, cascade='all, delete-orphan'))
+    course = db.relationship('Course', backref=db.backref('course_collaborators', lazy=True, cascade='all, delete-orphan'), foreign_keys=[combo_id])
 
     def __init__(self, user_id, course_id, review_text=None, rating=None):
         self.user_id = user_id
