@@ -28,6 +28,7 @@ import TaskEditorModal from '../../../components/studyplan/TaskEditorModal';
 import { TimerProvider } from '../../../components/TimerContext';
 import { AudioProvider } from '../../../components/AudioContext';
 import { UnifiedTimer } from '../../../components/UnifiedTimer';
+import Select from 'react-select';
 import { format, parseISO, isAfter, startOfDay } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -118,6 +119,11 @@ const GoalDetailPage = () => {
   const [pausedSubtasks, setPausedSubtasks] = useState<Set<string>>(new Set());
   const [engagedSubtasks, setEngagedSubtasks] = useState<Set<string>>(new Set());
   
+  // Materials state
+  const [courseMaterials, setCourseMaterials] = useState<any[]>([]);
+  const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  
   // Edit and delete subtask state
   const [editingSubtask, setEditingSubtask] = useState<string | null>(null);
   const [editSubtaskName, setEditSubtaskName] = useState('');
@@ -141,6 +147,45 @@ const GoalDetailPage = () => {
   const INACTIVITY_THRESHOLD_SECONDS = 600; // 10 minutes
   const INACTIVITY_CONFIRM_TIMEOUT = 180000; // 3 minutes in ms
   const [inactivityConfirmTimeoutId, setInactivityConfirmTimeoutId] = useState<NodeJS.Timeout | null>(null);
+
+  // Fetch course materials
+  const fetchCourseMaterials = async () => {
+    if (!courseId) return;
+    
+    setLoadingMaterials(true);
+    try {
+      const token = localStorage.getItem('token');
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      
+      // Extract just the course_id part if combo_id is provided (e.g., 'courseid+somethingelse')
+      const getS3CourseId = (id: string) => id.split('+')[0];
+      const s3CourseId = getS3CourseId(courseId);
+      
+      const response = await fetch(`${api}/api/courses/${s3CourseId}/materials/db`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch course materials');
+      }
+
+      const materials = await response.json();
+      setCourseMaterials(materials);
+    } catch (error) {
+      console.error('Error fetching course materials:', error);
+      toast.error('Failed to load course materials');
+    } finally {
+      setLoadingMaterials(false);
+    }
+  };
+
+  // Fetch materials when component mounts or courseId changes
+  useEffect(() => {
+    fetchCourseMaterials();
+  }, [courseId]);
 
   // At the top of GoalDetailPage, after useState for pausedSubtasks:
   useEffect(() => {
@@ -3152,17 +3197,77 @@ const GoalDetailPage = () => {
             {/* Tab Content */}
             <div className="space-y-4">
               {activeTab === 'select' && (
-                <div className="text-center">
-                  <p className="text-sm text-gray-600 mb-4">Choose from your existing materials</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Material to Study
+                    </label>
+                    <Select
+                      value={selectedMaterial}
+                      onChange={setSelectedMaterial}
+                      options={courseMaterials.map(material => ({
+                        value: material.id,
+                        label: material.material_name || material.filename || 'Unnamed Material',
+                        material: material
+                      }))}
+                      placeholder={loadingMaterials ? "Loading materials..." : "Choose a material..."}
+                      isLoading={loadingMaterials}
+                      isDisabled={loadingMaterials}
+                      className="react-select-container"
+                      classNamePrefix="react-select"
+                      styles={{
+                        control: (provided) => ({
+                          ...provided,
+                          minHeight: '42px',
+                          borderColor: '#d1d5db',
+                          '&:hover': {
+                            borderColor: '#9ca3af'
+                          }
+                        }),
+                        option: (provided, state) => ({
+                          ...provided,
+                          backgroundColor: state.isSelected 
+                            ? '#3b82f6' 
+                            : state.isFocused 
+                              ? '#eff6ff' 
+                              : 'white',
+                          color: state.isSelected ? 'white' : '#374151',
+                          padding: '12px 16px',
+                          '&:hover': {
+                            backgroundColor: state.isSelected ? '#3b82f6' : '#eff6ff'
+                          }
+                        }),
+                        placeholder: (provided) => ({
+                          ...provided,
+                          color: '#9ca3af'
+                        })
+                      }}
+                    />
+                    {courseMaterials.length === 0 && !loadingMaterials && (
+                      <p className="text-sm text-gray-500 mt-2">
+                        No materials found. Upload some materials in the Materials tab to get started.
+                      </p>
+                    )}
+                  </div>
+                  
                   <button
                     onClick={() => {
+                      if (!selectedMaterial) {
+                        toast.error('Please select a material first');
+                        return;
+                      }
                       setShowMaterialsModal(false);
                       setShowStartModal(true);
                     }}
-                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    disabled={!selectedMaterial}
+                    className={`w-full py-3 px-4 rounded-md transition-colors flex items-center justify-center gap-2 ${
+                      selectedMaterial 
+                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
                   >
                     <span>📚</span>
-                    Select Material
+                    Continue with Selected Material
                   </button>
                 </div>
               )}
