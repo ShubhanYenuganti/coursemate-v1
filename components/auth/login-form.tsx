@@ -4,28 +4,33 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Github, Apple } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
+import { Eye, EyeOff, Mail, Lock } from "lucide-react"
 
 export function LoginForm() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [formData, setFormData] = useState({ email: "", password: "" })
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }))
+  }
 
   const handleLogin = async (provider: string) => {
     setIsLoading(true);
 
     if (provider === "email") {
-      // Get the email and password values from the form inputs
-      const email = (document.getElementById("email") as HTMLInputElement).value;
-      const password = (document.getElementById("password") as HTMLInputElement).value;
-
       try {
         const response = await fetch(`${process.env.BACKEND_URL}/api/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email: formData.email, password: formData.password }),
         });
 
         const data = await response.json();
@@ -49,26 +54,22 @@ export function LoginForm() {
         alert("Login failed. Please try again.");
         setIsLoading(false);
       }
-    } else if (provider = "google") {
+    } else if (provider === "google") {
       window.location.href = `${process.env.BACKEND_URL}/api/auth/google`;
-    } else {
-      // Handle OAuth providers (Google, Apple, etc.)
-      console.log(`OAuth login with ${provider} - Not implemented yet`);
-      // This would typically involve redirecting to the OAuth provider
-      setIsLoading(false);
     }
   };
 
   return (
-    <Card className="p-6">
-      <div className="space-y-4">
+    <Card className="p-8 shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+      <div className="space-y-6">
+        {/* Google Sign In */}
         <Button
           variant="outline"
-          className="w-full justify-start gap-2"
+          className="w-full justify-center gap-3 h-12 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
           disabled={isLoading}
           onClick={() => handleLogin("google")}
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" className="mr-1">
+          <svg viewBox="0 0 24 24" width="20" height="20">
             <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
               <path
                 fill="#4285F4"
@@ -88,63 +89,78 @@ export function LoginForm() {
               />
             </g>
           </svg>
-          <span>Continue with Google</span>
-        </Button>
-
-        <Button
-          variant="outline"
-          className="w-full justify-start gap-2"
-          disabled={isLoading}
-          onClick={() => handleLogin("apple")}
-        >
-          <Apple className="h-4 w-4" />
-          <span>Continue with Apple</span>
-        </Button>
-
-        <Button
-          variant="outline"
-          className="w-full justify-start gap-2"
-          disabled={isLoading}
-          onClick={() => handleLogin("github")}
-        >
-          <Github className="h-4 w-4" />
-          <span>Continue with GitHub</span>
+          <span className="font-medium">Continue with Google</span>
         </Button>
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <Separator className="w-full" />
+            <Separator className="w-full bg-gray-200" />
           </div>
           <div className="relative flex justify-center">
-            <span className="bg-white px-2 text-xs text-gray-500">Or continue with email</span>
+            <span className="bg-white px-4 text-sm text-gray-500 font-medium">Or sign in with email</span>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div>
-            <label htmlFor="email" className="sr-only">
-              Email
+        {/* Email and Password Form */}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="email" className="text-sm font-medium text-gray-700">
+              Email address
             </label>
-            <input
-              id="email"
-              type="email"
-              placeholder="Email"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="Enter your email"
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
+                required
+              />
+            </div>
           </div>
-          <div>
-            <label htmlFor="password" className="sr-only">
+          
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-medium text-gray-700">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              placeholder="Password"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                value={formData.password}
+                onChange={handleInputChange}
+                placeholder="Enter your password"
+                className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
-          <Button className="w-full" disabled={isLoading} onClick={() => handleLogin("email")}>
-            {isLoading ? "Logging in..." : "Log in"}
+
+          <Button 
+            className="w-full h-12 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5" 
+            disabled={isLoading || !formData.email || !formData.password} 
+            onClick={() => handleLogin("email")}
+          >
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Signing in...
+              </div>
+            ) : (
+              "Sign in"
+            )}
           </Button>
         </div>
       </div>

@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { LogOutIcon } from 'lucide-react';
+import { useAuth } from '@/app/context/AuthContext';
+import { ProfileModal } from '@/components/profile/ProfileModal';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +26,18 @@ type NavItem = {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { user } = useAuth();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  // Get user name and initials
+  const userName = user?.name || 'User';
+  const userInitials = userName
+    .split(' ')
+    .map((name) => name.charAt(0))
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
 
   const handleLogoutClick = () => {
     setIsLogoutDialogOpen(true);
@@ -120,12 +133,22 @@ export function Sidebar() {
       <div className="p-5 border-t border-gray-200">
         <div className="flex items-center justify-between">
         <div className="flex items-center">
-          <div className="w-9 h-9 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold mr-3">
-            NS
+          <div className="w-9 h-9 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold mr-3 overflow-hidden">
+            {user?.profilePictureUrl ? (
+              <img 
+                src={user.profilePictureUrl} 
+                alt={userName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              userInitials
+            )}
           </div>
             <div>
-            <div className="font-medium text-gray-800">Nikhil Sharma</div>
-            <div className="text-xs text-gray-600 cursor-pointer hover:text-indigo-500">
+            <div className="font-medium text-gray-800">{userName}</div>
+            <div className="text-xs text-gray-600 cursor-pointer hover:text-indigo-500"
+              onClick={() => setIsProfileModalOpen(true)}
+            >
               View Profile
             </div>
           </div>
@@ -158,6 +181,12 @@ export function Sidebar() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Profile Modal */}
+      <ProfileModal 
+        isOpen={isProfileModalOpen} 
+        onClose={() => setIsProfileModalOpen(false)} 
+      />
     </>
   );
 }

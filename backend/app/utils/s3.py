@@ -102,6 +102,62 @@ def delete_file_from_s3(s3_path):
     s3.delete_object(Bucket=bucket_name, Key=s3_path)
     return True 
 
+def upload_profile_picture(image_data, user_id):
+    """
+    Uploads a profile picture (base64 data) to S3 and returns the URL.
+    """
+    import base64
+    import io
+    import uuid
+    
+    try:
+        # Extract base64 data (remove data:image/...;base64, prefix if present)
+        if image_data.startswith('data:'):
+            # Get the file extension from the data URL
+            header = image_data.split(',')[0]
+            if 'image/jpeg' in header or 'image/jpg' in header:
+                file_extension = 'jpg'
+            elif 'image/png' in header:
+                file_extension = 'png'
+            elif 'image/gif' in header:
+                file_extension = 'gif'
+            elif 'image/webp' in header:
+                file_extension = 'webp'
+            else:
+                file_extension = 'jpg'  # default
+            
+            image_data = image_data.split(',')[1]
+        else:
+            file_extension = 'jpg'  # default for unknown format
+        
+        # Decode base64 to bytes
+        image_bytes = base64.b64decode(image_data)
+        
+        # Create buffer from image bytes
+        buffer = io.BytesIO(image_bytes)
+        
+        # Generate unique filename
+        filename = f"profile_pictures/{user_id}/{uuid.uuid4()}.{file_extension}"
+        
+        # Upload to S3
+        s3_path = upload_file_to_s3(buffer, filename)
+        
+        # Generate presigned URL that expires in 1 year (for profile pictures)
+        s3 = get_s3_client()
+        bucket_name = current_app.config['AWS_STORAGE_BUCKET_NAME']
+        url = s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': bucket_name, 'Key': s3_path},
+            ExpiresIn=31536000  # 1 year
+        )
+        
+        return url
+        
+    except Exception as e:
+        print(f"Error uploading profile picture: {e}")
+        return None
+
+
 def download_file_from_s3(s3_path):
     """
     Downloads a file from S3 and returns its content as a string.

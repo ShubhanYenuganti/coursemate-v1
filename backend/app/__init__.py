@@ -80,6 +80,8 @@ def create_app(config_class=Config):
     from .routes.materials import materials_bp
     from .routes.conversations import conversations_bp
     from .api.community import community_bp
+    from .routes.reviews import course_reviews_bp
+    from .routes.course_enrollment import course_enrollment_bp
     from .routes.chat_group import chat_group_bp
 
     app.register_blueprint(auth_bp)
@@ -99,6 +101,8 @@ def create_app(config_class=Config):
     app.register_blueprint(materials_bp, url_prefix='/api/materials')
     app.register_blueprint(conversations_bp)
     app.register_blueprint(community_bp, url_prefix='/api')
+    app.register_blueprint(course_reviews_bp, url_prefix='/api')
+    app.register_blueprint(course_enrollment_bp, url_prefix='/api/course_enrollment')
     app.register_blueprint(chat_group_bp)
 
     # Ensure SocketIO handlers from blueprints are recognized

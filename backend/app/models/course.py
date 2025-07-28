@@ -32,7 +32,7 @@ class Course(db.Model):
     daily_progress = db.Column(db.Integer, default=0)  # 0-100
     is_pinned = db.Column(db.Boolean, default=False)
     is_archived = db.Column(db.Boolean, default=False)
-    badge = db.Column(db.Enum('Creator', 'Enrolled', name='badge_enum'), default='Creator')
+    badge = db.Column(db.Enum('Creator', 'Enrolled' ,'Co-Creator', name='badge_enum'), default='Creator')
     
     # File storage (store file paths/URLs)
     course_image = db.Column(db.String(500), nullable=True)  # Path to uploaded image/S3 key

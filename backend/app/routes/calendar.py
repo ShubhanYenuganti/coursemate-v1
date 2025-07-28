@@ -907,6 +907,12 @@ def disconnect_google_calendar():
         user.google_sync_tokens = {}
         user.calendar_synced = False
         user.calendar_sync_in_progress = False
+        
+        # Delete the Google Calendar course if it exists
+        google_calendar_course = Course.query.filter_by(combo_id=f"google-calendar-{user.id}", user_id=user.id).first()
+        if google_calendar_course:
+            print(f"🗑️  Deleting Google Calendar course: {google_calendar_course.title} (ID: {google_calendar_course.id})")
+            db.session.delete(google_calendar_course) 
 
         db.session.commit()
         print(f"✅ Google Calendar disconnected but login refresh token retained for user {user.id}")

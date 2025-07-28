@@ -11,9 +11,9 @@ const ChecklistWidget: React.FC<ChecklistWidgetProps> = ({
   onAddTask,
 }) => {
   return (
-    <div className="bg-orange-500 rounded-2xl shadow-md p-6 flex flex-col w-full" style={{ fontFamily: 'Inter, sans-serif', height: '510px' }}>
+    <div className="bg-orange-500 rounded-xl sm:rounded-2xl shadow-md p-3 sm:p-4 lg:p-6 flex flex-col w-full h-full" style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* Checklist */}
-      <div className="w-full">
+      <div className="w-full h-full">
           <TodaysChecklist />
       </div>
     </div>

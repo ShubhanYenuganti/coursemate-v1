@@ -21,6 +21,7 @@ def get_me():
         'major': user.major,
         'onboarded': user.onboarded,
         'calendar_synced': user.calendar_synced,
+        'profile_picture_url': user.profile_picture_url,
     })
 
 @users_bp.route('/', methods=['GET'])
@@ -90,19 +91,84 @@ def delete_me():
 @users_bp.route('/onboarding', methods=['POST'])
 @jwt_required()
 def onboarding():
+    from app.utils.s3 import upload_profile_picture
+    
     current_user = get_jwt_identity()
     user = User.query.get(current_user)
     if not user:
         return jsonify({'error': 'User not found'}), 404
     if user.onboarded:
         return jsonify({'error': 'User already onboarded'}), 400
+    
     data = request.get_json()
     user.name = data.get('name', user.name)
     user.email = data.get('email', user.email)
     user.college = data.get('school', user.college)
     user.year = data.get('year', user.year)
     user.major = data.get('major', user.major)
-    # Optionally save profilePic and academicInterests if you have columns for them
+    
+    # Handle profile picture upload
+    profile_pic_data = data.get('profilePic')
+    if profile_pic_data:
+        # Check if it's a base64 image (uploaded file) or external URL
+        if profile_pic_data.startswith('data:image') or (not profile_pic_data.startswith('http')):
+            # Upload to S3 if it's base64 data
+            profile_pic_url = upload_profile_picture(profile_pic_data, user.id)
+            if profile_pic_url:
+                user.profile_picture_url = profile_pic_url
+        else:
+            # External URL (from preset avatars)
+            user.profile_picture_url = profile_pic_data
+    
     user.onboarded = True
     db.session.commit()
     return jsonify({'message': 'Onboarding complete'}), 200
+
+@users_bp.route('/profile', methods=['PUT'])
+@jwt_required()
+def update_user_profile():
+    from app.utils.s3 import upload_profile_picture
+    
+    current_user = get_jwt_identity()
+    user = User.query.get(current_user)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    data = request.get_json()
+    
+    # Update basic profile information
+    if 'name' in data:
+        user.name = data['name']
+    if 'college' in data:
+        user.college = data['college']
+    if 'year' in data:
+        user.year = data['year']
+    if 'major' in data:
+        user.major = data['major']
+    
+    # Handle profile picture update
+    profile_pic_data = data.get('profilePictureUrl')
+    if profile_pic_data:
+        # Check if it's a new base64 image (uploaded file) or existing URL
+        if profile_pic_data.startswith('data:image') or (not profile_pic_data.startswith('http')):
+            # Upload new image to S3
+            profile_pic_url = upload_profile_picture(profile_pic_data, user.id)
+            if profile_pic_url:
+                user.profile_picture_url = profile_pic_url
+        else:
+            # External URL or existing S3 URL
+            user.profile_picture_url = profile_pic_data
+    
+    db.session.commit()
+    return jsonify({
+        'message': 'Profile updated successfully',
+        'user': {
+            'id': user.id,
+            'name': user.name,
+            'email': user.email,
+            'college': user.college,
+            'year': user.year,
+            'major': user.major,
+            'profile_picture_url': user.profile_picture_url,
+        }
+    }), 200

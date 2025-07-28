@@ -320,7 +320,7 @@ def delete_banner(course_id):
 @courses_bp.route('/public', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def get_public_courses():
-    """Get all public courses for the Discover page"""
+    """Get all public courses for the Discover page but the user's own courses"""
     current_user_id = get_jwt_identity()
     
     # Parse query parameters for pagination and filtering
@@ -330,7 +330,10 @@ def get_public_courses():
     subject = request.args.get('subject', '')
     
     # Base query - only get public courses
-    query = Course.query.filter_by(visibility='Public')
+    query = Course.query.filter_by(visibility='Public').filter(
+        Course.user_id != current_user_id,
+        Course.badge == 'Creator'
+    )
     
     # Apply filters
     if search_term:
@@ -582,6 +585,7 @@ def generate_study_plan(course_id):
         goal_title = data.get('goal_title')
         goal_description = data.get('goal_description', '')
         document_filename = data.get('document_filename')
+        end_date = data.get('end_date')  # Optional end date
         
         if not goal_title or not document_filename:
             return jsonify({'error': 'Goal title and document filename are required'}), 400
@@ -601,16 +605,31 @@ def generate_study_plan(course_id):
             return jsonify({'error': 'OpenAI API key not configured'}), 500
         client = openai.OpenAI(api_key=api_key)
 
+        # Calculate days until end date if provided
+        timeframe_info = ""
+        if end_date:
+            from datetime import datetime, date
+            try:
+                target_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+                today = date.today()
+                days_until = (target_date - today).days
+                
+                if days_until > 0:
+                    timeframe_info = f"\nTarget completion date: {end_date} ({days_until} days from today)"
+                else:
+                    timeframe_info = f"\nTarget completion date: {end_date} (today or past - create an intensive plan)"
+            except ValueError:
+                timeframe_info = f"\nTarget completion date: {end_date}"
+
         # Create the prompt for study plan generation
         prompt = f"""
 You are an expert study planner and educational consultant. Based on the following document content and learning goal, create a detailed study plan with tasks and subtasks.
 
-            ],
-            max_tokens=2000,
-            temperature=0.7
-        )
+Document content: {document_content[:2000]}
 
-        # Log the full OpenAI response and the raw text
+Goal: {goal_title}
+Description: {goal_description}{timeframe_info}
+
 Please create a study plan in the following JSON format:
 {{
   "goal_title": "{goal_title}",
@@ -618,7 +637,7 @@ Please create a study plan in the following JSON format:
   "tasks": [
     {{
       "name": "Task name",
-      "description": "Task description",
+      "description": "Task description", 
       "estimated_hours": 2,
       "priority": "high|medium|low",
       "subtasks": [
@@ -626,7 +645,7 @@ Please create a study plan in the following JSON format:
           "name": "Subtask name",
           "description": "Subtask description",
           "estimated_minutes": 30,
-          "type": "reading|practice|review|assessment"
+          "type": "reading|flashcard|quiz|practice|review|other"
         }}
       ]
     }}
@@ -637,10 +656,19 @@ Guidelines:
 1. Break down the goal into at least 4 but no more than 8 manageable tasks
 2. Each task should have 2-5 subtasks
 3. Focus on practical, actionable steps
-4. Consider different learning activities (reading, practice, review, assessment)
-5. Estimate realistic time requirements
+4. Use appropriate subtask types:
+   - "reading": Reading material, studying content
+   - "flashcard": Creating or reviewing flashcards
+   - "quiz": Taking quizzes or self-assessments
+   - "practice": Doing exercises, problem-solving
+   - "review": Reviewing previous material, summary
+   - "other": Any other learning activity
+5. Estimate realistic time requirements that fit within the available timeframe
 6. Prioritize tasks based on importance and dependencies
-7. Make sure the plan is comprehensive but achievable
+7. Make sure the plan is comprehensive but achievable within the given timeframe
+8. Include a variety of subtask types for effective learning
+9. If a short timeframe is provided, create a more intensive but manageable plan
+10. If a longer timeframe is provided, space out the learning with review sessions
 
 Return only the JSON response, no additional text.
 """
@@ -712,7 +740,7 @@ Return only the JSON response, no additional text.
                         course_id=course.combo_id,
                         goal_id=new_goal_id,
                         goal_descr=goal_title,
-                        due_date=None,  # You can set due_date from AI if available
+                        due_date=end_date,  # Use the target completion date from frontend
                         goal_completed=False,
                         task_id=task_id,
                         task_title=task_title,
@@ -721,7 +749,8 @@ Return only the JSON response, no additional text.
                         subtask_id=subtask_id,
                         subtask_descr=subtask_descr,
                         subtask_type=subtask_type,
-                        subtask_completed=subtask_completed
+                        subtask_completed=subtask_completed,
+                        is_conflicting=False  # Default to False for AI-generated plans
                     )
                     db.session.add(goal_row)
             db.session.commit()

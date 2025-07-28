@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Circle, Clock, BookOpen, Brain, Target, FileText, Zap, Trash2, Edit, Plus, AlertTriangle, Play, MessageCircle } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
 import { Subtask } from './types';
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -8,6 +9,10 @@ import { TimerProvider } from '../TimerContext';
 import { AudioProvider } from '../AudioContext';
 import { UnifiedTimer } from '../UnifiedTimer';
 import { Portal } from '../../../../components/Portal';
+import Select from 'react-select';
+import AnnotatablePDFViewer from '../../../../components/courses/AnnotatablePDFViewer';
+import QuizViewer from '../QuizViewer';
+import FlashcardViewer from '../FlashcardViewer';
 
 // Timer state store to preserve timer state across component boundaries
 const timerStateStore = {
@@ -51,13 +56,65 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
   const [completionTimeMinutes, setCompletionTimeMinutes] = useState('');
   const [subtaskToComplete, setSubtaskToComplete] = useState<Subtask | null>(null);
   const [showStartModal, setShowStartModal] = useState(false);
+  const [showMaterialsModal, setShowMaterialsModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'select' | 'upload' | 'generate'>('select');
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [activeSubtask, setActiveSubtask] = useState<Subtask | null>(null);
   const [subtaskToStart, setSubtaskToStart] = useState<Subtask | null>(null);
   const [timeDataModal, setTimeDataModal] = useState<{ subtask: Subtask; timeData: any } | null>(null);
+  
+  // Materials state
+  const [courseMaterials, setCourseMaterials] = useState<any[]>([]);
+  const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  const [activeMaterial, setActiveMaterial] = useState<any>(null); // Store material for active subtask
   const [engagedSubtasks, setEngagedSubtasks] = useState<Set<string>>(new Set());
   const [pausedSubtasks, setPausedSubtasks] = useState<Set<string>>(new Set());
+  
+  // Upload flow state
+  const [pendingSubtaskId, setPendingSubtaskId] = useState<string | null>(null); // Track subtask waiting for material
+  const [showReturnModal, setShowReturnModal] = useState(false); // Show after returning from materials tab
+  
   const router = useRouter();
+
+  // Fetch course materials
+  const fetchCourseMaterials = async () => {
+    if (!courseId) return;
+    
+    setLoadingMaterials(true);
+    try {
+      const token = localStorage.getItem('token');
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      
+      // Extract just the course_id part if combo_id is provided (e.g., 'courseid+somethingelse')
+      const getS3CourseId = (id: string) => id.split('+')[0];
+      const s3CourseId = getS3CourseId(courseId);
+      
+      const response = await fetch(`${api}/api/courses/${s3CourseId}/materials/db`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch course materials');
+      }
+
+      const materials = await response.json();
+      setCourseMaterials(materials);
+    } catch (error) {
+      console.error('Error fetching course materials:', error);
+      toast.error('Failed to load course materials');
+    } finally {
+      setLoadingMaterials(false);
+    }
+  };
+
+  // Fetch materials when component mounts or courseId changes
+  useEffect(() => {
+    fetchCourseMaterials();
+  }, [courseId]);
 
   // Persist pausedSubtasks to localStorage
   useEffect(() => {
@@ -139,7 +196,7 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
       }
     } catch (error) {
       console.error('Error updating interaction time:', error);
-    }
+      }
   };
 
   // End engagement and calculate total time
@@ -208,9 +265,10 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
       return;
     }
     
-    console.log('SHOWING START MODAL');
+    console.log('SHOWING MATERIALS MODAL');
     setSubtaskToStart(subtask);
-    setShowStartModal(true);
+    setSelectedMaterial(null); // Reset selected material
+    setShowMaterialsModal(true);
   };
 
   // Start engagement and show active subtask screen
@@ -219,6 +277,9 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
     
     // Clear any previous timer state since this is a fresh start
     timerStateStore.clearState();
+    
+    // Store the selected material for the active subtask
+    setActiveMaterial(selectedMaterial?.material || null);
     
     await startEngagement(subtaskToStart.id);
     setActiveSubtask(subtaskToStart);
@@ -237,6 +298,12 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
       return newSet;
     });
     
+    // For resumed subtasks, we might not have a selected material from the modal
+    // but we should keep any previously stored material
+    if (selectedMaterial?.material) {
+      setActiveMaterial(selectedMaterial.material);
+    }
+    
     // Start engagement again
     await startEngagement(subtaskToStart.id);
     setActiveSubtask(subtaskToStart);
@@ -251,6 +318,7 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
     // Mark as complete in backend and update UI
     await handleToggleSubtask(activeSubtask.id, true);
     setActiveSubtask(null);
+    setActiveMaterial(null); // Clear active material
     // Clear timer state since subtask is completed
     timerStateStore.clearState();
     // Note: Analytics update will be triggered by the parent component's onSubtaskToggled callback
@@ -271,6 +339,7 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
       setPausedSubtasks(prev => new Set(prev).add(activeSubtask.id));
     }
     setActiveSubtask(null);
+    setActiveMaterial(null); // Clear active material when going back
     // Don't clear timer state - we want to preserve it for when they resume
   };
 
@@ -540,6 +609,415 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
     }
   };
 
+  // Handle upload material navigation
+  const handleUploadMaterial = () => {
+    if (!subtaskToStart) return;
+    
+    // Store the subtask we want to start after material upload
+    setPendingSubtaskId(subtaskToStart.id);
+    setShowMaterialsModal(false);
+    
+    // Store in localStorage so we can detect return from materials tab
+    localStorage.setItem('pendingSubtaskStart', JSON.stringify({
+      subtaskId: subtaskToStart.id,
+      subtaskTitle: subtaskToStart.name,
+      taskId: taskId,
+      goalId: goalId,
+      courseId: courseId,
+      timestamp: Date.now()
+    }));
+    
+    // Navigate to materials tab
+    if (courseId && goalId) {
+      router.push(`/courses/${courseId}?tab=materials`);
+    }
+  };
+
+  // Handle return from materials tab
+  const handleReturnFromMaterials = () => {
+    const pending = localStorage.getItem('pendingSubtaskStart');
+    const shouldShowModal = localStorage.getItem('shouldShowMaterialModal');
+    const autoStart = localStorage.getItem('autoStartSubtask');
+    const selectedMaterial = localStorage.getItem('selectedMaterialForSubtask');
+    
+    if (pending) {
+      try {
+        const pendingData = JSON.parse(pending);
+        
+        // Check if this is a recent navigation (within 5 minutes) and matches current context
+        const isRecent = Date.now() - pendingData.timestamp < 5 * 60 * 1000;
+        const isCorrectContext = pendingData.taskId === taskId && 
+                                pendingData.goalId === goalId && 
+                                pendingData.courseId === courseId;
+        
+        if (isRecent && isCorrectContext) {
+          const subtask = subtasks.find(s => s.id === pendingData.subtaskId);
+          if (subtask) {
+            setSubtaskToStart(subtask);
+            setPendingSubtaskId(subtask.id);
+            
+            // Check if we should auto-start with selected material
+            if (autoStart === 'true' && selectedMaterial) {
+              try {
+                const materialData = JSON.parse(selectedMaterial);
+                if (materialData.subtaskId === subtask.id && materialData.material) {
+                  // Auto-start the subtask with the selected material
+                  setActiveMaterial(materialData.material);
+                  setActiveSubtask(subtask);
+                  setShowStartModal(true);
+                  
+                  // Clean up the auto-start flags
+                  localStorage.removeItem('autoStartSubtask');
+                  localStorage.removeItem('selectedMaterialForSubtask');
+                } else {
+                  // Material doesn't match, fall back to modal
+                  setShowMaterialsModal(true);
+                }
+              } catch (error) {
+                console.error('Error parsing selected material:', error);
+                setShowMaterialsModal(true);
+              }
+            } else if (shouldShowModal === 'true') {
+              // Show materials modal directly
+              setShowMaterialsModal(true);
+              localStorage.removeItem('shouldShowMaterialModal');
+            } else {
+              // Show return modal
+              setShowReturnModal(true);
+            }
+          }
+        }
+        
+        // Clean up localStorage
+        localStorage.removeItem('pendingSubtaskStart');
+      } catch (error) {
+        console.error('Error parsing pending subtask data:', error);
+        localStorage.removeItem('pendingSubtaskStart');
+      }
+    }
+    
+    // Clean up any remaining flags
+    if (shouldShowModal === 'true' && !pending) {
+      localStorage.removeItem('shouldShowMaterialModal');
+    }
+    if (autoStart === 'true' && !pending) {
+      localStorage.removeItem('autoStartSubtask');
+      localStorage.removeItem('selectedMaterialForSubtask');
+    }
+  };
+
+  // Check for return from materials tab on component mount
+  useEffect(() => {
+    handleReturnFromMaterials();
+  }, []);
+
+  // Re-fetch materials when returning to study plan
+  useEffect(() => {
+    if (pendingSubtaskId) {
+      fetchCourseMaterials();
+    }
+  }, [pendingSubtaskId]);
+
+  // Handle starting subtask with newly uploaded material
+  const handleStartWithNewMaterial = () => {
+    setShowReturnModal(false);
+    setShowMaterialsModal(true);
+    setActiveTab('select'); // Switch to select tab to show newly uploaded materials
+  };
+
+  // Helper function to get subtask type badge styling
+  const getSubtaskTypeBadge = (type: string | null | undefined) => {
+    const normalizedType = type || 'other';
+    
+    const typeStyles = {
+      reading: 'bg-blue-100 text-blue-800',
+      flashcard: 'bg-green-100 text-green-800', 
+      quiz: 'bg-purple-100 text-purple-800',
+      practice: 'bg-orange-100 text-orange-800',
+      review: 'bg-yellow-100 text-yellow-800',
+      other: 'bg-gray-100 text-gray-800'
+    };
+
+    return {
+      className: typeStyles[normalizedType as keyof typeof typeStyles] || typeStyles.other,
+      label: normalizedType.charAt(0).toUpperCase() + normalizedType.slice(1)
+    };
+  };
+
+  // Helper function to render the appropriate material viewer
+  const renderMaterialViewer = () => {
+    if (!activeMaterial) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-gray-500">
+            <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+            <p className="text-lg">No material selected for this subtask</p>
+            <p className="text-sm">Go back and select a material to study with</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Determine material type based on file extension or content type
+    const materialType = getMaterialType(activeMaterial);
+    
+    switch (materialType) {
+      case 'pdf':
+        return (
+          <div className="flex-1 overflow-hidden">
+            <AnnotatablePDFViewer url={getMaterialUrl(activeMaterial)} />
+          </div>
+        );
+      
+      case 'quiz':
+        return (
+          <div className="flex-1 overflow-y-auto">
+            <QuizMaterialLoader 
+              material={activeMaterial} 
+              courseId={courseId || ''}
+            />
+          </div>
+        );
+      
+      case 'flashcards':
+        return (
+          <div className="flex-1 overflow-y-auto">
+            <FlashcardMaterialLoader 
+              material={activeMaterial} 
+              courseId={courseId || ''}
+            />
+          </div>
+        );
+      
+      default:
+        return (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center text-gray-500">
+              <FileText className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+              <p className="text-lg">Unsupported material type</p>
+              <p className="text-sm">Material type: {materialType}</p>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  // Helper function to determine material type
+  const getMaterialType = (material: any): string => {
+    if (!material) return 'unknown';
+    
+    // First check the file_type field from the database
+    const fileType = material.file_type || material.type;
+    if (fileType === 'quiz') return 'quiz';
+    if (fileType === 'flashcards') return 'flashcards';
+    
+    // Check if it's a quiz object (has questions array) - for direct quiz data
+    if (material.questions && Array.isArray(material.questions)) {
+      return 'quiz';
+    }
+    
+    // Check if it's flashcards object (has flashcards array) - for direct flashcard data
+    if (material.flashcards && Array.isArray(material.flashcards)) {
+      return 'flashcards';
+    }
+    
+    // Check content type for saved materials
+    const contentType = material.content_type || '';
+    if (contentType === 'application/json' && fileType === 'quiz') {
+      return 'quiz';
+    }
+    if (contentType === 'application/json' && fileType === 'flashcards') {
+      return 'flashcards';
+    }
+    
+    // Check material name patterns as fallback
+    const materialName = material.material_name || material.filename || '';
+    if (materialName.toLowerCase().includes('quiz')) {
+      return 'quiz';
+    }
+    if (materialName.toLowerCase().includes('flashcard')) {
+      return 'flashcards';
+    }
+    
+    // Check file extension for PDFs
+    const filename = material.filename || material.material_name || '';
+    if (filename.toLowerCase().endsWith('.pdf')) {
+      return 'pdf';
+    }
+    
+    // Check content type for PDFs
+    if (contentType.includes('pdf')) {
+      return 'pdf';
+    }
+    
+    // Default fallback for uploaded files
+    return 'pdf';
+  };
+
+  // Helper function to get material URL
+  const getMaterialUrl = (material: any): string => {
+    // If material has a direct URL
+    if (material.url) return material.url;
+    
+    // If material has an S3 key, construct the URL
+    if (material.s3_key) {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      return `${api}/api/materials/file/${material.s3_key}`;
+    }
+    
+    // If material has an ID, construct URL from that
+    if (material.id) {
+      const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+      return `${api}/api/materials/${material.id}/content`;
+    }
+    
+    // Fallback
+    return '';
+  };
+
+  // Material loader components for quiz and flashcard materials
+  const QuizMaterialLoader: React.FC<{ material: any; courseId: string }> = ({ material, courseId }) => {
+    const [quizData, setQuizData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+      const loadQuizData = async () => {
+        try {
+          setLoading(true);
+          const token = localStorage.getItem('token');
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          
+          // If the material already has quiz data (direct quiz object), use it
+          if (material.questions && Array.isArray(material.questions)) {
+            setQuizData(material);
+            setLoading(false);
+            return;
+          }
+          
+          // Otherwise, fetch from backend
+          const response = await fetch(`${api}/api/courses/${courseId}/materials/${material.id}/quiz-data`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to load quiz data');
+          }
+          
+          const data = await response.json();
+          setQuizData(data.quiz_data);
+        } catch (error) {
+          console.error('Error loading quiz data:', error);
+          setError('Failed to load quiz data');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadQuizData();
+    }, [material, courseId]);
+
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>Loading quiz...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center text-red-600">
+            <p>{error}</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-6">
+        <QuizViewer quizData={quizData} />
+      </div>
+    );
+  };
+
+  const FlashcardMaterialLoader: React.FC<{ material: any; courseId: string }> = ({ material, courseId }) => {
+    const [flashcardData, setFlashcardData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+      const loadFlashcardData = async () => {
+        try {
+          setLoading(true);
+          const token = localStorage.getItem('token');
+          const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+          
+          // If the material already has flashcard data (direct flashcard object), use it
+          if (material.flashcards && Array.isArray(material.flashcards)) {
+            setFlashcardData(material);
+            setLoading(false);
+            return;
+          }
+          
+          // Otherwise, fetch from backend
+          const response = await fetch(`${api}/api/courses/${courseId}/materials/${material.id}/flashcards`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to load flashcard data');
+          }
+          
+          const data = await response.json();
+          setFlashcardData(data.flashcards_data);
+        } catch (error) {
+          console.error('Error loading flashcard data:', error);
+          setError('Failed to load flashcard data');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadFlashcardData();
+    }, [material, courseId]);
+
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <p>Loading flashcards...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center text-red-600">
+            <p>{error}</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-6">
+        <FlashcardViewer flashcardData={flashcardData} />
+      </div>
+    );
+  };
+
   // Render active subtask screen if activeSubtask is set
   if (activeSubtask) {
     return (
@@ -548,7 +1026,14 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
         <div className="flex-1 flex flex-col">
           {/* Header with Working on text and Complete button */}
           <div className="flex justify-between items-center p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-800">Working on: {activeSubtask.name}</h2>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800">Working on: {activeSubtask.name}</h2>
+              {activeMaterial && (
+                <p className="text-sm text-gray-600 mt-1">
+                  Material: {activeMaterial.material_name || activeMaterial.filename || 'Selected Material'}
+                </p>
+              )}
+            </div>
             <button
               onClick={handleCompleteActiveSubtask}
               className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
@@ -557,55 +1042,8 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
             </button>
           </div>
           
-          {/* PDF reading content */}
-          <div className="flex-1 p-6 overflow-y-auto">
-            <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-              <div className="prose prose-lg max-w-none">
-                <h1 className="text-3xl font-bold text-gray-900 mb-6">Introduction to Data Structures and Algorithms</h1>
-                
-                <p className="text-gray-700 leading-relaxed mb-4">
-                  Data structures and algorithms are fundamental concepts in computer science that form the backbone of efficient programming. Understanding these concepts is crucial for writing optimized code and solving complex computational problems.
-                </p>
-                
-                <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">What are Data Structures?</h2>
-                <p className="text-gray-700 leading-relaxed mb-4">
-                  A data structure is a specialized format for organizing, processing, retrieving, and storing data. There are several basic and advanced types of data structures, all designed to arrange data to suit a specific purpose so that it can be accessed and worked with in appropriate ways.
-                </p>
-                
-                <h3 className="text-xl font-semibold text-gray-800 mt-6 mb-3">Basic Data Structures</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4">
-                  <li><strong>Arrays:</strong> A collection of elements stored at contiguous memory locations.</li>
-                  <li><strong>Linked Lists:</strong> A linear data structure where elements are stored in nodes, and each node contains data and a reference to the next node.</li>
-                  <li><strong>Stacks:</strong> A linear data structure that follows the Last In First Out (LIFO) principle.</li>
-                  <li><strong>Queues:</strong> A linear data structure that follows the First In First Out (FIFO) principle.</li>
-                </ul>
-                
-                <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">Understanding Algorithms</h2>
-                <p className="text-gray-700 leading-relaxed mb-4">
-                  An algorithm is a finite sequence of well-defined, computer-implementable instructions, typically to solve a class of problems or to perform a computation. Algorithms are always unambiguous and are used as specifications for performing calculations, data processing, automated reasoning, and other tasks.
-                </p>
-                
-                <h3 className="text-xl font-semibold text-gray-800 mt-6 mb-3">Algorithm Analysis</h3>
-                <p className="text-gray-700 leading-relaxed mb-4">
-                  When analyzing algorithms, we typically focus on two main aspects: time complexity and space complexity. Time complexity measures the amount of time an algorithm takes to complete as a function of the input size, while space complexity measures the amount of memory space required.
-                </p>
-                
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 my-6">
-                  <p className="text-blue-800 font-medium">Key Takeaway:</p>
-                  <p className="text-blue-700">The choice of data structure and algorithm can significantly impact the performance of your program. Always consider the trade-offs between time and space complexity when designing solutions.</p>
-                </div>
-                
-                <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">Practical Applications</h2>
-                <p className="text-gray-700 leading-relaxed mb-4">
-                  Data structures and algorithms are used in various real-world applications, from simple tasks like sorting a list of names to complex operations like routing algorithms in GPS systems or recommendation algorithms in social media platforms.
-                </p>
-                
-                <p className="text-gray-700 leading-relaxed">
-                  As you progress through this course, you'll learn to implement these concepts in practice, analyze their performance characteristics, and apply them to solve real-world problems efficiently.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Material content */}
+          {renderMaterialViewer()}
           
           {/* Back button at bottom */}
           <div className="p-6 border-t border-gray-200">
@@ -699,6 +1137,13 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
                       >
                       {subtask.name}
                     </p>
+                    {/* Subtask Type Badge */}
+                    <Badge 
+                      variant="secondary" 
+                      className={`text-xs ${getSubtaskTypeBadge(subtask.type).className}`}
+                    >
+                      {getSubtaskTypeBadge(subtask.type).label}
+                    </Badge>
                       {isSubtaskOverdue(subtask) && !subtask.completed && (
                         <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-medium">
                           Overdue
@@ -708,6 +1153,42 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1">
+                {/* Schedule/Edit Time Button */}
+                <button
+                  onClick={() => {
+                    const dueDateForUrl = taskDueDate ? new Date(taskDueDate).toISOString().split('T')[0] : '';
+                    const isScheduled = subtask.start_time && subtask.end_time;
+                    
+                    const params = new URLSearchParams({
+                      scheduleSubtaskId: subtask.id,
+                      subtaskName: encodeURIComponent(subtask.name),
+                      subtaskType: subtask.type || 'other',
+                      taskId: taskId,
+                      taskDueDate: dueDateForUrl,
+                      taskName: encodeURIComponent(taskName || ''),
+                      goalId: goalId || '',
+                      courseId: courseId || '',
+                      isEdit: isScheduled ? 'true' : 'false'
+                    });
+                    
+                    if (isScheduled && subtask.start_time && subtask.end_time) {
+                      // Add existing timing data for editing
+                      params.set('currentStartTime', subtask.start_time);
+                      params.set('currentEndTime', subtask.end_time);
+                    }
+                    
+                    router.push(`/calendar?${params.toString()}`);
+                  }}
+                  className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                    subtask.start_time && subtask.end_time
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                  }`}
+                  title={subtask.start_time && subtask.end_time ? 'Edit scheduled time' : 'Schedule time'}
+                >
+                  {subtask.start_time && subtask.end_time ? 'Edit Time' : 'Schedule'}
+                </button>
+
                 {/* Feedback button for time data - only show when subtask is completed */}
                 {subtask.completed && (
                   <button
@@ -839,7 +1320,198 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
           </div>
         </Portal>
       )}
+      
+      {/* Materials Modal */}
+      {showMaterialsModal && subtaskToStart && (
+        <Portal>
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]" onClick={() => setShowMaterialsModal(false)}>
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600" onClick={() => setShowMaterialsModal(false)}>
+                <span className="text-xl">&times;</span>
+              </button>
+              <h3 className="text-lg font-semibold mb-4 text-center">Materials</h3>
+              <p className="text-center mb-6">Choose how you want to work on "{subtaskToStart.name}"</p>
+              
+              {/* Tab Navigation */}
+              <div className="flex border-b border-gray-200 mb-4">
+                <button
+                  onClick={() => setActiveTab('select')}
+                  className={`flex-1 py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'select'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Select Material
+                </button>
+                <button
+                  onClick={() => setActiveTab('upload')}
+                  className={`flex-1 py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'upload'
+                      ? 'border-green-500 text-green-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Upload Material
+                </button>
+                <button
+                  onClick={() => setActiveTab('generate')}
+                  className={`flex-1 py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'generate'
+                      ? 'border-purple-500 text-purple-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Generate Material
+                </button>
+              </div>
 
+              {/* Tab Content */}
+              <div className="space-y-4">
+                {activeTab === 'select' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Material to Study
+                      </label>
+                      <Select
+                        value={selectedMaterial}
+                        onChange={setSelectedMaterial}
+                        options={courseMaterials.map(material => ({
+                          value: material.id,
+                          label: material.material_name || material.filename || 'Unnamed Material',
+                          material: material
+                        }))}
+                        placeholder={loadingMaterials ? "Loading materials..." : "Choose a material..."}
+                        isLoading={loadingMaterials}
+                        isDisabled={loadingMaterials}
+                        className="react-select-container"
+                        classNamePrefix="react-select"
+                        styles={{
+                          control: (provided) => ({
+                            ...provided,
+                            minHeight: '42px',
+                            borderColor: '#d1d5db',
+                            '&:hover': {
+                              borderColor: '#9ca3af'
+                            }
+                          }),
+                          option: (provided, state) => ({
+                            ...provided,
+                            backgroundColor: state.isSelected 
+                              ? '#3b82f6' 
+                              : state.isFocused 
+                                ? '#eff6ff' 
+                                : 'white',
+                            color: state.isSelected ? 'white' : '#374151',
+                            padding: '12px 16px',
+                            '&:hover': {
+                              backgroundColor: state.isSelected ? '#3b82f6' : '#eff6ff'
+                            }
+                          }),
+                          placeholder: (provided) => ({
+                            ...provided,
+                            color: '#9ca3af'
+                          })
+                        }}
+                      />
+                      {courseMaterials.length === 0 && !loadingMaterials && (
+                        <p className="text-sm text-gray-500 mt-2">
+                          No materials found. Upload some materials in the Materials tab to get started.
+                        </p>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        if (!selectedMaterial) {
+                          toast.error('Please select a material first');
+                          return;
+                        }
+                        setShowMaterialsModal(false);
+                        setShowStartModal(true);
+                      }}
+                      disabled={!selectedMaterial}
+                      className={`w-full py-3 px-4 rounded-md transition-colors flex items-center justify-center gap-2 ${
+                        selectedMaterial 
+                          ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      <span>📚</span>
+                      Continue with Selected Material
+                    </button>
+                  </div>
+                )}
+
+                {activeTab === 'upload' && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-4">Upload a new file to work with</p>
+                    <button
+                      onClick={handleUploadMaterial}
+                      className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>📤</span>
+                      Go to Materials Tab
+                    </button>
+                  </div>
+                )}
+
+                {activeTab === 'generate' && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-4">Generate new material using AI</p>
+                    <button
+                      onClick={() => {
+                        // Store the subtask we want to start after material generation
+                        if (subtaskToStart) {
+                          setPendingSubtaskId(subtaskToStart.id);
+                          localStorage.setItem('pendingSubtaskStart', JSON.stringify({
+                            subtaskId: subtaskToStart.id,
+                            subtaskTitle: subtaskToStart.name,
+                            taskId: taskId,
+                            goalId: goalId,
+                            courseId: courseId,
+                            timestamp: Date.now()
+                          }));
+                        }
+                        setShowMaterialsModal(false);
+                        
+                        // Navigate to AI chat tab for material generation
+                        if (courseId && goalId) {
+                          router.push(`/courses/${courseId}?tab=ai`);
+                        }
+                      }}
+                      className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>🤖</span>
+                      Go to AI Chat Tab
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowMaterialsModal(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMaterialsModal(false);
+                    setShowStartModal(true);
+                  }}
+                  className="flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+      
       {/* Time Data Modal */}
       {timeDataModal && (
         <Portal>
@@ -884,40 +1556,68 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
               <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600" onClick={() => setShowCompletionTimeModal(false)}>
                 <span className="text-xl">&times;</span>
               </button>
-              <h3 className="text-lg font-semibold mb-4 text-center">Record Completion Time</h3>
-              <p className="text-sm text-gray-600 mb-4 text-center">
-                How long did it take you to complete "{subtaskToComplete.name}"?
-            </p>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Time (minutes)</label>
-                  <input
-                    type="number"
-                    value={completionTimeMinutes}
-                    onChange={(e) => setCompletionTimeMinutes(e.target.value)}
-                    placeholder="e.g., 15.5"
-                    min="0.1"
-                    step="0.1"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onKeyPress={(e) => e.key === 'Enter' && handleSetCompletionTime()}
-                  />
-                </div>
-                <div className="flex gap-2">
-              <button 
-                    onClick={() => setShowCompletionTimeModal(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                    onClick={handleSetCompletionTime}
-                    className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
-              >
-                    Complete
-              </button>
+              <h3 className="text-lg font-semibold mb-4 text-center">Set Completion Time</h3>
+              <p className="text-center mb-6">
+                Subtask "{subtaskToComplete.name}" requires a completion time. Please enter the time in minutes.
+              </p>
+              <div>
+                <input
+                  type="number"
+                  value={completionTimeMinutes}
+                  onChange={(e) => setCompletionTimeMinutes(e.target.value)}
+                  placeholder="Enter time in minutes"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={handleSetCompletionTime}
+                  className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  Set Time & Complete
+                </button>
+                <button
+                  onClick={() => setShowCompletionTimeModal(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </Portal>
+      )}
+      
+      {/* Return from Materials Tab Modal */}
+      {showReturnModal && subtaskToStart && (
+        <Portal>
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]" onClick={() => setShowReturnModal(false)}>
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600" onClick={() => setShowReturnModal(false)}>
+                <span className="text-xl">&times;</span>
+              </button>
+              <h3 className="text-lg font-semibold mb-4 text-center">Ready to Start?</h3>
+              <p className="text-center mb-6">
+                Welcome back! Would you like to start "{subtaskToStart.name}" with a material?
+              </p>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => {
+                    setShowReturnModal(false);
+                    setPendingSubtaskId(null);
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStartWithNewMaterial}
+                  className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  Select Material
+                </button>
+              </div>
+            </div>
           </div>
         </Portal>
       )}

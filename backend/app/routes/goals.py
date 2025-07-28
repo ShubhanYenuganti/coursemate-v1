@@ -676,11 +676,11 @@ def update_goal_tasks(goal_id):
                         if start_time and subtask_id and start_time.date() > task_due_date.date():
                             conflicting_subtasks.add(subtask_id)
 
-            if conflicting_subtasks:
-                return jsonify({
-                    'conflicting_subtasks': list(conflicting_subtasks),
-                    'message': 'Some subtasks have a start_time after the task due date.'
-                }), 409
+                if conflicting_subtasks:
+                    return jsonify({
+                        'conflicting_subtasks': list(conflicting_subtasks),
+                        'message': 'Some subtasks have a start_time after the task due date.'
+                    }), 409
 
         for task_data in data['tasks']:
             task_id = task_data.get('task_id')
@@ -834,13 +834,7 @@ def update_goal_tasks(goal_id):
             for g in goals:
                 g.goal_completed = all_tasks_completed
 
-        all_task_ids = set(g.task_id for g in goals if g.task_id != 'placeholder')
-        all_tasks_completed = bool(all_task_ids) and all(
-            all(g.task_completed for g in goals if g.task_id == tid)
-            for tid in all_task_ids
-        )
-        for g in goals:
-            g.goal_completed = all_tasks_completed
+
         
         db.session.commit()
         
@@ -869,7 +863,7 @@ def update_goal_tasks(goal_id):
         db.session.rollback()
         current_app.logger.error(f"Error updating tasks: {str(e)}")
         return jsonify({'error': 'An error occurred while updating tasks'}), 500
-    
+
 @goals_bp.route('/api/goals/<task_id>', methods = ['GET'])
 @jwt_required()
 def get_task_by_id(task_id):
@@ -1485,7 +1479,7 @@ def end_subtask_engagement(subtask_id):
         if subtask.subtask_engagement_start and subtask.subtask_engagement_end:
             time_diff = subtask.subtask_engagement_end - subtask.subtask_engagement_start
             current_session_minutes = time_diff.total_seconds() / 60.0  # Convert to minutes
-            
+        
             # Accumulate with previous sessions
             previous_total = subtask.subtask_total_active_minutes or 0.0
             subtask.subtask_total_active_minutes = previous_total + current_session_minutes
