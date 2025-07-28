@@ -37,6 +37,19 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   });
   const [profilePreview, setProfilePreview] = useState<string>(user?.profilePictureUrl || '');
 
+  // Generate user initials
+  const getUserInitials = (name: string) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const userInitials = getUserInitials(formData.name || user?.name || '');
+
   // Fetch user details when modal opens
   useEffect(() => {
     if (isOpen && user) {
@@ -168,11 +181,17 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
           {/* Profile Picture Section */}
           <div className="flex flex-col items-center space-y-4">
             <div className="relative">
-              <img
-                src={profilePreview || '/placeholder-user.jpg'}
-                alt="Profile"
-                className="w-32 h-32 rounded-full object-cover border-4 border-indigo-100 shadow-lg"
-              />
+              {profilePreview ? (
+                <img
+                  src={profilePreview}
+                  alt="Profile"
+                  className="w-32 h-32 rounded-full object-cover border-4 border-indigo-100 shadow-lg"
+                />
+              ) : (
+                <div className="w-32 h-32 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-3xl border-4 border-indigo-100 shadow-lg">
+                  {userInitials}
+                </div>
+              )}
               {isEditing && (
                 <button
                   onClick={() => fileInputRef.current?.click()}
