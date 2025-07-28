@@ -59,7 +59,7 @@ const TodaysChecklist: React.FC = () => {
           const subtasksData = await response.json();
           
           // Map subtasks to the Subtask interface format
-          const mappedSubtasks: Subtask[] = subtasksData.map((subtask: any) => {
+          const mappedSubtasks: Subtask[] = subtasksData.map((subtask: any, index: number) => {
             let courseTitle = subtask.course_id || '';
             
             // Find course title from userCourses
@@ -73,7 +73,7 @@ const TodaysChecklist: React.FC = () => {
             // Use start_time for scheduled subtasks, fallback to task_due_date
             const dueDate = subtask.start_time || subtask.task_due_date || subtask.due_date || '';
             return {
-              id: subtask.subtask_id || subtask.id || '',
+              id: subtask.subtask_id || subtask.id || `subtask-${index}`,
               title: subtask.subtask_descr || subtask.subtask_title || 'Untitled Subtask',
               course: courseTitle,
               dueDate: dueDate,
@@ -168,25 +168,25 @@ const TodaysChecklist: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-md border border-gray-100 min-h-[340px] flex flex-col justify-start" style={{height: '460px', paddingTop: '18px'}}>
+    <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-md border border-gray-100 h-full flex flex-col justify-start">
       {/* Header */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3 sm:gap-0">
         <h2 className="text-lg font-bold text-gray-800 tracking-tight">Checklist</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-1 sm:gap-2 overflow-x-auto">
           <button
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'overdue' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
+            className={`px-2 sm:px-3 py-1 rounded-md sm:rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${selectedFilter === 'overdue' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
             onClick={() => setSelectedFilter('overdue')}
           >
             Overdue
           </button>
           <button
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'today' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-500 border border-gray-200'}`}
+            className={`px-2 sm:px-3 py-1 rounded-md sm:rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${selectedFilter === 'today' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-500 border border-gray-200'}`}
             onClick={() => setSelectedFilter('today')}
           >
             Today's
           </button>
           <button
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'upcoming' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
+            className={`px-2 sm:px-3 py-1 rounded-md sm:rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${selectedFilter === 'upcoming' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
             onClick={() => setSelectedFilter('upcoming')}
           >
             Upcoming
@@ -194,41 +194,47 @@ const TodaysChecklist: React.FC = () => {
         </div>
       </div>
       {/* Checklist Content */}
-      <div className="flex-1 flex flex-col justify-start items-stretch overflow-y-auto" style={{minHeight: '220px', paddingTop: 0}}>
+      <div className="flex-1 flex flex-col justify-start items-stretch overflow-y-auto min-h-[200px] sm:min-h-[220px]">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-8">
-            <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-600">Loading subtasks...</p>
+          <div className="flex flex-col items-center justify-center py-6 sm:py-8">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-600 text-sm sm:text-base">Loading subtasks...</p>
           </div>
         ) : visibleSubtasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8">
-            <span className="text-3xl mb-2">📅</span>
-            <p className="text-gray-500 text-center">No {selectedFilter === 'today' ? "today's" : selectedFilter} subtasks.<br />Time to relax or plan ahead!</p>
+          <div className="flex flex-col items-center justify-center py-6 sm:py-8">
+            <span className="text-2xl sm:text-3xl mb-2">📅</span>
+            <p className="text-gray-500 text-center text-sm sm:text-base">
+              No {selectedFilter === 'today' ? "today's" : selectedFilter} subtasks.<br />
+              Time to relax or plan ahead!
+            </p>
           </div>
         ) : (
           <ul className="w-full space-y-2">
             {visibleSubtasks.map(subtask => (
               <li
                 key={subtask.id}
-                className="flex items-center bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2 gap-2 group hover:shadow-md transition-all relative"
+                className="flex items-center bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 px-2 sm:px-3 py-2 gap-2 group hover:shadow-md transition-all relative"
               >
                 {/* Play button links to studyplan tab and goal */}
                 <a
                   href={`/courses/${subtask.courseId}/goals/${subtask.goalId}`}
-                  className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-700 text-white mr-3 shadow"
+                  className="flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-600 hover:bg-blue-700 text-white mr-2 sm:mr-3 shadow flex-shrink-0"
                   title="Go to Study Plan"
-                  style={{ minWidth: 24, minHeight: 24 }}
                 >
-                  <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20" className="lucide lucide-play"><polygon points="5,3 19,12 5,21" /></svg>
+                  <svg width="12" height="12" className="sm:w-[14px] sm:h-[14px]" fill="currentColor" viewBox="0 0 20 20">
+                    <polygon points="5,3 19,12 5,21" />
+                  </svg>
                 </a>
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className={`font-bold text-gray-800 text-sm truncate ${subtask.completed ? 'line-through' : ''}`}>{subtask.title}</div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                    <span className="truncate max-w-[120px]">{subtask.course}</span>
+                  <div className={`font-bold text-gray-800 text-xs sm:text-sm truncate ${subtask.completed ? 'line-through' : ''}`}>
+                    {subtask.title}
+                  </div>
+                  <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-500 mt-1 flex-wrap">
+                    <span className="truncate max-w-[80px] sm:max-w-[120px]">{subtask.course}</span>
                     {/* Scheduled Time Display */}
                     {subtask.start_time && subtask.end_time && (
                       <span className="flex items-center gap-1 text-blue-600 whitespace-nowrap">
-                        <Clock size={10} />
+                        <Clock size={8} className="sm:w-[10px] sm:h-[10px]" />
                         {(() => {
                           try {
                             const startDate = new Date(subtask.start_time);
@@ -252,7 +258,7 @@ const TodaysChecklist: React.FC = () => {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-col items-end justify-center min-w-[48px]">
+                <div className="flex flex-col items-end justify-center min-w-[40px] sm:min-w-[48px] flex-shrink-0">
                   <span className="text-xs text-gray-400 font-medium">{getDueDateLabel(subtask.dueDate)}</span>
                 </div>
               </li>
@@ -261,18 +267,20 @@ const TodaysChecklist: React.FC = () => {
         )}
       </div>
       {/* Divider */}
-      <div className="my-4 border-t border-gray-200"></div>
+      <div className="my-3 sm:my-4 border-t border-gray-200"></div>
+      
       {/* Bottom area: more subtasks indicator and Go to Calendar button */}
-      <div className="flex flex-row items-end justify-between w-full pt-0 pb-3" style={{ minHeight: 40 }}>
-        <div className="flex-1">
+      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between w-full gap-2 sm:gap-0 pt-0 pb-2 sm:pb-3 min-h-[40px]">
+        <div className="flex-1 order-2 sm:order-1">
           {hasMoreSubtasks && (
-            <div className="text-xs text-gray-400">+{filteredSubtasks.length - MAX_SUBTASKS} more subtasks in calendar</div>
+            <div className="text-xs text-gray-400">
+              +{filteredSubtasks.length - MAX_SUBTASKS} more subtasks in calendar
+            </div>
           )}
         </div>
         <a
           href="/calendar"
-          className="inline-block px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow transition-colors text-sm ml-2 mt-2"
-          style={{ minWidth: 130 }}
+          className="inline-block px-3 sm:px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow transition-colors text-xs sm:text-sm order-1 sm:order-2 w-full sm:w-auto text-center min-w-[100px] sm:min-w-[130px]"
         >
           Go to Calendar
         </a>
