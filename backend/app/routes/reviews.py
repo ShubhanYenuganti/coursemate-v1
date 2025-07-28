@@ -129,3 +129,32 @@ def delete_review():
     except Exception as e:
         db.session.rollback()
         return jsonify({"msg": "Internal server error", "error": str(e)}), 500
+    
+# Get the average rating for a course
+@course_reviews_bp.route('/reviews/average-rating', methods=['POST'])
+@jwt_required()
+def get_average_rating(): 
+    current_user = get_jwt_identity()
+    if not current_user:
+        return jsonify({"msg": "User not authenticated"}), 401
+
+    data = request.get_json()
+    course_ids = data.get('course_ids')
+
+    if not course_ids or not isinstance(course_ids, list):
+        return jsonify({"msg": "Missing or invalid course_ids"}), 400
+    
+    try:
+        result = {}
+        for course_id in course_ids:
+            course_id = str(course_id)  # Cast to match DB field type if needed
+            reviews = CourseReview.query.filter_by(course_id=course_id).all()
+            if reviews:
+                avg = sum(review.rating for review in reviews) / len(reviews)
+                result[course_id] = round(avg, 2)
+            else:
+                result[course_id] = 0.0
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"msg": "Internal server error", "error": str(e)}), 500

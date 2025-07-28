@@ -255,6 +255,17 @@ class CourseService {
     return this.handleResponse(response);
   }
 
+  async getAverageRatingForCourses(courseIds: number[]): Promise<{ [courseId: number]: number }> {
+    if (courseIds.length === 0) return {};
+    const response = await fetch(`${this.baseUrl}/api/reviews/average-rating`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ course_ids: courseIds }),
+    });
+
+    return this.handleResponse(response);
+  }
+
   async uploadBanner(courseId: string, file: File): Promise<{ message: string; course: CourseData }> {
     const formData = new FormData();
     formData.append('file', file);

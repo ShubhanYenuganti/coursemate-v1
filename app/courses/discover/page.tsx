@@ -39,34 +39,42 @@ const CoursesPage: React.FC = () => {
 
   useEffect(() => {
     const fetchPublicCourses = async () => {
-      setIsLoading(true)
+      setIsLoading(true);
       try {
-        const data = await courseService.getPublicCourses(page, perPage, searchQuery, "")
-        const mappedCourses = data.courses.map((courseData: CourseData) => ({
-          id: courseData.id || "",
-          title: courseData.title,
-          description: courseData.description,
-          subject: courseData.subject,
-          category: courseData.subject || "Uncategorized",
-          thumbnail: courseData.courseImage || null,
-          creator: courseData.professor || "Unknown",
-          rating: 0,
-          students: 0,
-          isNew: false,
-          isPopular: false,
-          isAIRecommended: false,
-          tags: courseData.tags || []
-        }))
-        setCourses(mappedCourses)
-        setTotal(data.total)
-        setPage(data.page)
-        setPerPage(data.per_page)
+        const data = await courseService.getPublicCourses(page, perPage, searchQuery, "");
+
+        const courseIds = data.courses.map((course: CourseData) => course.id || ""); // get all IDs as strings
+        const ratingsMap = await courseService.getAverageRatingForCourses(courseIds); // returns { courseId: rating }
+        const mappedCourses = data.courses.map((courseData: CourseData) => {
+          const courseId = courseData.id || "";
+          return {
+            id: courseId,
+            title: courseData.title,
+            description: courseData.description,
+            subject: courseData.subject,
+            category: courseData.subject || "Uncategorized",
+            thumbnail: courseData.courseImage || null,
+            creator: courseData.professor || "Unknown",
+            rating: ratingsMap[courseId] || 0, // <-- use rating from map
+            students: 0,
+            isNew: false,
+            isPopular: false,
+            isAIRecommended: false,
+            tags: courseData.tags || [],
+          };
+        });
+
+        setCourses(mappedCourses);
+        setTotal(data.total);
+        setPage(data.page);
+        setPerPage(data.per_page);
       } catch (error) {
-        console.error("Failed to fetch public courses:", error)
+        console.error("Failed to fetch public courses:", error);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
-    }
+    };
+
 
     fetchPublicCourses()
   }, [page, perPage, searchQuery])
