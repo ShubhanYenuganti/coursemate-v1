@@ -43,6 +43,7 @@ def get_review_by_course_id(course_id):
         .all()
     )
     return jsonify([review.to_dict_with_user() for review in reviews]), 200
+
 # Post a new review
 @course_reviews_bp.route('/reviews', methods=['POST'])
 @jwt_required()
@@ -107,21 +108,24 @@ def delete_review():
     current_user = get_jwt_identity()
     if not current_user:
         return jsonify({"msg": "User not authenticated"}), 401
-    
+
     data = request.get_json()
     course_id = data.get('course_id')
-    
+
     if not course_id:
         return jsonify({"msg": "Missing course_id"}), 400
-    
-    user_id = current_user
-    combo_id = generate_combo_id(course_id, user_id)
-    
-    review = CourseReview.query.filter_by(combo_id=combo_id).first() # should be a single object
-    if not review:
-        return jsonify({"msg": "Review not found"}), 404
 
-    db.session.delete(review)
-    db.session.commit()
+    try:
+        course_id = str(course_id)  # avoid casting to UUID
+        combo_id = generate_combo_id(course_id, current_user)
+        review = CourseReview.query.filter_by(combo_id=combo_id).first()
+        if not review:
+            return jsonify({"msg": "Review not found"}), 404
 
-    return jsonify({"msg": "Review deleted successfully"}), 200
+        db.session.delete(review)
+        db.session.commit()
+        return jsonify({"msg": "Review deleted successfully"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"msg": "Internal server error", "error": str(e)}), 500

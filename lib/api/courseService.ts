@@ -225,6 +225,36 @@ class CourseService {
     }
   }
 
+  async postCourseReview(reviewData: { course_id: string, rating: number; review_text: string }): Promise<{ message: string; review: any }> {
+    const response = await fetch(`${this.baseUrl}/api/reviews`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(reviewData),
+    });
+
+    return this.handleResponse(response);
+  }
+
+  async updateCourseReview(reviewData: { course_id: string, rating: number; review_text: string }): Promise<{ message: string; review: any }> {
+    const response = await fetch(`${this.baseUrl}/api/reviews`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(reviewData),
+    });
+
+    return this.handleResponse(response);
+  }
+
+  async deleteCourseReview(course_id: string): Promise<{ message: string }> {
+    const response = await fetch(`${this.baseUrl}/api/reviews`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ course_id: course_id }),
+    });
+
+    return this.handleResponse(response);
+  }
+
   async uploadBanner(courseId: string, file: File): Promise<{ message: string; course: CourseData }> {
     const formData = new FormData();
     formData.append('file', file);

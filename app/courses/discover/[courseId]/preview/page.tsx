@@ -5,6 +5,8 @@ import { ArrowLeft, FileText, MessageSquare, Star, Play, Image } from "lucide-re
 import Link from "next/link"
 import { courseService } from "@/lib/api/courseService"
 import { useRouter, useParams } from 'next/navigation'
+import LeaveReview from "@/app/courses/discover/components/LeaveReview"
+
 
 interface Tab {
   id: string
@@ -82,12 +84,20 @@ const CoursePreviewPage: React.FC = () => {
   const router = useRouter();
   const params = useParams();
   const courseId = params.courseId as string;
+  const [userId, setUserId] = useState<string | null>(null);
   const [course, setCourse] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isOwnedByUser, setIsOwnedByUser] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>("description");
   const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewRating, setReviewRating] = useState<number>(0);
+  const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
+  const [showReviewForm, setShowReviewForm] = useState<boolean>(false);
+  const [editingReviewId, setEditingReviewId] = useState<any | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<boolean>(false);
+  const [reviewToDelete, setReviewToDelete] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -111,11 +121,105 @@ const CoursePreviewPage: React.FC = () => {
         setIsLoading(false);
       }
     };
+    const fetchUserId = async () => {
+      try {
+        const api = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5173";
+        const response = await fetch(`${api}/api/users/me`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem("token")}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const data = await response.json();
+        setUserId(data.id);
+      } catch (error) {
+        console.error('Error fetching user ID:', error);
+      }
+    };
 
     if (courseId) {
       fetchCourse();
     }
-  }, [courseId]);
+
+    if (userId === null) {
+      fetchUserId();
+    }
+
+  }, [courseId, userId]);
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewRating || reviewRating < 0.5 || reviewRating > 5) {
+      alert("Please provide a rating between 0.5 and 5.");
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      const response = await courseService.postCourseReview({
+        course_id: courseId,
+        rating: reviewRating,
+        review_text: reviewText || "",  // default to empty string
+      });
+
+      console.log('Review response:', response); // Debug log
+
+      const updatedReviews = await courseService.getCourseReviews(courseId);
+      setReviews(updatedReviews);
+      setReviewText("");
+      setReviewRating(0.5);
+    } catch (error: any) {
+      alert(error.message || "Failed to submit review.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  }
+
+  const handleUpdateReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewRating || reviewRating < 0.5 || reviewRating > 5) {
+      alert("Please provide a rating between 0.5 and 5.");
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      const response = await courseService.updateCourseReview({
+        course_id: courseId,
+        rating: reviewRating,
+        review_text: reviewText || "",  // default to empty string
+      });
+
+      console.log('Update review response:', response); // Debug log
+
+      const updatedReviews = await courseService.getCourseReviews(courseId);
+      setReviews(updatedReviews);
+      setReviewText("");
+      setReviewRating(0.5);
+      setEditingReviewId(null);
+    } catch (error: any) {
+      alert(error.message || "Failed to update review.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  }
+
+  const handleDeleteReview = async () => {
+    if (!reviewToDelete) return;
+
+    try {
+      await courseService.deleteCourseReview(reviewToDelete);
+      const updatedReviews = await courseService.getCourseReviews(courseId);
+      setReviews(updatedReviews);
+      setReviewToDelete(null);
+      setShowDeleteConfirmation(false);
+    } catch (error: any) {
+      alert(error.message || "Failed to delete review.");
+    }
+  }
+
+  const hasUserReviewed = userId && reviews.some(review => review.user_id === userId);
 
   if (isLoading) {
     return (
@@ -221,8 +325,8 @@ const CoursePreviewPage: React.FC = () => {
                           <Star
                             key={index}
                             className={`h-4 w-4 ${index < Math.round((resource.credibility_score + resource.relevance_score) / 2 * 5)
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-gray-300"
+                              ? "fill-yellow-400 text-yellow-400"
+                              : "text-gray-300"
                               }`}
                           />
                         ))}
@@ -297,24 +401,98 @@ const CoursePreviewPage: React.FC = () => {
               <div key={review.combo_id} className="bg-gray-50 p-6 rounded-lg">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-semibold text-gray-800">{review.user_name}</h4>
-                  <span className="text-sm text-gray-500">
-                    {new Intl.DateTimeFormat("en-US", {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "numeric",
-                    }).format(new Date(review.updated_at))}
-                  </span>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <span>
+                      {new Intl.DateTimeFormat("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "numeric",
+                      }).format(new Date(review.updated_at))}
+                    </span>
+
+                    {/* ✅ Only show for the user's own review */}
+                    {userId === review.user_id && (
+                      <>
+                        <button
+                          className="ml-2 hover:text-purple-600"
+                          onClick={() => { 
+                            setShowReviewForm(true);
+                            setReviewRating(review.rating);
+                            setReviewText(review.review_text);
+                            setEditingReviewId(review.combo_id);
+                          }}
+                          title="Edit Review"
+                        >
+                        <svg className="w-5 h-5 md:w-6 md:h-6 text-yellow-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path d="M15.232 5.232l3.536 3.536M4 13.5V19h5.5L19.5 9.5a2.121 2.121 0 0 0-3-3L4 13.5z" />
+                        </svg>
+                        </button>
+                        <button
+                          className="hover:text-red-600"
+                          onClick={() => {
+                            setShowDeleteConfirmation(true);
+                            setReviewToDelete(review.course_id)
+                          }}
+                          title="Delete Review"
+                        >
+                        <svg className="w-5 h-5 md:w-6 md:h-6 text-red-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 0 1 1 1v0a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v0a1 1 0 0 1 1-1h10z" />
+                        </svg>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
+
                 <div className="flex items-center mb-3">
                   {renderStars(review.rating)}
                   <span className="ml-2 text-sm text-gray-600">({review.rating}/5)</span>
                 </div>
+
                 <p className="text-gray-700">{review.review_text}</p>
               </div>
             ))}
+
+            {!isOwnedByUser && (!hasUserReviewed || editingReviewId) && (
+              <LeaveReview
+                rating={reviewRating}
+                setRating={setReviewRating}
+                text={reviewText}
+                setText={setReviewText}
+                isSubmitting={isSubmittingReview}
+                onSubmit={editingReviewId ? handleUpdateReview : handleSubmitReview}
+                showForm={showReviewForm}
+                setShowForm={setShowReviewForm}
+              />
+            )}
+
+            {showDeleteConfirmation && (
+              <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+                <div className="bg-white p-6 rounded shadow-md text-center w-96">
+                  <h3 className="text-lg font-semibold mb-4">Are you sure?</h3>
+                  <p className="text-gray-700 mb-6">Do you really want to delete this review? This action cannot be undone.</p>
+                  <div className="flex justify-end space-x-4">
+                    <button
+                      onClick={() => setShowDeleteConfirmation(false)}
+                      className="px-4 py-2 text-sm font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteReview}
+                      className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
+
         );
       default:
         return null;
@@ -378,8 +556,8 @@ const CoursePreviewPage: React.FC = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center space-x-2 py-4 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                    ? "border-purple-500 text-purple-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  ? "border-purple-500 text-purple-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                   }`}
               >
                 {tab.icon}
