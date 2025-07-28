@@ -8,6 +8,7 @@ import { courseService, CourseData } from "../../../lib/api/courseService";
 import { Code, Beaker, Calculator, Globe, Palette, Music } from 'lucide-react';
 import PinnedResources from "../components/PinnedResources";
 import ShareInviteFeature from "../components/ShareInviteFeature";
+import ManageEnrollmentModal from "../components/manageEnrollment";
 import MaterialsManagerCourse from "../components/ai-chat/MaterialsManagerCourse";
 import RecommendedResources from "../components/RecommendedResources";
 import NewAIChatInterface from "../components/ai-chat/NewAIChatInterface";
@@ -95,16 +96,16 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
   // Handle animated tab switching
   const handleTabChange = (newTab: string) => {
     if (newTab === activeTab || isAnimating) return;
-    
+
     const currentIndex = tabOrder.indexOf(activeTab);
     const newIndex = tabOrder.indexOf(newTab);
     const direction = newIndex > currentIndex ? 'left' : 'right';
-    
+
     // Immediately update the tab (load new content)
     setActiveTab(newTab);
     setAnimationDirection(direction);
     setIsAnimating(true);
-    
+
     // End animation after slide-in completes
     setTimeout(() => {
       setIsAnimating(false);
@@ -149,8 +150,13 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
         />
         <PinnedResources course={course} />
         <div className="mt-8" />
-        {course.badge === 'Creator' && (() => { console.log('ShareInviteFeature comboId:', course.comboId); return <ShareInviteFeature course={course} /> })()}
-        {course.badge === 'Creator' && <EnrolledUsersList courseId={course.dbId} isCreator />}
+        {course.badge === 'Creator' && (
+          <>
+            <ShareInviteFeature course={course} />
+            <ManageEnrollmentModal courseId={course.dbId} />
+            <EnrolledUsersList courseId={course.dbId} isCreator />
+          </>
+        )}
         {course.badge === 'Enrolled' && <LeaveCourseButton courseId={course.dbId} />}
       </div>
     ),
@@ -181,7 +187,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
       <div className="bg-white border-b border-gray-200 flex items-center px-8 py-4 sticky top-0 z-10 flex-shrink-0">
         <h2 className="text-3xl font-bold text-gray-800 truncate mr-4">{course.title}</h2>
         {tabLabel !== 'Study Plan' && (
-        <span className="text-xl text-gray-500 font-medium">- {tabLabel}</span>
+          <span className="text-xl text-gray-500 font-medium">- {tabLabel}</span>
         )}
       </div>
       <div className={`${activeTab === 'ai' ? 'flex-1 flex flex-col min-h-0' : 'mx-auto p-8 pb-24'} ${activeTab === 'ai' ? 'max-w-7xl mx-auto' : 'max-w-5xl'}`}>
@@ -189,17 +195,17 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
         <CourseDetailTabs activeTab={activeTab} setActiveTab={handleTabChange} />
         </div>
         <div className={`relative ${activeTab === 'ai' ? 'flex-1 px-8 pb-8 min-h-0' : 'overflow-hidden min-h-[400px]'}`}>
-          <div 
+          <div
             className={`transition-all duration-500 ease-out ${activeTab === 'ai' ? 'h-full' : ''}`}
             style={{
-              transform: isAnimating 
-                ? animationDirection === 'left' 
-                  ? 'translateX(-20px)' 
+              transform: isAnimating
+                ? animationDirection === 'left'
+                  ? 'translateX(-20px)'
                   : 'translateX(20px)'
                 : 'translateX(0)',
               opacity: isAnimating ? 0.3 : 1
             }}
-            id={`tab-panel-${activeTab}`} 
+            id={`tab-panel-${activeTab}`}
             role="tabpanel"
           >
             {tabContent}

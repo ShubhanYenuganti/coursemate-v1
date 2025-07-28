@@ -676,11 +676,11 @@ def update_goal_tasks(goal_id):
                         if start_time and subtask_id and start_time.date() > task_due_date.date():
                             conflicting_subtasks.add(subtask_id)
 
-            if conflicting_subtasks:
-                return jsonify({
-                    'conflicting_subtasks': list(conflicting_subtasks),
-                    'message': 'Some subtasks have a start_time after the task due date.'
-                }), 409
+                if conflicting_subtasks:
+                    return jsonify({
+                        'conflicting_subtasks': list(conflicting_subtasks),
+                        'message': 'Some subtasks have a start_time after the task due date.'
+                    }), 409
 
         for task_data in data['tasks']:
             task_id = task_data.get('task_id')
