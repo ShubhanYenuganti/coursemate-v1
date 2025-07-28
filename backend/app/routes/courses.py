@@ -320,7 +320,7 @@ def delete_banner(course_id):
 @courses_bp.route('/public', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def get_public_courses():
-    """Get all public courses for the Discover page"""
+    """Get all public courses for the Discover page but the user's own courses"""
     current_user_id = get_jwt_identity()
     
     # Parse query parameters for pagination and filtering
@@ -330,7 +330,10 @@ def get_public_courses():
     subject = request.args.get('subject', '')
     
     # Base query - only get public courses
-    query = Course.query.filter_by(visibility='Public')
+    query = Course.query.filter_by(visibility='Public').filter(
+        Course.user_id != current_user_id,
+        Course.badge == 'Creator'
+    )
     
     # Apply filters
     if search_term:
