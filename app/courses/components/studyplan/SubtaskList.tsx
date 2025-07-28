@@ -70,6 +70,11 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
   const [activeMaterial, setActiveMaterial] = useState<any>(null); // Store material for active subtask
   const [engagedSubtasks, setEngagedSubtasks] = useState<Set<string>>(new Set());
   const [pausedSubtasks, setPausedSubtasks] = useState<Set<string>>(new Set());
+  
+  // Upload flow state
+  const [pendingSubtaskId, setPendingSubtaskId] = useState<string | null>(null); // Track subtask waiting for material
+  const [showReturnModal, setShowReturnModal] = useState(false); // Show after returning from materials tab
+  
   const router = useRouter();
 
   // Fetch course materials
@@ -602,6 +607,122 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
       console.error('Error setting completion time:', error);
       toast.error('Failed to set completion time');
     }
+  };
+
+  // Handle upload material navigation
+  const handleUploadMaterial = () => {
+    if (!subtaskToStart) return;
+    
+    // Store the subtask we want to start after material upload
+    setPendingSubtaskId(subtaskToStart.id);
+    setShowMaterialsModal(false);
+    
+    // Store in localStorage so we can detect return from materials tab
+    localStorage.setItem('pendingSubtaskStart', JSON.stringify({
+      subtaskId: subtaskToStart.id,
+      subtaskTitle: subtaskToStart.name,
+      taskId: taskId,
+      goalId: goalId,
+      courseId: courseId,
+      timestamp: Date.now()
+    }));
+    
+    // Navigate to materials tab
+    if (courseId && goalId) {
+      router.push(`/courses/${courseId}?tab=materials`);
+    }
+  };
+
+  // Handle return from materials tab
+  const handleReturnFromMaterials = () => {
+    const pending = localStorage.getItem('pendingSubtaskStart');
+    const shouldShowModal = localStorage.getItem('shouldShowMaterialModal');
+    const autoStart = localStorage.getItem('autoStartSubtask');
+    const selectedMaterial = localStorage.getItem('selectedMaterialForSubtask');
+    
+    if (pending) {
+      try {
+        const pendingData = JSON.parse(pending);
+        
+        // Check if this is a recent navigation (within 5 minutes) and matches current context
+        const isRecent = Date.now() - pendingData.timestamp < 5 * 60 * 1000;
+        const isCorrectContext = pendingData.taskId === taskId && 
+                                pendingData.goalId === goalId && 
+                                pendingData.courseId === courseId;
+        
+        if (isRecent && isCorrectContext) {
+          const subtask = subtasks.find(s => s.id === pendingData.subtaskId);
+          if (subtask) {
+            setSubtaskToStart(subtask);
+            setPendingSubtaskId(subtask.id);
+            
+            // Check if we should auto-start with selected material
+            if (autoStart === 'true' && selectedMaterial) {
+              try {
+                const materialData = JSON.parse(selectedMaterial);
+                if (materialData.subtaskId === subtask.id && materialData.material) {
+                  // Auto-start the subtask with the selected material
+                  setActiveMaterial(materialData.material);
+                  setActiveSubtask(subtask);
+                  setShowStartModal(true);
+                  
+                  // Clean up the auto-start flags
+                  localStorage.removeItem('autoStartSubtask');
+                  localStorage.removeItem('selectedMaterialForSubtask');
+                } else {
+                  // Material doesn't match, fall back to modal
+                  setShowMaterialsModal(true);
+                }
+              } catch (error) {
+                console.error('Error parsing selected material:', error);
+                setShowMaterialsModal(true);
+              }
+            } else if (shouldShowModal === 'true') {
+              // Show materials modal directly
+              setShowMaterialsModal(true);
+              localStorage.removeItem('shouldShowMaterialModal');
+            } else {
+              // Show return modal
+              setShowReturnModal(true);
+            }
+          }
+        }
+        
+        // Clean up localStorage
+        localStorage.removeItem('pendingSubtaskStart');
+      } catch (error) {
+        console.error('Error parsing pending subtask data:', error);
+        localStorage.removeItem('pendingSubtaskStart');
+      }
+    }
+    
+    // Clean up any remaining flags
+    if (shouldShowModal === 'true' && !pending) {
+      localStorage.removeItem('shouldShowMaterialModal');
+    }
+    if (autoStart === 'true' && !pending) {
+      localStorage.removeItem('autoStartSubtask');
+      localStorage.removeItem('selectedMaterialForSubtask');
+    }
+  };
+
+  // Check for return from materials tab on component mount
+  useEffect(() => {
+    handleReturnFromMaterials();
+  }, []);
+
+  // Re-fetch materials when returning to study plan
+  useEffect(() => {
+    if (pendingSubtaskId) {
+      fetchCourseMaterials();
+    }
+  }, [pendingSubtaskId]);
+
+  // Handle starting subtask with newly uploaded material
+  const handleStartWithNewMaterial = () => {
+    setShowReturnModal(false);
+    setShowMaterialsModal(true);
+    setActiveTab('select'); // Switch to select tab to show newly uploaded materials
   };
 
   // Helper function to get subtask type badge styling
@@ -1327,15 +1448,11 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
                   <div className="text-center">
                     <p className="text-sm text-gray-600 mb-4">Upload a new file to work with</p>
                     <button
-                      onClick={() => {
-                        setShowMaterialsModal(false);
-                        // TODO: Navigate to upload material page
-                        console.log('Navigate to upload material');
-                      }}
+                      onClick={handleUploadMaterial}
                       className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
                     >
                       <span>📤</span>
-                      Upload Material
+                      Go to Materials Tab
                     </button>
                   </div>
                 )}
@@ -1345,14 +1462,29 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
                     <p className="text-sm text-gray-600 mb-4">Generate new material using AI</p>
                     <button
                       onClick={() => {
+                        // Store the subtask we want to start after material generation
+                        if (subtaskToStart) {
+                          setPendingSubtaskId(subtaskToStart.id);
+                          localStorage.setItem('pendingSubtaskStart', JSON.stringify({
+                            subtaskId: subtaskToStart.id,
+                            subtaskTitle: subtaskToStart.name,
+                            taskId: taskId,
+                            goalId: goalId,
+                            courseId: courseId,
+                            timestamp: Date.now()
+                          }));
+                        }
                         setShowMaterialsModal(false);
-                        // TODO: Navigate to generate material page
-                        console.log('Navigate to generate material');
+                        
+                        // Navigate to AI chat tab for material generation
+                        if (courseId && goalId) {
+                          router.push(`/courses/${courseId}?tab=ai`);
+                        }
                       }}
                       className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
                     >
                       <span>🤖</span>
-                      Generate Material
+                      Go to AI Chat Tab
                     </button>
                   </div>
                 )}
@@ -1424,40 +1556,68 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
               <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600" onClick={() => setShowCompletionTimeModal(false)}>
                 <span className="text-xl">&times;</span>
               </button>
-              <h3 className="text-lg font-semibold mb-4 text-center">Record Completion Time</h3>
-              <p className="text-sm text-gray-600 mb-4 text-center">
-                How long did it take you to complete "{subtaskToComplete.name}"?
-            </p>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Time (minutes)</label>
-                  <input
-                    type="number"
-                    value={completionTimeMinutes}
-                    onChange={(e) => setCompletionTimeMinutes(e.target.value)}
-                    placeholder="e.g., 15.5"
-                    min="0.1"
-                    step="0.1"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onKeyPress={(e) => e.key === 'Enter' && handleSetCompletionTime()}
-                  />
-                </div>
-                <div className="flex gap-2">
-              <button 
-                    onClick={() => setShowCompletionTimeModal(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                    onClick={handleSetCompletionTime}
-                    className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
-              >
-                    Complete
-              </button>
+              <h3 className="text-lg font-semibold mb-4 text-center">Set Completion Time</h3>
+              <p className="text-center mb-6">
+                Subtask "{subtaskToComplete.name}" requires a completion time. Please enter the time in minutes.
+              </p>
+              <div>
+                <input
+                  type="number"
+                  value={completionTimeMinutes}
+                  onChange={(e) => setCompletionTimeMinutes(e.target.value)}
+                  placeholder="Enter time in minutes"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={handleSetCompletionTime}
+                  className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  Set Time & Complete
+                </button>
+                <button
+                  onClick={() => setShowCompletionTimeModal(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </Portal>
+      )}
+      
+      {/* Return from Materials Tab Modal */}
+      {showReturnModal && subtaskToStart && (
+        <Portal>
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]" onClick={() => setShowReturnModal(false)}>
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600" onClick={() => setShowReturnModal(false)}>
+                <span className="text-xl">&times;</span>
+              </button>
+              <h3 className="text-lg font-semibold mb-4 text-center">Ready to Start?</h3>
+              <p className="text-center mb-6">
+                Welcome back! Would you like to start "{subtaskToStart.name}" with a material?
+              </p>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => {
+                    setShowReturnModal(false);
+                    setPendingSubtaskId(null);
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStartWithNewMaterial}
+                  className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  Select Material
+                </button>
+              </div>
+            </div>
           </div>
         </Portal>
       )}

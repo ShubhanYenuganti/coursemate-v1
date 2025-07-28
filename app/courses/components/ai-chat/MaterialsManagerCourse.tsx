@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Upload, File, Trash2, Eye, Download, AlertCircle, CheckCircle, Loader2, Pin, Edit2, Save, X, Brain } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Upload, File, Trash2, Eye, Download, AlertCircle, CheckCircle, Loader2, Pin, Edit2, Save, X, Brain, ArrowLeft } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +53,7 @@ interface MaterialsManagerCourseProps {
 }
 
 export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCourseProps) {
+  const router = useRouter();
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -68,6 +70,7 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
   const [editedFilename, setEditedFilename] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<{ id: string; filename: string } | null>(null);
+  const [pendingSubtaskStart, setPendingSubtaskStart] = useState<any>(null);
 
   // Fetch uploaded files for this course
   const fetchFiles = async () => {
@@ -125,6 +128,25 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
 
   useEffect(() => {
     fetchFiles();
+  }, [courseId]);
+
+  // Check for pending subtask start from study plan navigation
+  useEffect(() => {
+    const checkPendingSubtaskStart = () => {
+      const pendingData = localStorage.getItem('pendingSubtaskStart');
+      if (pendingData) {
+        try {
+          const data = JSON.parse(pendingData);
+          if (data.courseId === courseId) {
+            setPendingSubtaskStart(data);
+          }
+        } catch (error) {
+          console.error('Error parsing pending subtask start data:', error);
+        }
+      }
+    };
+
+    checkPendingSubtaskStart();
   }, [courseId]);
 
   // Load quiz data from backend endpoint to avoid CORS issues
@@ -258,6 +280,11 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
       // Reset file input
       event.target.value = '';
       
+      // If there's a pending subtask start, show a more prominent message
+      if (pendingSubtaskStart) {
+        setSuccess(`Successfully uploaded "${file.name}"! You can now return to your study plan to continue.`);
+      }
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
       console.error('Upload error:', err);
@@ -267,6 +294,43 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
         setUploadProgress(0);
         setSuccess(null);
       }, 3000);
+    }
+  };
+
+  // Handle returning to study plan after upload
+  const handleReturnToStudyPlan = async () => {
+    if (pendingSubtaskStart && pendingSubtaskStart.goalId) {
+      try {
+        // Find the most recently uploaded material
+        const sortedFiles = [...files].sort((a, b) => {
+          const aDate = a.created_at || a.uploaded_at;
+          const bDate = b.created_at || b.uploaded_at;
+          return new Date(bDate).getTime() - new Date(aDate).getTime();
+        });
+        
+        const mostRecentMaterial = sortedFiles[0];
+        
+        if (mostRecentMaterial) {
+          // Store the selected material for the subtask to use
+          localStorage.setItem('selectedMaterialForSubtask', JSON.stringify({
+            subtaskId: pendingSubtaskStart.subtaskId,
+            material: mostRecentMaterial,
+            timestamp: Date.now()
+          }));
+          
+          // Set flag to auto-start the subtask
+          localStorage.setItem('autoStartSubtask', 'true');
+        }
+        
+        // Navigate back to the study plan
+        router.push(`/courses/${courseId}/goals/${pendingSubtaskStart.goalId}`);
+      } catch (error) {
+        console.error('Error preparing subtask start:', error);
+        // Fallback to regular navigation
+        router.push(`/courses/${courseId}/goals/${pendingSubtaskStart.goalId}`);
+      }
+    } else {
+      console.error('Cannot navigate to study plan: missing goalId in pending subtask data');
     }
   };
 
@@ -585,6 +649,31 @@ export default function MaterialsManagerCourse({ courseId }: MaterialsManagerCou
           </div>
           <Badge variant="secondary">{files.length} files</Badge>
         </div>
+
+        {/* Return to Study Plan Button */}
+        {pendingSubtaskStart && (
+          <Alert className="border-blue-200 bg-blue-50">
+            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="flex items-center justify-between">
+              <div>
+                <span className="font-medium">Ready to start your subtask?</span>
+                <p className="text-sm text-gray-600 mt-1">
+                  Subtask: {pendingSubtaskStart.subtaskTitle || 'Unnamed subtask'}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Your most recent upload will be used automatically
+                </p>
+              </div>
+              <Button
+                onClick={handleReturnToStudyPlan}
+                className="ml-4 bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Start Subtask with Latest Material
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Alerts */}
         {error && (
