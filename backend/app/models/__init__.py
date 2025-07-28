@@ -10,5 +10,6 @@ from .conversation import Conversation
 from .conversation_message import ConversationMessage
 from .community import CommunityPost, CommunityAnswer, CommunityPostVote, CommunityAnswerVote, CommunityPostView
 from .course_reviews import CourseReview
+from .course_enrollment import CourseEnrollment
 
-__all__ = ['User', 'Course', 'Goal', 'Message', 'Friend', 'DocumentEmbedding', 'UploadedFile', 'MaterialChunk', 'Conversation', 'ConversationMessage', 'CommunityPost', 'CommunityAnswer', 'CommunityPostVote', 'CommunityAnswerVote', 'CommunityPostView', 'CourseReview']
+__all__ = ['User', 'Course', 'Goal', 'Message', 'Friend', 'DocumentEmbedding', 'UploadedFile', 'MaterialChunk', 'Conversation', 'ConversationMessage', 'CommunityPost', 'CommunityAnswer', 'CommunityPostVote', 'CommunityAnswerVote', 'CommunityPostView', 'CourseReview', 'CourseEnrollment']

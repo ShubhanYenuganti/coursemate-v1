@@ -266,6 +266,26 @@ class CourseService {
     return this.handleResponse(response);
   }
 
+  async enrollInCourse(courseId: string): Promise<{ message: string}> {
+    const response = await fetch(`${this.baseUrl}/api/course_enrollment/enroll`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ course_id: courseId }),
+    });
+
+    return this.handleResponse(response);
+  }
+
+  async getStatusOfEnrollment(courseIds: number[]): Promise<{ [courseId: number]: "pending" | "approved" | "rejected" | "not_enrolled" }> {
+    const response = await fetch(`${this.baseUrl}/api/course_enrollment/enrollment_status`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ course_ids: courseIds }),
+    });
+
+    return this.handleResponse(response);
+  }
+
   async uploadBanner(courseId: string, file: File): Promise<{ message: string; course: CourseData }> {
     const formData = new FormData();
     formData.append('file', file);

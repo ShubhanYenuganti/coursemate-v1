@@ -15,8 +15,8 @@ class CourseReview(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    user = db.relationship('User', backref=db.backref('course_collaborations', lazy=True, cascade='all, delete-orphan'))
-    course = db.relationship('Course', backref=db.backref('course_collaborators', lazy=True, cascade='all, delete-orphan'), foreign_keys=[combo_id])
+    user = db.relationship('User', backref=db.backref('course_reviews', lazy=True, cascade='all, delete-orphan'))
+    course = db.relationship('Course', backref=db.backref('course_reviews', lazy=True, cascade='all, delete-orphan'))
 
     def __init__(self, user_id, course_id, review_text=None, rating=None):
         self.user_id = user_id

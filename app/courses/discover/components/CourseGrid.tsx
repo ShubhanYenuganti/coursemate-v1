@@ -7,12 +7,14 @@ interface CourseGridProps {
   courses: Course[]
   onSaveCourse: (courseId: number) => void
   onDismissAIRecommendation: (courseId: number) => void
+  onEnrollCourse: (courseId: string) => void
 }
 
 const CourseGrid: React.FC<CourseGridProps> = ({
   courses,
   onSaveCourse,
   onDismissAIRecommendation,
+  onEnrollCourse,
 }) => {
   return (
     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -81,13 +83,28 @@ const CourseGrid: React.FC<CourseGridProps> = ({
                 </span>
               ))}
             </div>
-            <div className="mt-4">
-                              <Link href={`/courses/discover/${course.id}/preview`}>
+            <div className="mt-4 space-y-2">
+              <Link href={`/courses/discover/${course.id}/preview`}>
                 <button className="flex w-full items-center justify-center space-x-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
                   <Eye className="h-4 w-4" />
                   <span>Preview Course</span>
                 </button>
               </Link>
+              {course.enrollmentStatus === "not_enrolled" ? (
+                <button
+                  onClick={() => onEnrollCourse(course.id)}
+                  className="flex w-full items-center justify-center space-x-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                >
+                  <Users className="h-4 w-4" />
+                  <span>Enroll in Course</span>
+                </button>
+              ) : (
+                <div className="w-full text-center text-sm font-semibold text-gray-600 py-2 border rounded-lg border-green-500 bg-green-50">
+                  {course.enrollmentStatus === "pending" && "Enrollment Requested"}
+                  {course.enrollmentStatus === "approved" && "Enrolled"}
+                  {course.enrollmentStatus === "rejected" && "Enrollment Rejected"}
+                </div>
+              )}
             </div>
           </div>
         </div>

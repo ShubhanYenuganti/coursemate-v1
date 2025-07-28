@@ -12,6 +12,7 @@ export interface Course {
   isAIRecommended: boolean
   description: string
   aiReason?: string
+  enrollmentStatus?: "pending" | "approved" | "rejected" | "not_enrolled"
 }
 
 export interface Filter {

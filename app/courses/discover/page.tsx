@@ -43,8 +43,14 @@ const CoursesPage: React.FC = () => {
       try {
         const data = await courseService.getPublicCourses(page, perPage, searchQuery, "");
 
-        const courseIds = data.courses.map((course: CourseData) => course.id || ""); // get all IDs as strings
-        const ratingsMap = await courseService.getAverageRatingForCourses(courseIds); // returns { courseId: rating }
+        const courseIds = data.courses.map((course: CourseData) => course.id || "");
+
+        // Fetch ratings and enrollment statuses in parallel
+        const [ratingsMap, enrollmentStatusMap] = await Promise.all([
+          courseService.getAverageRatingForCourses(courseIds),
+          courseService.getStatusOfEnrollment(courseIds),
+        ]);
+
         const mappedCourses = data.courses.map((courseData: CourseData) => {
           const courseId = courseData.id || "";
           return {
@@ -55,12 +61,13 @@ const CoursesPage: React.FC = () => {
             category: courseData.subject || "Uncategorized",
             thumbnail: courseData.courseImage || null,
             creator: courseData.professor || "Unknown",
-            rating: ratingsMap[courseId] || 0, // <-- use rating from map
+            rating: ratingsMap[courseId] || 0,
             students: 0,
             isNew: false,
             isPopular: false,
             isAIRecommended: false,
             tags: courseData.tags || [],
+            enrollmentStatus: enrollmentStatusMap[courseId] || "not_enrolled",
           };
         });
 
@@ -74,6 +81,7 @@ const CoursesPage: React.FC = () => {
         setIsLoading(false);
       }
     };
+
 
 
     fetchPublicCourses()
@@ -128,6 +136,25 @@ const CoursesPage: React.FC = () => {
     console.log("Subject changed to:", event.target.value)
     setPage(1) // Reset to first page on new filter
   }
+
+  const handleEnrollCourse = async (courseId: string) => {
+    try {
+      const res = await courseService.enrollInCourse(courseId)
+      console.log("Enrolled successfully:", res.message)
+
+      // Update course enrollmentStatus to "pending"
+      setCourses((prevCourses) =>
+        prevCourses.map((course) =>
+          course.id === courseId
+            ? { ...course, enrollmentStatus: "pending" }
+            : course
+        )
+      )
+    } catch (err) {
+      console.error("Failed to enroll:", err)
+    }
+  }
+
 
   if (isLoading) {
     return (
@@ -193,6 +220,7 @@ const CoursesPage: React.FC = () => {
               courses={paginatedCourses}
               onSaveCourse={handleSaveCourse}
               onDismissAIRecommendation={handleDismissAIRecommendation}
+              onEnrollCourse={handleEnrollCourse}
             />
             {totalPages > 1 && (
               <div className="pt-4">
