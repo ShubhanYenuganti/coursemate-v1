@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { format, isToday, isBefore, isAfter, parseISO } from 'date-fns';
 import { courseService, CourseData } from '../../../lib/api/courseService';
-import { taskService, Task as TaskType } from '../../../lib/api/taskService';
-import { getSubtasksForTask } from '../../courses/components/studyplan/mockData';
-import { ChevronDown, ChevronRight, CheckCircle, Circle } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
-export interface Task {
+export interface Subtask {
   id: string;
   title: string;
   course: string;
@@ -15,6 +13,8 @@ export interface Task {
   color?: string;
   courseId?: string;
   goalId?: string;
+  start_time?: string;
+  end_time?: string;
 }
 
 const FILTERS = [
@@ -24,36 +24,11 @@ const FILTERS = [
 ] as const;
 type FilterType = typeof FILTERS[number]['key'];
 
-const DEFAULT_COLORS = [
-  '#0ea5e9', // blue
-  '#ef4444', // red
-  '#22c55e', // green
-  '#8b5cf6', // purple
-  '#f59e0b', // amber
-  '#ec4899', // pink
-  '#10b981', // emerald
-  '#6b7280', // gray
-];
-
 const TodaysChecklist: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('today');
-  const [showModal, setShowModal] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editTaskId, setEditTaskId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [userCourses, setUserCourses] = useState<CourseData[]>([]);
-  const [courseSearchTerm, setCourseSearchTerm] = useState('');
-  const [showCourseDropdown, setShowCourseDropdown] = useState(false);
-  const [form, setForm] = useState({
-    title: '',
-    course: '',
-    dueDate: '',
-    color: DEFAULT_COLORS[0],
-    time: '',
-  });
-  const [expandedTasks, setExpandedTasks] = useState<{ [taskId: string]: boolean }>({});
 
   // Fetch user courses on component mount
   useEffect(() => {
@@ -68,59 +43,73 @@ const TodaysChecklist: React.FC = () => {
     fetchUserCourses();
   }, []);
 
-  // Replace the old fetchTasks useEffect with a new one that calls the backend checklist endpoint
+  // Fetch subtasks from the checklist endpoint
   useEffect(() => {
-    if (userCourses.length === 0) return;
-    const fetchChecklistTasks = async () => {
+    const fetchChecklistSubtasks = async () => {
       setIsLoading(true);
       try {
-        const apiTasks = await taskService.getChecklistTasks(selectedFilter);
-        // Deduplicate tasks by composite key (task_title + course_id + goal_id)
-        const taskMap = new Map();
-        apiTasks.forEach(task => {
-          const t = task as any;
-          const compositeKey = `${t.title || t.task_title || ''}_${t.course_id || ''}_${t.goal_id || ''}`;
-          if (!taskMap.has(compositeKey)) {
-            let courseTitle = t.course || t.course_id || '';
-            if (t.course_id && userCourses.length > 0) {
-              const found = userCourses.find(c => c.id === t.course_id || c.combo_id === t.course_id);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/goals/checklist?type=${selectedFilter}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const subtasksData = await response.json();
+          
+          // Map subtasks to the Subtask interface format
+          const mappedSubtasks: Subtask[] = subtasksData.map((subtask: any) => {
+            let courseTitle = subtask.course_id || '';
+            
+            // Find course title from userCourses
+            if (subtask.course_id && userCourses.length > 0) {
+              const found = userCourses.find(c => c.id === subtask.course_id || c.combo_id === subtask.course_id);
               if (found && found.title) {
                 courseTitle = found.title;
               }
             }
-            taskMap.set(compositeKey, {
-              id: t.id || t.task_id || compositeKey,
-              title: t.title || t.task_title || '',
+
+            // Use start_time for scheduled subtasks, fallback to task_due_date
+            const dueDate = subtask.start_time || subtask.task_due_date || subtask.due_date || '';
+            return {
+              id: subtask.subtask_id || subtask.id || '',
+              title: subtask.subtask_descr || subtask.subtask_title || 'Untitled Subtask',
               course: courseTitle,
-              dueDate: t.due_date || t.task_due_date || '',
-              completed: t.completed || t.task_completed || false,
-              color: t.color || t.google_calendar_color || '',
-              time: (t.due_date || t.task_due_date) ? format(parseISO(t.due_date || t.task_due_date), 'MMM d') : '',
-              courseId: t.course_id && typeof t.course_id === 'string' && t.course_id.includes('+') ? t.course_id.split('+')[0] : t.course_id,
-              goalId: t.goal_id,
-            });
-          }
-        });
-        setTasks(Array.from(taskMap.values()));
+              dueDate: dueDate,
+              completed: subtask.subtask_completed || false,
+              color: subtask.color || '#10B981',
+              time: dueDate ? format(parseISO(dueDate), 'MMM d') : '',
+              courseId: subtask.course_id,
+              goalId: subtask.goal_id,
+              start_time: subtask.start_time,
+              end_time: subtask.end_time,
+            };
+          });
+          
+          setSubtasks(mappedSubtasks);
+        } else {
+          console.error('Failed to fetch checklist subtasks:', response.statusText);
+          setSubtasks([]);
+        }
       } catch (error) {
-        console.error('❌ Failed to fetch checklist tasks:', error);
+        console.error('❌ Failed to fetch checklist subtasks:', error);
+        setSubtasks([]);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchChecklistTasks();
-  }, [selectedFilter, userCourses]);
 
-  const filteredCourses = userCourses.filter(course =>
-    course.title.toLowerCase().includes(courseSearchTerm.toLowerCase()) ||
-    course.subject.toLowerCase().includes(courseSearchTerm.toLowerCase())
-  );
+    if (userCourses.length > 0) {
+      fetchChecklistSubtasks();
+    }
+  }, [selectedFilter, userCourses]);
 
   // Date helpers
   const todayDate = new Date();
-  const filterTasks = (tasks: Task[]) => {
-    return tasks.filter(task => {
-      const due = parseISO(task.dueDate);
+  const filterSubtasks = (subtasks: Subtask[]) => {
+    return subtasks.filter(subtask => {
+      const due = parseISO(subtask.dueDate);
       if (selectedFilter === 'today') {
         return isToday(due);
       } else if (selectedFilter === 'overdue') {
@@ -131,168 +120,40 @@ const TodaysChecklist: React.FC = () => {
       return false;
     });
   };
-  const filteredTasks = filterTasks(tasks);
-  const isTaskOverdue = (task: Task) => {
-    const due = parseISO(task.dueDate);
-    return isBefore(due, todayDate) && !isToday(due);
-  };
+  const filteredSubtasks = filterSubtasks(subtasks);
 
-  // Toggle expand/collapse for a task
-  const toggleTaskExpand = (taskId: string) => {
-    setExpandedTasks(prev => ({ ...prev, [taskId]: !prev[taskId] }));
-  };
-
-  // Toggle subtask completion (mock, for demo)
-  const [subtaskState, setSubtaskState] = useState<{ [subtaskId: string]: boolean }>({});
-  const handleSubtaskToggle = (subtaskId: string) => {
-    setSubtaskState(prev => ({ ...prev, [subtaskId]: !prev[subtaskId] }));
-  };
-
-  const handleTaskToggle = async (taskId: string, checked: boolean) => {
+  const handleSubtaskToggle = async (subtaskId: string, checked: boolean) => {
     try {
-      console.log('🔄 Toggling task:', taskId, 'to:', checked);
-      await taskService.toggleTask(taskId);
-      await refreshTasks();
-      console.log('✅ Task toggled successfully');
-    } catch (error) {
-      console.error('❌ Failed to toggle task:', error);
-    }
-  };
-
-  const handleOpenModal = () => {
-    setShowModal(true);
-    setIsEditMode(false);
-    setEditTaskId(null);
-    setForm({ title: '', course: '', dueDate: '', color: DEFAULT_COLORS[0], time: '' });
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setForm({ title: '', course: '', dueDate: '', color: DEFAULT_COLORS[0], time: '' });
-    setIsEditMode(false);
-    setEditTaskId(null);
-    setCourseSearchTerm('');
-    setShowCourseDropdown(false);
-  };
-
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
-    
-    // Handle course search
-    if (name === 'course') {
-      setCourseSearchTerm(value);
-      setShowCourseDropdown(value.length > 0);
-    }
-  };
-
-  const handleCourseSelect = (courseTitle: string) => {
-    setForm({ ...form, course: courseTitle });
-    setCourseSearchTerm(courseTitle);
-    setShowCourseDropdown(false);
-  };
-
-  const handleAddTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.title || !form.course || !form.dueDate) return;
-    
-    try {
-      console.log('➕ Adding/updating task:', form);
-      if (isEditMode && editTaskId !== null) {
-        // Update existing task
-        console.log('✏️ Updating task:', editTaskId);
-        await taskService.updateTask(editTaskId, {
-          title: form.title,
-          course: form.course,
-          due_date: form.dueDate,
-          color: form.color,
-        });
-      } else {
-        // Create new task
-        console.log('🆕 Creating new task');
-        await taskService.createTask({
-          title: form.title,
-          course: form.course,
-          due_date: form.dueDate,
-          color: form.color,
-        });
-      }
+      console.log('🔄 Toggling subtask:', subtaskId, 'to:', checked);
+      const token = localStorage.getItem('token');
       
-      // Refresh all tasks
-      await refreshTasks();
-      
-      handleCloseModal();
-      setShowSuccessMessage(true);
-      
-      // Hide success message after 3 seconds
-      setTimeout(() => setShowSuccessMessage(false), 3000);
-      console.log('✅ Task saved successfully');
-    } catch (error) {
-      console.error('❌ Failed to save task:', error);
-    }
-  };
-
-  const handleEditClick = (task: Task) => {
-    console.log('✏️ Edit clicked for task:', task);
-    setIsEditMode(true);
-    setEditTaskId(task.id);
-    setForm({
-      title: task.title,
-      course: task.course,
-      dueDate: task.dueDate,
-      color: task.color || DEFAULT_COLORS[0],
-      time: task.time,
-    });
-    setShowModal(true);
-  };
-
-  const handleDeleteTask = async (taskId: string) => {
-    try {
-      console.log('🗑️ Deleting task:', taskId);
-      await taskService.deleteTask(taskId);
-      await refreshTasks();
-      console.log('✅ Task deleted successfully');
-    } catch (error) {
-      console.error('❌ Failed to delete task:', error);
-    }
-  };
-
-  // Function to refresh all tasks
-  const refreshTasks = async () => {
-    try {
-      console.log('🔄 Refreshing tasks...');
-      const apiTasks = await taskService.getChecklistTasks(selectedFilter);
-      const transformedTasks: Task[] = apiTasks.map(task => {
-        const t = task as any;
-        // Try to get the course title from userCourses
-        let courseTitle = t.course || t.course_id || '';
-        if (t.course_id && userCourses.length > 0) {
-          const found = userCourses.find(c => c.id === t.course_id || c.combo_id === t.course_id);
-          if (found && found.title) {
-            courseTitle = found.title;
-          }
-        }
-        return {
-          id: t.id || t.task_id || '',
-          title: t.title || t.task_title || '',
-          course: courseTitle,
-          dueDate: t.due_date || t.task_due_date || '',
-          completed: t.completed || t.task_completed || false,
-          color: t.color || t.google_calendar_color || '',
-          time: (t.due_date || t.task_due_date) ? format(parseISO(t.due_date || t.task_due_date), 'MMM d') : '',
-        };
+      // Call the subtask toggle endpoint
+      const response = await fetch(`/api/goals/tasks/subtasks/${subtaskId}/toggle`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
-      setTasks(transformedTasks);
-      console.log('✅ Tasks refreshed:', transformedTasks);
+
+      if (response.ok) {
+        // Optimistically update the local state
+        setSubtasks(prev => prev.map(subtask => 
+          subtask.id === subtaskId ? { ...subtask, completed: checked } : subtask
+        ));
+        console.log('✅ Subtask toggled successfully');
+      } else {
+        console.error('❌ Failed to toggle subtask:', response.statusText);
+      }
     } catch (error) {
-      console.error('❌ Failed to refresh tasks:', error);
+      console.error('❌ Failed to toggle subtask:', error);
     }
   };
 
-  // Limit the number of tasks shown
-  const MAX_TASKS = 5;
-  const visibleTasks = filteredTasks.slice(0, MAX_TASKS);
-  const hasMoreTasks = filteredTasks.length > MAX_TASKS;
+  // Limit the number of subtasks shown
+  const MAX_SUBTASKS = 5;
+  const visibleSubtasks = filteredSubtasks.slice(0, MAX_SUBTASKS);
+  const hasMoreSubtasks = filteredSubtasks.length > MAX_SUBTASKS;
 
   // Helper for due date formatting
   const getDueDateLabel = (dueDate: string) => {
@@ -337,23 +198,23 @@ const TodaysChecklist: React.FC = () => {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-8">
             <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-600">Loading tasks...</p>
+            <p className="text-gray-600">Loading subtasks...</p>
           </div>
-        ) : visibleTasks.length === 0 ? (
+        ) : visibleSubtasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8">
             <span className="text-3xl mb-2">📅</span>
-            <p className="text-gray-500 text-center">No {selectedFilter === 'today' ? "today's" : selectedFilter} tasks.<br />Time to relax or plan ahead!</p>
+            <p className="text-gray-500 text-center">No {selectedFilter === 'today' ? "today's" : selectedFilter} subtasks.<br />Time to relax or plan ahead!</p>
           </div>
         ) : (
           <ul className="w-full space-y-2">
-            {visibleTasks.map(task => (
+            {visibleSubtasks.map(subtask => (
               <li
-                key={task.id}
+                key={subtask.id}
                 className="flex items-center bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2 gap-2 group hover:shadow-md transition-all relative"
               >
                 {/* Play button links to studyplan tab and goal */}
                 <a
-                  href={`/courses/${task.courseId}/goals/${task.goalId}`}
+                  href={`/courses/${subtask.courseId}/goals/${subtask.goalId}`}
                   className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-700 text-white mr-3 shadow"
                   title="Go to Study Plan"
                   style={{ minWidth: 24, minHeight: 24 }}
@@ -361,11 +222,38 @@ const TodaysChecklist: React.FC = () => {
                   <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20" className="lucide lucide-play"><polygon points="5,3 19,12 5,21" /></svg>
                 </a>
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className={`font-bold text-gray-800 text-sm truncate ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
-                  <div className="text-xs text-gray-500 truncate max-w-[120px]">{task.course}</div>
+                  <div className={`font-bold text-gray-800 text-sm truncate ${subtask.completed ? 'line-through' : ''}`}>{subtask.title}</div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                    <span className="truncate max-w-[120px]">{subtask.course}</span>
+                    {/* Scheduled Time Display */}
+                    {subtask.start_time && subtask.end_time && (
+                      <span className="flex items-center gap-1 text-blue-600 whitespace-nowrap">
+                        <Clock size={10} />
+                        {(() => {
+                          try {
+                            const startDate = new Date(subtask.start_time);
+                            const endDate = new Date(subtask.end_time);
+                            const startTime = startDate.toLocaleTimeString('en-US', { 
+                              hour: 'numeric', 
+                              minute: '2-digit',
+                              hour12: true 
+                            });
+                            const endTime = endDate.toLocaleTimeString('en-US', { 
+                              hour: 'numeric', 
+                              minute: '2-digit',
+                              hour12: true 
+                            });
+                            return `${startTime}-${endTime}`;
+                          } catch (e) {
+                            return 'Scheduled';
+                          }
+                        })()}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-col items-end justify-center min-w-[48px]">
-                  <span className="text-xs text-gray-400 font-medium">{getDueDateLabel(task.dueDate)}</span>
+                  <span className="text-xs text-gray-400 font-medium">{getDueDateLabel(subtask.dueDate)}</span>
                 </div>
               </li>
             ))}
@@ -374,11 +262,11 @@ const TodaysChecklist: React.FC = () => {
       </div>
       {/* Divider */}
       <div className="my-4 border-t border-gray-200"></div>
-      {/* Bottom area: more tasks indicator and Go to Calendar button */}
+      {/* Bottom area: more subtasks indicator and Go to Calendar button */}
       <div className="flex flex-row items-end justify-between w-full pt-0 pb-3" style={{ minHeight: 40 }}>
         <div className="flex-1">
-          {hasMoreTasks && (
-            <div className="text-xs text-gray-400">+{filteredTasks.length - MAX_TASKS} more tasks in calendar</div>
+          {hasMoreSubtasks && (
+            <div className="text-xs text-gray-400">+{filteredSubtasks.length - MAX_SUBTASKS} more subtasks in calendar</div>
           )}
         </div>
         <a

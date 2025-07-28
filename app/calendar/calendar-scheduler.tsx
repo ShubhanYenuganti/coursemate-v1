@@ -4706,10 +4706,42 @@ export function CalendarScheduler() {
                           <div className={`text-sm font-medium ${currentSubtask.subtask_completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
                             {currentSubtask.subtask_descr || `Subtask ${index + 1}`}
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                             {currentSubtask.subtask_type && currentSubtask.subtask_type !== 'other' && (
                               <span className="text-xs px-2 py-1 bg-gray-200 rounded text-gray-600">
                                 {currentSubtask.subtask_type}
+                              </span>
+                            )}
+                            {/* Scheduled Time Display */}
+                            {currentSubtask.start_time && currentSubtask.end_time && (
+                              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <circle cx="12" cy="12" r="10"/>
+                                  <polyline points="12,6 12,12 16,14"/>
+                                </svg>
+                                {(() => {
+                                  try {
+                                    const startDate = new Date(currentSubtask.start_time);
+                                    const endDate = new Date(currentSubtask.end_time);
+                                    const startTime = startDate.toLocaleTimeString('en-US', { 
+                                      hour: 'numeric', 
+                                      minute: '2-digit',
+                                      hour12: true 
+                                    });
+                                    const endTime = endDate.toLocaleTimeString('en-US', { 
+                                      hour: 'numeric', 
+                                      minute: '2-digit',
+                                      hour12: true 
+                                    });
+                                    const dateStr = startDate.toLocaleDateString('en-US', { 
+                                      month: 'short', 
+                                      day: 'numeric' 
+                                    });
+                                    return `${dateStr} ${startTime}-${endTime}`;
+                                  } catch (e) {
+                                    return 'Scheduled';
+                                  }
+                                })()}
                               </span>
                             )}
                             {/* Schedule/Edit Time Button */}

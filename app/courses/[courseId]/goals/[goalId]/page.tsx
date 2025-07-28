@@ -2273,7 +2273,7 @@ const GoalDetailPage = () => {
                 <span>Add Task</span>
               </button>
             )}
-            
+
             {/* View Toggle Button */}
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
@@ -2756,6 +2756,31 @@ const GoalDetailPage = () => {
                                     </p>
                                     <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
                                       <span>From: {subtask.taskName}</span>
+                                      {/* Scheduled Time Info */}
+                                      {subtask.start_time && subtask.end_time && (
+                                        <span className="flex items-center gap-1 text-blue-600">
+                                          <Clock size={12} />
+                                          {(() => {
+                                            try {
+                                              const startDate = new Date(subtask.start_time);
+                                              const endDate = new Date(subtask.end_time);
+                                              const startTime = startDate.toLocaleTimeString('en-US', { 
+                                                hour: 'numeric', 
+                                                minute: '2-digit',
+                                                hour12: true 
+                                              });
+                                              const endTime = endDate.toLocaleTimeString('en-US', { 
+                                                hour: 'numeric', 
+                                                minute: '2-digit',
+                                                hour12: true 
+                                              });
+                                              return `${startTime}-${endTime}`;
+                                            } catch (e) {
+                                              return 'Scheduled';
+                                            }
+                                          })()}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1">

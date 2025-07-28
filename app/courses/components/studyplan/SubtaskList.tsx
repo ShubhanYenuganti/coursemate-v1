@@ -706,7 +706,7 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
           </button>
 
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p
                         className={`text-sm ${
                           subtask.completed 
@@ -726,6 +726,38 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
                     >
                       {getSubtaskTypeBadge(subtask.type).label}
                     </Badge>
+                    {/* Scheduled Time Badge */}
+                    {subtask.start_time && subtask.end_time && (
+                      <Badge 
+                        variant="outline" 
+                        className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                      >
+                        <Clock size={12} className="mr-1" />
+                        {(() => {
+                          try {
+                            const startDate = new Date(subtask.start_time);
+                            const endDate = new Date(subtask.end_time);
+                            const startTime = startDate.toLocaleTimeString('en-US', { 
+                              hour: 'numeric', 
+                              minute: '2-digit',
+                              hour12: true 
+                            });
+                            const endTime = endDate.toLocaleTimeString('en-US', { 
+                              hour: 'numeric', 
+                              minute: '2-digit',
+                              hour12: true 
+                            });
+                            const dateStr = startDate.toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric' 
+                            });
+                            return `${dateStr} ${startTime}-${endTime}`;
+                          } catch (e) {
+                            return 'Scheduled';
+                          }
+                        })()}
+                      </Badge>
+                    )}
                       {isSubtaskOverdue(subtask) && !subtask.completed && (
                         <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-medium">
                           Overdue

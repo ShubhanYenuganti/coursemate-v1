@@ -1980,7 +1980,7 @@ def get_subtask_orders_for_task(task_id, user_id):
 @goals_bp.route("/api/goals/checklist", methods=["GET"])
 @jwt_required()
 def get_checklist():
-    """Return tasks for the checklist: today, overdue, or upcoming (excluding Google Calendar events)."""
+    """Return subtasks for the checklist: today, overdue, or upcoming (excluding Google Calendar events)."""
     user_id = get_jwt_identity()
     try:
         # Get filter type from query param: 'today', 'overdue', 'upcoming' (default: today)
@@ -1988,33 +1988,38 @@ def get_checklist():
         now = datetime.now(timezone.utc)
         today = now.date()
 
-        # Get all tasks for the user that are not Google Calendar events and not completed
-        tasks = Goal.query.filter(
+        # Get all subtasks for the user that are not Google Calendar events and not completed
+        subtasks = Goal.query.filter(
             Goal.user_id == user_id,
             Goal.goal_id != "Google Calendar",
-            Goal.task_completed == False,
+            Goal.subtask_completed == False,
+            Goal.subtask_id.isnot(None)  # Only get rows that have subtasks
         ).all()
 
-        filtered_tasks = []
-        for t in tasks:
+        filtered_subtasks = []
+        for s in subtasks:
             due = None
-            if t.task_due_date:
-                due = t.task_due_date.date()
-            elif t.due_date:
-                due = t.due_date.date()
+            # For scheduled subtasks, use the start_time date
+            if s.start_time:
+                due = s.start_time.date()
+            # Fallback to task due date if no start_time
+            elif s.task_due_date:
+                due = s.task_due_date.date()
+            elif s.due_date:
+                due = s.due_date.date()
             else:
                 continue  # skip if no due date
 
             if filter_type == "today" and due == today:
-                filtered_tasks.append(t.to_dict())
+                filtered_subtasks.append(s.to_dict())
             elif filter_type == "overdue" and due < today:
-                filtered_tasks.append(t.to_dict())
+                filtered_subtasks.append(s.to_dict())
             elif filter_type == "upcoming" and due > today:
-                filtered_tasks.append(t.to_dict())
+                filtered_subtasks.append(s.to_dict())
 
-        # Optionally sort by due date ascending
-        filtered_tasks.sort(key=lambda x: x.get("task_due_date") or x.get("due_date") or "")
-        return jsonify(filtered_tasks), 200
+        # Sort by due date/start_time ascending
+        filtered_subtasks.sort(key=lambda x: x.get("start_time") or x.get("task_due_date") or x.get("due_date") or "")
+        return jsonify(filtered_subtasks), 200
     except Exception as e:
         current_app.logger.error(f"Error fetching checklist: {e}")
         return jsonify({"error": "An error occurred"}), 500
