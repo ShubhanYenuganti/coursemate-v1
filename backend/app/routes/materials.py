@@ -1,4 +1,9 @@
-from flask import Blueprint, request, jsonify, current_app
+# Serve material file for preview (PDF proxy)
+
+from flask import Blueprint, request, jsonify, current_app, abort
+from flask_jwt_extended import jwt_required, get_jwt_identity, decode_token
+from app.models.user_course_material import UserCourseMaterial
+from app.models.course import Course
 from werkzeug.utils import secure_filename
 import os
 import tempfile
@@ -9,6 +14,137 @@ from ..models.material_chunk import MaterialChunk
 from ..extensions import db
 
 materials_bp = Blueprint('materials', __name__)
+
+# Get signed URL for material (returns JSON instead of redirect)
+@materials_bp.route('/<material_id>/signed-url', methods=['GET'])
+def get_material_signed_url(material_id):
+    # Check for JWT token in Authorization header or query parameter
+    token = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+    elif 'token' in request.args:
+        token = request.args.get('token')
+    
+    if not token:
+        abort(401)
+    
+    try:
+        decode_token(token)
+    except Exception as e:
+        print(f"JWT token validation failed: {str(e)}")
+        abort(401)
+    
+    material = UserCourseMaterial.query.get_or_404(material_id)
+    
+    # If file_path is a full URL, return it
+    if material.file_path.startswith('http://') or material.file_path.startswith('https://'):
+        return jsonify({'signed_url': material.file_path}), 200
+    
+    # If file_path looks like an S3 key, generate signed URL
+    if material.file_path and not os.path.isabs(material.file_path):
+        try:
+            from app.utils.s3 import get_presigned_url
+            signed_url = get_presigned_url(material.file_path)
+            if signed_url:
+                return jsonify({'signed_url': signed_url}), 200
+            else:
+                print(f"Failed to generate signed URL for S3 key: {material.file_path}")
+                abort(404)
+        except Exception as e:
+            print(f"Error generating signed URL for {material.file_path}: {str(e)}")
+            abort(500)
+    
+    # For local files, we can't return a direct URL
+    abort(404)
+
+# Serve material file for preview (PDF proxy)
+@materials_bp.route('/<material_id>/view', methods=['GET'])
+def view_material(material_id):
+    # Check for JWT token in Authorization header or query parameter
+    token = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+    elif 'token' in request.args:
+        token = request.args.get('token')
+    
+    if not token:
+        abort(401)
+    
+    try:
+        decode_token(token)
+    except Exception as e:
+        print(f"JWT token validation failed: {str(e)}")
+        abort(401)
+    
+    material = UserCourseMaterial.query.get_or_404(material_id)
+    
+    # If file_path is a full URL, redirect to it
+    if material.file_path.startswith('http://') or material.file_path.startswith('https://'):
+        from flask import redirect
+        return redirect(material.file_path)
+    
+    # If file_path looks like an S3 key (e.g., "courses/xxx/file.pdf"), generate signed URL
+    if material.file_path and not os.path.isabs(material.file_path):
+        try:
+            from app.utils.s3 import get_presigned_url
+            signed_url = get_presigned_url(material.file_path)
+            if signed_url:
+                from flask import redirect
+                return redirect(signed_url)
+            else:
+                print(f"Failed to generate signed URL for S3 key: {material.file_path}")
+                abort(404)
+        except Exception as e:
+            print(f"Error generating signed URL for {material.file_path}: {str(e)}")
+            abort(500)
+    
+    # Otherwise, serve from local storage
+    from flask import send_file
+    if os.path.exists(material.file_path):
+        return send_file(material.file_path)
+    
+    print(f"File not found: {material.file_path}")
+    abort(404)
+
+# Endpoint: Get all user materials grouped by course
+@materials_bp.route('/all-user-materials', methods=['GET'])
+@jwt_required()
+def get_all_user_materials():
+    """Get all materials for all courses the user is enrolled in, grouped by course"""
+    try:
+        current_user_id = get_jwt_identity()
+        # Get all courses the user is enrolled in
+        user_courses = Course.query.filter_by(user_id=current_user_id).all()
+        courses_data = []
+        for course in user_courses:
+            # Cross reference combo_id (course_id + user_id) for UserCourseMaterial
+            combo_id = f"{course.id}+{current_user_id}"
+            materials = UserCourseMaterial.query.filter_by(course_id=combo_id).all()
+            materials_list = []
+            for material in materials:
+                materials_list.append({
+                    'id': material.id,
+                    'name': material.material_name,
+                    'file_type': material.file_type,
+                    'file_size': material.file_size,
+                    'thumbnail_path': material.thumbnail_path,
+                    'original_filename': material.original_filename,
+                    'created_at': material.created_at.isoformat() if hasattr(material, 'created_at') else '',
+                    'course_name': course.title,
+                    'file_path': material.file_path,
+                    'is_pinned': material.is_pinned,
+                    'last_accessed': material.last_accessed.isoformat() if material.last_accessed else None
+                })
+            courses_data.append({
+                'course_id': course.id,
+                'course_name': course.title,
+                'materials': materials_list
+            })
+        return jsonify({'courses': courses_data}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Initialize services
 document_processor = DocumentProcessor()

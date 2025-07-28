@@ -9,5 +9,7 @@ from .material_chunk import MaterialChunk
 from .conversation import Conversation
 from .conversation_message import ConversationMessage
 from .community import CommunityPost, CommunityAnswer, CommunityPostVote, CommunityAnswerVote, CommunityPostView
+from .chat import ChatGroup, ChatGroupMember, ChatMessage
+from .user_course_material import UserCourseMaterial
 
-__all__ = ['User', 'Course', 'Goal', 'Message', 'Friend', 'DocumentEmbedding', 'UploadedFile', 'MaterialChunk', 'Conversation', 'ConversationMessage', 'CommunityPost', 'CommunityAnswer', 'CommunityPostVote', 'CommunityAnswerVote', 'CommunityPostView']
+__all__ = ['User', 'Course', 'Goal', 'Message', 'Friend', 'DocumentEmbedding', 'UploadedFile', 'MaterialChunk', 'Conversation', 'ConversationMessage', 'CommunityPost', 'CommunityAnswer', 'CommunityPostVote', 'CommunityAnswerVote', 'CommunityPostView', 'ChatGroup', 'ChatGroupMember', 'ChatMessage', 'UserCourseMaterial']

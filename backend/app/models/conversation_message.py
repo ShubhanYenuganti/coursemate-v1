@@ -8,22 +8,22 @@ class ConversationMessage(db.Model):
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     conversation_id = db.Column(db.String(36), db.ForeignKey('conversations.id'), nullable=False)
-    message_type = db.Column(db.Enum('user', 'assistant', name='message_type_enum'), nullable=False)
+    message_type = db.Column(db.Enum('user', 'assistant', 'material_share', name='message_type_enum'), nullable=False)
     content = db.Column(db.Text, nullable=False)
+    material_id = db.Column(db.String, db.ForeignKey('user_course_materials.id'), nullable=True)
+    material_preview = db.Column(db.JSON, nullable=True)  # Store preview info (name, type, thumbnail)
     source_files = db.Column(db.Text, nullable=True)  # Store as JSON string for SQLite compatibility
     confidence = db.Column(db.Float, nullable=True)   # AI confidence score
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
-        # Parse source_files JSON if it exists
         source_files_list = []
         if self.source_files:
             try:
                 source_files_list = json.loads(self.source_files)
             except (json.JSONDecodeError, TypeError):
                 source_files_list = []
-        
-        return {
+        result = {
             'id': self.id,
             'conversation_id': self.conversation_id,
             'message_type': self.message_type,
@@ -34,6 +34,10 @@ class ConversationMessage(db.Model):
             },
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+        if self.message_type == 'material_share':
+            result['material_id'] = self.material_id
+            result['material_preview'] = self.material_preview
+        return result
     
     def set_source_files(self, source_files_list):
         """Set source files as JSON string"""
@@ -51,7 +55,7 @@ class ConversationMessage(db.Model):
             content=content
         )
         return message
-    
+
     @staticmethod
     def create_assistant_message(conversation_id, content, source_files=None, confidence=None):
         """Create a new assistant message"""
@@ -63,4 +67,16 @@ class ConversationMessage(db.Model):
         )
         if source_files:
             message.set_source_files(source_files)
+        return message
+
+    @staticmethod
+    def create_material_share_message(conversation_id, material_id, material_preview, content=None):
+        """Create a new material share message"""
+        message = ConversationMessage(
+            conversation_id=conversation_id,
+            message_type='material_share',
+            content=content or '',
+            material_id=material_id,
+            material_preview=material_preview
+        )
         return message

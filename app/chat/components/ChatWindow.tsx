@@ -1,24 +1,51 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, MoreVertical, Phone, Video } from 'lucide-react';
+import { Send, MoreVertical, Phone, Video, Paperclip } from 'lucide-react';
 import { Chat, Message, User } from '../types';
 import { useCall } from '@/app/context/CallContext';
 import { useSocket } from '@/app/context/SocketContext';
 import { useAuth } from '@/app/context/AuthContext';
+import MaterialPicker from './MaterialPicker';
+import MaterialMessage from './MaterialMessage';
+import ManageMembersModal from './ManageMembersModal';
+import { messageService } from '../../../lib/api/messageService';
 
 interface ChatWindowProps {
   chat?: Chat;
   messages: Message[];
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, materialId?: string) => void;
   onDeleteChat: () => void;
+  onRefreshConversations?: () => void; // Add this to refresh conversations after member changes
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, onDeleteChat }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ 
+  chat, 
+  messages, 
+  onSendMessage, 
+  onDeleteChat, 
+  onRefreshConversations 
+}) => {
+  // Map messages to ensure material_share type gets materialPreview property
+  const mappedMessages = messages.map((msg) => {
+    if (msg.type === 'material_share') {
+      console.log('Mapping material_share message:', msg);
+      // If backend sends material_preview, map to materialPreview
+      if ((msg as any).material_preview && !msg.materialPreview) {
+        return {
+          ...msg,
+          materialPreview: (msg as any).material_preview
+        };
+      }
+    }
+    return msg;
+  });
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showMaterialPicker, setShowMaterialPicker] = useState(false);
+  const [showManageMembers, setShowManageMembers] = useState(false);
   const { startCall, isPeerReady } = useCall();
   const { socket } = useSocket();
   const peerRef = React.useRef<any>(null);
@@ -38,6 +65,34 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
     if (newMessage.trim()) {
       onSendMessage(newMessage.trim());
       setNewMessage('');
+    }
+  };
+
+  const handleMaterialSelect = (material: any) => {
+    onSendMessage('', material.id);
+    setShowMaterialPicker(false);
+  };
+
+  const handleDeleteChat = async () => {
+    try {
+      if (chat?.type === 'group') {
+        await messageService.deleteGroupChat(chat.id);
+      } else {
+        // Handle direct message deletion
+        onDeleteChat();
+      }
+      setShowConfirm(false);
+      onDeleteChat(); // Call the parent's delete handler to update UI
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      // You might want to show an error message here
+    }
+  };
+
+  const handleMembersChanged = () => {
+    // Refresh conversations list when members change
+    if (onRefreshConversations) {
+      onRefreshConversations();
     }
   };
 
@@ -91,32 +146,44 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
         <div className="flex items-center space-x-3">
           <div className="relative">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
-              {otherParticipant?.name.split(' ').map(n => n[0]).join('')}
+              {chat?.type === 'group' 
+                ? chat.groupName?.charAt(0).toUpperCase() || 'G'
+                : otherParticipant?.name.split(' ').map(n => n[0]).join('')
+              }
             </div>
-            <div className={`absolute -bottom-1 -right-1 w-3 h-3 ${getStatusColor(otherParticipant?.status || 'offline')} rounded-full border-2 border-white`} />
+            {chat?.type !== 'group' && (
+              <div className={`absolute -bottom-1 -right-1 w-3 h-3 ${getStatusColor(otherParticipant?.status || 'offline')} rounded-full border-2 border-white`} />
+            )}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{otherParticipant?.name}</h3>
+            <h3 className="font-semibold text-gray-900">
+              {chat?.type === 'group' ? chat.groupName : otherParticipant?.name}
+            </h3>
             <p className="text-sm text-gray-500">
-              {otherParticipant?.status === 'online' ? 'Online' : 
-               otherParticipant?.status === 'away' ? 'Away' : 'Offline'}
+              {chat?.type === 'group' 
+                ? `${chat.participants.length} members`
+                : (otherParticipant?.status === 'online' ? 'Online' : 
+                   otherParticipant?.status === 'away' ? 'Away' : 'Offline')
+              }
             </p>
           </div>
         </div>
         
         <div className="flex items-center space-x-2">
-          <button 
-            onClick={() => {
-              if (otherParticipant) {
-                startCall(otherParticipant.id);
-              }
-            }}
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            disabled={!isPeerReady}
-            title={!isPeerReady ? 'Call is not ready yet' : 'Start Video Call'}
-          >
-            <Video className="w-4 h-4" />
-          </button>
+          {chat?.type !== 'group' && (
+            <button 
+              onClick={() => {
+                if (otherParticipant) {
+                  startCall(otherParticipant.id);
+                }
+              }}
+              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              disabled={!isPeerReady}
+              title={!isPeerReady ? 'Call is not ready yet' : 'Start Video Call'}
+            >
+              <Video className="w-4 h-4" />
+            </button>
+          )}
           <div className="relative">
             <button
               className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
@@ -126,11 +193,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
             </button>
             {menuOpen && (
               <div className="absolute right-0 mt-2 w-44 min-w-[140px] bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                {chat?.type === 'group' && (
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                    onClick={() => { 
+                      setMenuOpen(false); 
+                      setShowManageMembers(true); 
+                    }}
+                  >
+                    Manage Members
+                  </button>
+                )}
                 <button
-                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-t-lg"
+                  className={`w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 ${
+                    chat?.type === 'group' ? '' : 'rounded-t-lg'
+                  } rounded-b-lg`}
                   onClick={() => { setMenuOpen(false); setShowConfirm(true); }}
                 >
-                  Delete Chat
+                  {chat?.type === 'group' ? 'Delete Group' : 'Delete Chat'}
                 </button>
               </div>
             )}
@@ -141,8 +221,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Delete Conversation?</h3>
-            <p className="text-gray-700 mb-6">Are you sure you want to delete this chat and all its messages? This action cannot be undone.</p>
+            <h3 className="text-lg font-semibold mb-2 text-gray-900">
+              {chat?.type === 'group' ? 'Delete Group?' : 'Delete Conversation?'}
+            </h3>
+            <p className="text-gray-700 mb-6">
+              {chat?.type === 'group' 
+                ? 'Are you sure you want to delete this group chat and all its messages? This action cannot be undone and will remove the group for all members.'
+                : 'Are you sure you want to delete this chat and all its messages? This action cannot be undone.'
+              }
+            </p>
             <div className="flex justify-end gap-3">
               <button
                 className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -152,7 +239,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
               </button>
               <button
                 className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
-                onClick={() => { setShowConfirm(false); onDeleteChat(); }}
+                onClick={handleDeleteChat}
               >
                 Delete
               </button>
@@ -162,40 +249,63 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
       )}
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
+        {mappedMessages.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-500">No messages yet. Start the conversation!</p>
           </div>
         ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
-            >
+          mappedMessages.map((message) => {
+            console.log('Rendering message:', message, message.type);
+            if (message.type === 'material_share' && message.materialPreview) {
+              return (
+                <MaterialMessage
+                  key={message.id}
+                  materialPreview={message.materialPreview}
+                  isOwn={message.isOwn}
+                  timestamp={message.timestamp}
+                  content={message.content}
+                  senderName={message.senderName}
+                  isGroupChat={chat?.type === 'group'}
+                />
+              );
+            }
+            // Regular text message
+            return (
               <div
-                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                  message.isOwn
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
-                }`}
+                key={message.id}
+                className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
               >
-                <p className="text-sm">{message.content}</p>
-                <div className={`flex items-center justify-end mt-1 ${
-                  message.isOwn ? 'text-blue-100' : 'text-gray-500'
-                }`}>
-                  <span className="text-xs">
-                    {formatTime(message.timestamp)}
-                  </span>
-                  {message.isOwn && (
-                    <span className="ml-1">
-                      {message.status === 'read' ? '✓✓' : 
-                       message.status === 'delivered' ? '✓✓' : '✓'}
-                    </span>
+                <div
+                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    message.isOwn
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}
+                >
+                  {/* Show sender name for group messages (only for messages not from current user) */}
+                  {!message.isOwn && message.senderName && chat?.type === 'group' && (
+                    <div className="text-xs text-gray-600 mb-1 font-medium">
+                      {message.senderName}
+                    </div>
                   )}
+                  <p className="text-sm">{message.content}</p>
+                  <div className={`flex items-center justify-end mt-1 ${
+                    message.isOwn ? 'text-blue-100' : 'text-gray-500'
+                  }`}>
+                    <span className="text-xs">
+                      {formatTime(message.timestamp)}
+                    </span>
+                    {message.isOwn && (
+                      <span className="ml-1">
+                        {message.status === 'read' ? '✓✓' : 
+                         message.status === 'delivered' ? '✓✓' : '✓'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -203,6 +313,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
       {/* Message Input */}
       <div className="p-4 border-t border-gray-200">
         <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
+          <button
+            type="button"
+            onClick={() => setShowMaterialPicker(true)}
+            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+            title="Share material"
+          >
+            <Paperclip className="w-4 h-4" />
+          </button>
           <input
             ref={inputRef}
             type="text"
@@ -220,6 +338,25 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, messages, onSendMessage, 
           </button>
         </form>
       </div>
+
+      {/* Material Picker Modal */}
+      <MaterialPicker
+        isOpen={showMaterialPicker}
+        onClose={() => setShowMaterialPicker(false)}
+        onSelectMaterial={handleMaterialSelect}
+      />
+
+      {/* Manage Members Modal - Only for group chats */}
+      {chat?.type === 'group' && (
+        <ManageMembersModal
+          isOpen={showManageMembers}
+          onClose={() => setShowManageMembers(false)}
+          groupId={chat.id}
+          groupName={chat.groupName || 'Group Chat'}
+          currentUserId={user?.id || ''}
+          onMembersChanged={handleMembersChanged}
+        />
+      )}
     </div>
   );
 };

@@ -10,7 +10,10 @@ export interface User {
 
 export interface Conversation {
   id: string;
-  participant_name: string;
+  type?: 'direct' | 'group';
+  participant_name?: string; // For direct chats
+  group_name?: string; // For group chats
+  participant_names?: string[]; // For group chats
   last_message: string;
   last_message_time: string;
   unread_count: number;
@@ -19,16 +22,38 @@ export interface Conversation {
 
 export interface Message {
   id: string;
-  content: string;
+  user_id?: string;
+  sender_id?: string;
+  receiver_id?: string;
   timestamp: string;
+  message_content?: string;
+  content?: string; // Keep both for compatibility
   is_own: boolean;
   sender_name: string;
   receiver_name: string;
+  message_type?: string;
+  material_id?: string;
+  material_preview?: {
+    id: string;
+    name: string;
+    file_type: string;
+    file_size: number;
+    thumbnail_path?: string;
+    original_filename?: string;
+    file_path?: string;
+    course_id?: string;
+  };
 }
 
 export interface SendMessageRequest {
   receiver_id: string;
-  message_content: string;
+  message_content?: string;
+  material_id?: string;
+}
+
+export interface SendGroupMessageRequest {
+  content?: string;
+  material_id?: string;
 }
 
 export interface CreateConversationRequest {
@@ -47,6 +72,14 @@ export interface SendMessageResponse {
     message_content: string;
     sender_name: string;
     receiver_name: string;
+    material_preview?: {
+      id: string;
+      name: string;
+      file_type: string;
+      file_size: number;
+      thumbnail_path?: string;
+      original_filename?: string;
+    };
   };
 }
 
@@ -127,6 +160,20 @@ export const messageService = {
     }
   },
 
+  // Send a message to a group chat
+  async sendGroupMessage(groupId: string, data: SendGroupMessageRequest): Promise<SendMessageResponse> {
+    try {
+      const response = await fetchWithAuth(`/api/chat-group/${groupId}/send`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return response;
+    } catch (error) {
+      console.error('Error sending group message:', error);
+      throw error;
+    }
+  },
+
   // Delete a conversation and all its messages
   async deleteConversation(otherUserId: string): Promise<{ success: boolean; message: string }> {
     try {
@@ -139,4 +186,71 @@ export const messageService = {
       throw error;
     }
   },
+
+  // Group Chat Management Functions
+  
+  // Delete a group chat
+  async deleteGroupChat(groupId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetchWithAuth(`/api/chat-group/${groupId}/delete`, {
+        method: 'DELETE',
+      });
+      return response;
+    } catch (error) {
+      console.error('Error deleting group chat:', error);
+      throw error;
+    }
+  },
+
+  // Get group members
+  async getGroupMembers(groupId: string): Promise<GroupMember[]> {
+    try {
+      const response = await fetchWithAuth(`/api/chat-group/${groupId}/members`);
+      return response.members || [];
+    } catch (error) {
+      console.error('Error fetching group members:', error);
+      throw error;
+    }
+  },
+
+  // Add members to group
+  async addGroupMembers(groupId: string, userIds: string[]): Promise<{ success: boolean; message: string; added_members: any[]; existing_members: string[] }> {
+    try {
+      const response = await fetchWithAuth(`/api/chat-group/${groupId}/members/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_ids: userIds }),
+      });
+      return response;
+    } catch (error) {
+      console.error('Error adding group members:', error);
+      throw error;
+    }
+  },
+
+  // Remove member from group
+  async removeGroupMember(groupId: string, userId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetchWithAuth(`/api/chat-group/${groupId}/members/${userId}/remove`, {
+        method: 'DELETE',
+      });
+      return response;
+    } catch (error) {
+      console.error('Error removing group member:', error);
+      throw error;
+    }
+  },
 }; 
+
+// Group member interface
+export interface GroupMember {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  role: 'admin' | 'member';
+  joined_at: string;
+  is_current_user: boolean;
+} 
