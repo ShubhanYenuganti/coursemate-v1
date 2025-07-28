@@ -103,6 +103,7 @@ const CourseGrid: React.FC<CourseGridProps> = ({
                   {course.enrollmentStatus === "pending" && "Enrollment Requested"}
                   {course.enrollmentStatus === "approved" && "Enrolled"}
                   {course.enrollmentStatus === "rejected" && "Enrollment Rejected"}
+                  {course.enrollmentStatus === "revoked" && "Enrollment Revoked"}
                 </div>
               )}
             </div>
