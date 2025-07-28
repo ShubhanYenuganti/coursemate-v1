@@ -307,25 +307,25 @@ const TodaysChecklist: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-md border border-gray-100 min-h-[340px] flex flex-col justify-start" style={{height: '460px', paddingTop: '18px'}}>
+    <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-md border border-gray-100 min-h-[340px] flex flex-col justify-start" style={{height: '460px', paddingTop: '18px'}}>
       {/* Header */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3 sm:gap-0">
         <h2 className="text-lg font-bold text-gray-800 tracking-tight">Checklist</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-1 sm:gap-2 overflow-x-auto">
           <button
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'overdue' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
+            className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${selectedFilter === 'overdue' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
             onClick={() => setSelectedFilter('overdue')}
           >
             Overdue
           </button>
           <button
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'today' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-500 border border-gray-200'}`}
+            className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${selectedFilter === 'today' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-500 border border-gray-200'}`}
             onClick={() => setSelectedFilter('today')}
           >
             Today's
           </button>
           <button
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${selectedFilter === 'upcoming' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
+            className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${selectedFilter === 'upcoming' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-500 border border-gray-200'}`}
             onClick={() => setSelectedFilter('upcoming')}
           >
             Upcoming
@@ -349,23 +349,22 @@ const TodaysChecklist: React.FC = () => {
             {visibleTasks.map(task => (
               <li
                 key={task.id}
-                className="flex items-center bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2 gap-2 group hover:shadow-md transition-all relative"
+                className="flex items-center bg-white rounded-xl shadow-sm border border-gray-100 px-2 sm:px-3 py-2 gap-2 group hover:shadow-md transition-all relative"
               >
                 {/* Play button links to studyplan tab and goal */}
                 <a
                   href={`/courses/${task.courseId}/goals/${task.goalId}`}
-                  className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-700 text-white mr-3 shadow"
+                  className="flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-600 hover:bg-blue-700 text-white mr-2 sm:mr-3 shadow flex-shrink-0"
                   title="Go to Study Plan"
-                  style={{ minWidth: 24, minHeight: 24 }}
                 >
-                  <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20" className="lucide lucide-play"><polygon points="5,3 19,12 5,21" /></svg>
+                  <svg width="10" height="10" className="sm:w-3.5 sm:h-3.5" fill="currentColor" viewBox="0 0 20 20"><polygon points="5,3 19,12 5,21" /></svg>
                 </a>
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className={`font-bold text-gray-800 text-sm truncate ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
-                  <div className="text-xs text-gray-500 truncate max-w-[120px]">{task.course}</div>
+                  <div className={`font-bold text-gray-800 text-xs sm:text-sm leading-tight ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
+                  <div className="text-xs text-gray-500 leading-tight sm:truncate">{task.course}</div>
                 </div>
-                <div className="flex flex-col items-end justify-center min-w-[48px]">
-                  <span className="text-xs text-gray-400 font-medium">{getDueDateLabel(task.dueDate)}</span>
+                <div className="flex flex-col items-end justify-center min-w-[36px] sm:min-w-[48px] flex-shrink-0">
+                  <span className="text-xs text-gray-400 font-medium text-right">{getDueDateLabel(task.dueDate)}</span>
                 </div>
               </li>
             ))}
@@ -375,7 +374,7 @@ const TodaysChecklist: React.FC = () => {
       {/* Divider */}
       <div className="my-4 border-t border-gray-200"></div>
       {/* Bottom area: more tasks indicator and Go to Calendar button */}
-      <div className="flex flex-row items-end justify-between w-full pt-0 pb-3" style={{ minHeight: 40 }}>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between w-full pt-0 pb-3 gap-2 sm:gap-0" style={{ minHeight: 40 }}>
         <div className="flex-1">
           {hasMoreTasks && (
             <div className="text-xs text-gray-400">+{filteredTasks.length - MAX_TASKS} more tasks in calendar</div>
@@ -383,8 +382,8 @@ const TodaysChecklist: React.FC = () => {
         </div>
         <a
           href="/calendar"
-          className="inline-block px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow transition-colors text-sm ml-2 mt-2"
-          style={{ minWidth: 130 }}
+          className="inline-block px-3 sm:px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow transition-colors text-xs sm:text-sm text-center"
+          style={{ minWidth: 110 }}
         >
           Go to Calendar
         </a>

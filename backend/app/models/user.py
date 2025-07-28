@@ -21,6 +21,7 @@ class User(db.Model):
     year = db.Column(db.String(20), nullable=True)  # Using string to allow values like "freshman", "sophomore", etc.
     major = db.Column(db.String(100), nullable=True)
     onboarded = db.Column(db.Boolean, default=False)
+    profile_picture_url = db.Column(db.String(500), nullable=True)  # URL to S3 or external image
     
     # Email verification fields
     email_verified = db.Column(db.Boolean, default=False)

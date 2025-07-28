@@ -522,8 +522,8 @@ def update_goal(goal_id):
                 if not all(g.task_completed for g in task_rows):
                     all_tasks_completed = False
                     break
-                for g in goals:
-                    g.goal_completed = all_tasks_completed
+            for g in goals:
+                g.goal_completed = all_tasks_completed
         
         db.session.commit()
         
@@ -1479,7 +1479,7 @@ def end_subtask_engagement(subtask_id):
         if subtask.subtask_engagement_start and subtask.subtask_engagement_end:
             time_diff = subtask.subtask_engagement_end - subtask.subtask_engagement_start
             current_session_minutes = time_diff.total_seconds() / 60.0  # Convert to minutes
-            
+        
             # Accumulate with previous sessions
             previous_total = subtask.subtask_total_active_minutes or 0.0
             subtask.subtask_total_active_minutes = previous_total + current_session_minutes
