@@ -142,19 +142,19 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="bg-[#F8F9FB] font-sans w-full min-h-screen">
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col gap-4 sm:gap-6">
+    <div className="bg-[#F8F9FB] font-sans w-full">
+      <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col gap-6">
         {/* Analytics Cards Row */}
-        <section className="w-full bg-indigo-100 rounded-xl sm:rounded-2xl shadow p-3 sm:p-4 mb-1">
-          <AnalyticsCards />
+        <section className="w-full bg-indigo-100 rounded-2xl shadow p-4 flex flex-row gap-6 items-center mb-1">
+          <div className="flex-1">
+            <AnalyticsCards />
+          </div>
         </section>
-        
-        {/* Main Content: Responsive Layout */}
-        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 w-full">
+        {/* Main Content Row: Left (My Courses + Recent Activity), Right (Checklist) */}
+        <div className="flex flex-row gap-6 w-full items-stretch">
           {/* Left column: My Courses + Recent Activity */}
-          <div className="flex flex-col gap-4 sm:gap-6 flex-1 lg:min-w-0">
-            <div className="flex-1">
+          <div className="flex flex-col gap-6 flex-1 min-w-0" style={{ minWidth: 0 }}>
+            <div>
               <MyCourses
                 courses={userCourses.map((course, index) => convertToMyCoursesFormat(course, index))}
                 isLoading={isLoadingCourses}
@@ -163,23 +163,19 @@ const Dashboard = () => {
                 onContinueCourse={handleContinueCourse}
               />
             </div>
-            <section className="flex-1">
+            <section className="flex-1 flex flex-col justify-end min-h-[120px]">
               <CommunityActivity />
             </section>
           </div>
-          
-          {/* Right column: Checklist - Full width on mobile, sidebar on desktop */}
-          <section className="w-full lg:w-[477px] lg:flex-shrink-0">
-            <div className="h-[600px] lg:h-[650px]">
-              <ChecklistWidget
-                onTaskToggle={handleTaskToggle}
-                onAddTask={() => {console.log('Add Task')}}
-              />
-            </div>
+          {/* Right column: Checklist */}
+          <section className="" style={{height: '510px', width: '477.29px'}}>
+            <ChecklistWidget
+              onTaskToggle={handleTaskToggle}
+              onAddTask={() => {console.log('Add Task')}}
+            />
           </section>
         </div>
       </div>
-      
       {/* Course Tasks Modal */}
       {selectedCourse && (
         <CourseTasksModal

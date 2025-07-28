@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, use } from "react";
+import { useSearchParams } from "next/navigation";
 import CourseDetailHeader from "../components/CourseDetailHeader";
 import CourseDetailTabs from "../components/CourseDetailTabs";
 import { Course } from "../components/CourseCard";
@@ -56,6 +57,8 @@ interface Props {
 }
 
 const CourseDetailPage: React.FC<Props> = ({ params }) => {
+  const searchParams = useSearchParams();
+  
   // Use localStorage to persist the last opened tab
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -76,6 +79,15 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
       localStorage.setItem('lastCourseTab', activeTab);
     }
   }, [activeTab]);
+
+  // Read tab from URL query parameter
+  useEffect(() => {
+    if (!searchParams) return;
+    const tabFromUrl = searchParams.get('tab');
+    if (tabFromUrl && ['overview', 'materials', 'ai', 'study', 'community', 'progress'].includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams]);
 
   // Tab order for animation direction
   const tabOrder = ['overview', 'materials', 'ai', 'study', 'community', 'progress'];
@@ -174,7 +186,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
       </div>
       <div className={`${activeTab === 'ai' ? 'flex-1 flex flex-col min-h-0' : 'mx-auto p-8 pb-24'} ${activeTab === 'ai' ? 'max-w-7xl mx-auto' : 'max-w-5xl'}`}>
         <div className={activeTab === 'ai' ? 'p-8 pb-4 flex-shrink-0' : ''}>
-          <CourseDetailTabs activeTab={activeTab} setActiveTab={handleTabChange} />
+        <CourseDetailTabs activeTab={activeTab} setActiveTab={handleTabChange} />
         </div>
         <div className={`relative ${activeTab === 'ai' ? 'flex-1 px-8 pb-8 min-h-0' : 'overflow-hidden min-h-[400px]'}`}>
           <div 

@@ -104,29 +104,29 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   useEffect(() => {
     const fetchRecentMessages = async () => {
       try {
-        const conversations = await messageService.getConversations();
-        
+      const conversations = await messageService.getConversations();
+      
         // Filter out conversations with no unread messages
-        const unreadConversations = conversations.filter(conv => conv.unread_count > 0);
-        
+      const unreadConversations = conversations.filter(conv => conv.unread_count > 0);
+      
         // Convert conversations to activities
         const activities: Activity[] = unreadConversations.slice(0, 5).map((conv: Conversation) => ({
-          id: conv.id,
+        id: conv.id,
           user: conv.participant_name,
           avatar: conv.participant_name.charAt(0).toUpperCase(),
           action: 'sent you a message',
           content: conv.last_message,
           time: formatTimeAgo(conv.last_message_time),
           type: 'message',
-          conversationId: conv.id,
-        }));
-        
+        conversationId: conv.id,
+      }));
+      
         setMessageActivities(activities);
-      } catch (error) {
+    } catch (error) {
         console.error('Error fetching recent messages:', error);
         setMessageActivities([]);
-      }
-    };
+    }
+  };
 
     fetchRecentMessages();
   }, []);
@@ -255,7 +255,7 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   const handleActivityClick = async (activity: Activity) => {
     if (activity.type === 'message') {
       setModalActivity(activity);
-      setReplyText('');
+    setReplyText('');
       onActivityClick && onActivityClick(activity);
       
       // Mark the conversation as read by removing it from the notifications
@@ -400,38 +400,36 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
   const pastelAvatarColors = ['bg-[#E0D7FB]', 'bg-[#D0E7FB]', 'bg-[#D0FBE7]'];
 
   return (
-    <div className="bg-indigo-100 w-full rounded-xl sm:rounded-2xl shadow-lg border border-[#ECE6FA] bg-[#F3F0FF] flex flex-col h-full min-h-[280px] p-0 relative">
-      <div className="flex flex-row items-center justify-between px-4 sm:px-6 pt-4 pb-1">
-        <h2 className="text-sm sm:text-base font-bold text-gray-800">Recent Activity</h2>
+    <div className="bg-indigo-100 w-full rounded-2xl shadow-lg border border-[#ECE6FA] bg-[#F3F0FF] flex flex-col justify-center min-h-[180px] max-h-[220px] p-0 relative">
+      <div className="flex flex-row items-center justify-between px-6 pt-4 pb-1">
+        <h2 className="text-base font-bold text-gray-800">Recent Activity</h2>
         <button
-          className="text-gray-400 hover:text-gray-700 text-lg sm:text-xl px-2 py-1 rounded transition"
+          className="text-gray-400 hover:text-gray-700 text-xl px-2 py-1 rounded transition"
           aria-label="Show all recent activity"
           onClick={() => setShowModal(true)}
         >
           &#8230;
         </button>
       </div>
-      <div className="flex flex-col gap-0.5 px-4 sm:px-6 pb-4 flex-1 items-start">
+      <div className="flex flex-col gap-0.5 px-6 pb-4 h-full items-start">
         {visibleActivities.length === 0 ? (
-          <div className="flex items-center justify-center text-gray-400 w-full flex-1">
-            <div className="text-center">
-              <span className="text-xl sm:text-2xl block mb-2">🕒</span>
-              <span className="text-sm sm:text-base">No recent activity</span>
-            </div>
-          </div>
-        ) : (
+          <div className="flex items-center justify-center text-gray-400 w-full h-20">
+            <span className="text-2xl">🕒</span>
+            <span className="ml-2">No recent activity</span>
+        </div>
+      ) : (
           visibleActivities.map((activity, idx, arr) => {
             const avatarBg = pastelAvatarColors[idx % pastelAvatarColors.length];
             return (
-              <div key={activity.id} className="flex flex-row items-start w-full gap-2 sm:gap-3 py-1.5 relative">
-                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-[#6C4AB6] text-xs sm:text-sm shadow ${avatarBg}`}
+              <div key={activity.id} className="flex flex-row items-start w-full gap-3 py-1.5 relative">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-[#6C4AB6] text-sm shadow ${avatarBg}`}
                   style={{ fontFamily: 'Inter, sans-serif' }}
                 >
                   {activity.avatar}
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <span className="text-[10px] sm:text-[11px] text-gray-400 mb-0.5">{activity.time}</span>
-                  <div className="text-sm sm:text-[15px] text-gray-900 font-bold truncate">
+                  <span className="text-[11px] text-gray-400 mb-0.5">{activity.time}</span>
+                  <div className="text-[15px] text-gray-900 font-bold truncate">
                     {activity.user && <span className="font-bold text-gray-900">{activity.user}</span>}
                     {activity.action && <span className="font-normal text-gray-700 ml-1">{activity.action}</span>}
                     {activity.target && <span className="font-medium text-blue-600 ml-1 underline cursor-pointer">{activity.target}</span>}
@@ -441,39 +439,39 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
                   )}
                 </div>
                 {/* Divider except for last item */}
-                {idx < arr.length - 1 && <div className="absolute left-9 sm:left-11 right-0 bottom-0 border-b border-[#ECE6FA]" />}
+                {idx < arr.length - 1 && <div className="absolute left-11 right-0 bottom-0 border-b border-[#ECE6FA]" />}
               </div>
             );
           })
         )}
-      </div>
+            </div>
       {/* Modal for all activities */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100">
-              <h2 className="text-base sm:text-lg font-bold text-gray-800">All Recent Activity</h2>
-              <button
-                className="text-gray-400 hover:text-gray-700 text-xl sm:text-2xl px-2 py-1 rounded transition"
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">All Recent Activity</h2>
+            <button
+                className="text-gray-400 hover:text-gray-700 text-2xl px-2 py-1 rounded transition"
                 aria-label="Close activity modal"
                 onClick={() => setShowModal(false)}
-              >
+            >
                 &times;
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 flex flex-col gap-2">
+            </button>
+              </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-2">
               {activitiesToShow.length === 0 ? (
                 <div className="flex items-center justify-center text-gray-400 w-full h-20">
-                  <span className="text-xl sm:text-2xl">🕒</span>
-                  <span className="ml-2 text-sm sm:text-base">No recent activity</span>
+                  <span className="text-2xl">🕒</span>
+                  <span className="ml-2">No recent activity</span>
                 </div>
               ) : (
                 activitiesToShow.map((activity, idx) => {
                   const avatarColors = ['bg-purple-400', 'bg-blue-400', 'bg-green-400'];
                   const avatarBg = avatarColors[idx % avatarColors.length];
                   return (
-                    <div key={activity.id} className="flex flex-row items-start w-full gap-2 sm:gap-3 py-2">
-                      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-white text-xs sm:text-sm shadow ${avatarBg}`}
+                    <div key={activity.id} className="flex flex-row items-start w-full gap-3 py-2">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm shadow ${avatarBg}`}
                         style={{ fontFamily: 'Inter, sans-serif' }}
                       >
                         {activity.avatar}
@@ -484,12 +482,12 @@ const CommunityActivity: React.FC<CommunityActivityProps> = ({
                           {activity.user && <span className="font-semibold text-gray-900">{activity.user}</span>}
                           {activity.action && <span className="font-normal text-gray-700 ml-1">{activity.action}</span>}
                           {activity.target && <span className="font-medium text-blue-600 ml-1 underline cursor-pointer">{activity.target}</span>}
-                        </div>
+                </div>
                         {activity.content && (
                           <div className="text-xs text-gray-500 truncate mt-0.5">{activity.content}</div>
                         )}
-                      </div>
-                    </div>
+              </div>
+            </div>
                   );
                 })
               )}

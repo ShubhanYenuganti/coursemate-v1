@@ -52,6 +52,8 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
   const [completionTimeMinutes, setCompletionTimeMinutes] = useState('');
   const [subtaskToComplete, setSubtaskToComplete] = useState<Subtask | null>(null);
   const [showStartModal, setShowStartModal] = useState(false);
+  const [showMaterialsModal, setShowMaterialsModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'select' | 'upload' | 'generate'>('select');
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [activeSubtask, setActiveSubtask] = useState<Subtask | null>(null);
   const [subtaskToStart, setSubtaskToStart] = useState<Subtask | null>(null);
@@ -209,9 +211,9 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
       return;
     }
     
-    console.log('SHOWING START MODAL');
+    console.log('SHOWING MATERIALS MODAL');
     setSubtaskToStart(subtask);
-    setShowStartModal(true);
+    setShowMaterialsModal(true);
   };
 
   // Start engagement and show active subtask screen
@@ -706,7 +708,7 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
           </button>
 
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
                       <p
                         className={`text-sm ${
                           subtask.completed 
@@ -726,38 +728,6 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
                     >
                       {getSubtaskTypeBadge(subtask.type).label}
                     </Badge>
-                    {/* Scheduled Time Badge */}
-                    {subtask.start_time && subtask.end_time && (
-                      <Badge 
-                        variant="outline" 
-                        className="text-xs bg-blue-50 text-blue-700 border-blue-200"
-                      >
-                        <Clock size={12} className="mr-1" />
-                        {(() => {
-                          try {
-                            const startDate = new Date(subtask.start_time);
-                            const endDate = new Date(subtask.end_time);
-                            const startTime = startDate.toLocaleTimeString('en-US', { 
-                              hour: 'numeric', 
-                              minute: '2-digit',
-                              hour12: true 
-                            });
-                            const endTime = endDate.toLocaleTimeString('en-US', { 
-                              hour: 'numeric', 
-                              minute: '2-digit',
-                              hour12: true 
-                            });
-                            const dateStr = startDate.toLocaleDateString('en-US', { 
-                              month: 'short', 
-                              day: 'numeric' 
-                            });
-                            return `${dateStr} ${startTime}-${endTime}`;
-                          } catch (e) {
-                            return 'Scheduled';
-                          }
-                        })()}
-                      </Badge>
-                    )}
                       {isSubtaskOverdue(subtask) && !subtask.completed && (
                         <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-medium">
                           Overdue
@@ -931,6 +901,126 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({
         </button>
           </div>
         </div>
+          </div>
+        </Portal>
+      )}
+      
+      {/* Materials Modal */}
+      {showMaterialsModal && subtaskToStart && (
+        <Portal>
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]" onClick={() => setShowMaterialsModal(false)}>
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600" onClick={() => setShowMaterialsModal(false)}>
+                <span className="text-xl">&times;</span>
+              </button>
+              <h3 className="text-lg font-semibold mb-4 text-center">Materials</h3>
+              <p className="text-center mb-6">Choose how you want to work on "{subtaskToStart.name}"</p>
+              
+              {/* Tab Navigation */}
+              <div className="flex border-b border-gray-200 mb-4">
+                <button
+                  onClick={() => setActiveTab('select')}
+                  className={`flex-1 py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'select'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Select Material
+                </button>
+                <button
+                  onClick={() => setActiveTab('upload')}
+                  className={`flex-1 py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'upload'
+                      ? 'border-green-500 text-green-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Upload Material
+                </button>
+                <button
+                  onClick={() => setActiveTab('generate')}
+                  className={`flex-1 py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'generate'
+                      ? 'border-purple-500 text-purple-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Generate Material
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              <div className="space-y-4">
+                {activeTab === 'select' && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-4">Choose from your existing materials</p>
+                    <button
+                      onClick={() => {
+                        setShowMaterialsModal(false);
+                        setShowStartModal(true);
+                      }}
+                      className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>📚</span>
+                      Select Material
+                    </button>
+                  </div>
+                )}
+
+                {activeTab === 'upload' && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-4">Upload a new file to work with</p>
+                    <button
+                      onClick={() => {
+                        setShowMaterialsModal(false);
+                        // TODO: Navigate to upload material page
+                        console.log('Navigate to upload material');
+                      }}
+                      className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>📤</span>
+                      Upload Material
+                    </button>
+                  </div>
+                )}
+
+                {activeTab === 'generate' && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-4">Generate new material using AI</p>
+                    <button
+                      onClick={() => {
+                        setShowMaterialsModal(false);
+                        // TODO: Navigate to generate material page
+                        console.log('Navigate to generate material');
+                      }}
+                      className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>🤖</span>
+                      Generate Material
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowMaterialsModal(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMaterialsModal(false);
+                    setShowStartModal(true);
+                  }}
+                  className="flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         </Portal>
       )}

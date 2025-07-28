@@ -519,10 +519,10 @@ def update_goal(goal_id):
             all_tasks_completed = True if all_task_ids else False
             for tid in all_task_ids:
                 task_rows = [g for g in goals if g.task_id == tid]
-                if not all(g.task_completed for g in task_rows):
-                    all_tasks_completed = False
-                    break
-            for g in goals:
+                    if not all(g.task_completed for g in task_rows):
+                        all_tasks_completed = False
+                        break
+                for g in goals:
                     g.goal_completed = all_tasks_completed
         
         db.session.commit()
@@ -647,8 +647,8 @@ def update_goal_tasks(goal_id):
         bypass = data.get('bypass')
         
         if not bypass:
-            for task_data in data['tasks']:
-                task_id = task_data.get('task_id')
+        for task_data in data['tasks']:
+            task_id = task_data.get('task_id')
                 task_rows = [g for g in goals if g.task_id == task_id]
                 task_due_date = None
 
@@ -1479,7 +1479,7 @@ def end_subtask_engagement(subtask_id):
         if subtask.subtask_engagement_start and subtask.subtask_engagement_end:
             time_diff = subtask.subtask_engagement_end - subtask.subtask_engagement_start
             current_session_minutes = time_diff.total_seconds() / 60.0  # Convert to minutes
-            
+        
             # Accumulate with previous sessions
             previous_total = subtask.subtask_total_active_minutes or 0.0
             subtask.subtask_total_active_minutes = previous_total + current_session_minutes
@@ -1980,7 +1980,7 @@ def get_subtask_orders_for_task(task_id, user_id):
 @goals_bp.route("/api/goals/checklist", methods=["GET"])
 @jwt_required()
 def get_checklist():
-    """Return subtasks for the checklist: today, overdue, or upcoming (excluding Google Calendar events)."""
+    """Return tasks for the checklist: today, overdue, or upcoming (excluding Google Calendar events)."""
     user_id = get_jwt_identity()
     try:
         # Get filter type from query param: 'today', 'overdue', 'upcoming' (default: today)
@@ -1988,38 +1988,33 @@ def get_checklist():
         now = datetime.now(timezone.utc)
         today = now.date()
 
-        # Get all subtasks for the user that are not Google Calendar events and not completed
-        subtasks = Goal.query.filter(
+        # Get all tasks for the user that are not Google Calendar events and not completed
+        tasks = Goal.query.filter(
             Goal.user_id == user_id,
             Goal.goal_id != "Google Calendar",
-            Goal.subtask_completed == False,
-            Goal.subtask_id.isnot(None)  # Only get rows that have subtasks
+            Goal.task_completed == False,
         ).all()
 
-        filtered_subtasks = []
-        for s in subtasks:
+        filtered_tasks = []
+        for t in tasks:
             due = None
-            # For scheduled subtasks, use the start_time date
-            if s.start_time:
-                due = s.start_time.date()
-            # Fallback to task due date if no start_time
-            elif s.task_due_date:
-                due = s.task_due_date.date()
-            elif s.due_date:
-                due = s.due_date.date()
+            if t.task_due_date:
+                due = t.task_due_date.date()
+            elif t.due_date:
+                due = t.due_date.date()
             else:
                 continue  # skip if no due date
 
             if filter_type == "today" and due == today:
-                filtered_subtasks.append(s.to_dict())
+                filtered_tasks.append(t.to_dict())
             elif filter_type == "overdue" and due < today:
-                filtered_subtasks.append(s.to_dict())
+                filtered_tasks.append(t.to_dict())
             elif filter_type == "upcoming" and due > today:
-                filtered_subtasks.append(s.to_dict())
+                filtered_tasks.append(t.to_dict())
 
-        # Sort by due date/start_time ascending
-        filtered_subtasks.sort(key=lambda x: x.get("start_time") or x.get("task_due_date") or x.get("due_date") or "")
-        return jsonify(filtered_subtasks), 200
+        # Optionally sort by due date ascending
+        filtered_tasks.sort(key=lambda x: x.get("task_due_date") or x.get("due_date") or "")
+        return jsonify(filtered_tasks), 200
     except Exception as e:
         current_app.logger.error(f"Error fetching checklist: {e}")
         return jsonify({"error": "An error occurred"}), 500
