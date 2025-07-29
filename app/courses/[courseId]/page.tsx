@@ -85,13 +85,13 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
   useEffect(() => {
     if (!searchParams) return;
     const tabFromUrl = searchParams.get('tab');
-    if (tabFromUrl && ['overview', 'materials', 'ai', 'study', 'community', 'progress'].includes(tabFromUrl)) {
+    if (tabFromUrl && ['overview', 'materials', 'ai', 'study', 'community'].includes(tabFromUrl)) {
       setActiveTab(tabFromUrl);
     }
   }, [searchParams]);
 
   // Tab order for animation direction
-  const tabOrder = ['overview', 'materials', 'ai', 'study', 'community', 'progress'];
+  const tabOrder = ['overview', 'materials', 'ai', 'study', 'community'];
 
   // Handle animated tab switching
   const handleTabChange = (newTab: string) => {
@@ -168,7 +168,6 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     ai: <NewAIChatInterface courseId={course.comboId} materialsDbId={course.dbId} />,
     study: <StudyPlanTab courseId={course.dbId} />,
     community: <CommunityTab courseId={course.dbId} />,
-    progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
   };
   const tabContent = tabContentMap[activeTab];
 
@@ -178,7 +177,6 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     ai: 'AI Chat',
     study: 'Study Plan',
     community: 'Community',
-    progress: 'Progress',
   }[activeTab] || '';
 
   return (
