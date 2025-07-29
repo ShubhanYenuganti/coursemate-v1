@@ -42,7 +42,16 @@ const findNewFriends = (): Promise<UserSummary[]> => {
 };
 
 const getFriendsForNewChat = (): Promise<Friend[]> => {
-    return apiService.get('/api/friends/list-for-new-chat').then((res: AxiosResponse<ApiResponse & { friends: Friend[] }>) => res.data.friends);
+    console.log('🔍 [FriendService] Calling /api/friends/list-for-new-chat');
+    return apiService.get('/api/friends/list-for-new-chat')
+        .then((res: AxiosResponse<ApiResponse & { friends: Friend[] }>) => {
+            console.log('✅ [FriendService] Response received:', res.data);
+            return res.data.friends;
+        })
+        .catch(error => {
+            console.error('❌ [FriendService] Error in getFriendsForNewChat:', error);
+            throw error;
+        });
 };
 
 export const friendService = {

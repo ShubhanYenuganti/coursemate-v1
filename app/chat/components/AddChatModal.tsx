@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { X, Search, UserPlus } from 'lucide-react';
+import { X, Search, UserPlus, Check } from 'lucide-react';
 import { User } from '../types';
 
 interface AddChatModalProps {
@@ -67,7 +67,11 @@ const AddChatModal: React.FC<AddChatModalProps> = ({ isOpen, onClose, onStartCha
         <div className="flex-1 overflow-y-auto min-h-0">
           {filteredUsers.length === 0 ? (
             <div className="p-6 text-center text-gray-500">
-              <p>No users found</p>
+              <UserPlus className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p>No friends available for new chats</p>
+              <p className="text-sm text-gray-400 mt-1">
+                {searchTerm ? 'Try a different search term' : 'You already have active chats with all your friends'}
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
@@ -89,9 +93,7 @@ const AddChatModal: React.FC<AddChatModalProps> = ({ isOpen, onClose, onStartCha
                     </div>
                     {selectedUser === user.id && (
                       <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                        <Check className="w-3 h-3 text-white" />
                       </div>
                     )}
                   </div>

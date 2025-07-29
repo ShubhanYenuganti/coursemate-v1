@@ -172,3 +172,29 @@ def download_file_from_s3(s3_path):
     except Exception as e:
         print(f"Error downloading file from S3: {str(e)}")
         return None
+
+def copy_s3_object(source_key, destination_key):
+    """
+    Copies an S3 object from one key to another within the same bucket.
+    """
+    try:
+        s3 = get_s3_client()
+        bucket_name = current_app.config['AWS_STORAGE_BUCKET_NAME']
+        
+        print(f"DEBUG S3: Copying from {source_key} to {destination_key}")
+        
+        # Copy the object
+        copy_source = {'Bucket': bucket_name, 'Key': source_key}
+        s3.copy_object(
+            CopySource=copy_source,
+            Bucket=bucket_name,
+            Key=destination_key,
+            MetadataDirective='COPY'  # Copy all metadata
+        )
+        
+        print(f"DEBUG S3: Successfully copied {source_key} to {destination_key}")
+        return True
+        
+    except Exception as e:
+        print(f"ERROR S3: Failed to copy {source_key} to {destination_key}: {str(e)}")
+        return False

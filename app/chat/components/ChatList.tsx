@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { Plus, UserPlus, Bell } from 'lucide-react';
+import { Plus, UserPlus, Bell, Users } from 'lucide-react';
 import { ChatWithPreview } from '../types';
 
 interface ChatListProps {
@@ -11,6 +11,7 @@ interface ChatListProps {
   onAddChat: () => void;
   onAddFriend: () => void;
   onToggleFriendRequests: () => void;
+  onCreateGroup?: () => void;
 }
 
 const ChatList: React.FC<ChatListProps> = ({
@@ -21,6 +22,7 @@ const ChatList: React.FC<ChatListProps> = ({
   onAddChat,
   onAddFriend,
   onToggleFriendRequests,
+  onCreateGroup,
 }) => {
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -50,7 +52,18 @@ const ChatList: React.FC<ChatListProps> = ({
   };
 
   const getOtherParticipant = (chat: ChatWithPreview) => {
-    return chat.participants.find(p => p.id !== 'current');
+    if (chat.type === 'group') {
+      // For group chats, return a synthetic participant with the group name
+      return {
+        id: chat.id,
+        name: chat.groupName || 'Group Chat',
+        email: '',
+        status: 'offline' as const
+      };
+    } else {
+      // For direct chats, find the other participant
+      return chat.participants.find(p => p.id !== 'current');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -85,6 +98,15 @@ const ChatList: React.FC<ChatListProps> = ({
                 </span>
               )}
             </button>
+            {onCreateGroup && (
+              <button
+                onClick={onCreateGroup}
+                className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                title="Create Group Chat"
+              >
+                <Users className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={onAddChat}
               className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -161,16 +183,24 @@ const ChatList: React.FC<ChatListProps> = ({
                     {/* Avatar */}
                     <div className="relative flex-shrink-0">
                       <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
-                        {otherParticipant?.name.split(' ').map(n => n[0]).join('')}
+                        {chat.type === 'group' 
+                          ? (chat.groupName || 'G').substring(0, 2).toUpperCase()
+                          : otherParticipant?.name?.split(' ').map(n => n[0]).join('') || '?'
+                        }
                       </div>
-                      <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${getStatusColor(otherParticipant?.status || 'offline')} rounded-full border-2 border-white`} />
+                      {chat.type !== 'group' && (
+                        <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${getStatusColor(otherParticipant?.status || 'offline')} rounded-full border-2 border-white`} />
+                      )}
                     </div>
 
                     {/* Chat Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-medium text-gray-900 truncate">
-                          {otherParticipant?.name}
+                          {chat.type === 'group' 
+                            ? (chat.groupName || 'Group Chat')
+                            : (otherParticipant?.name || 'Unknown User')
+                          }
                         </h3>
                         <span className="text-xs text-gray-500">
                           {formatTime(chat.lastMessageTime)}
