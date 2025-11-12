@@ -50,6 +50,7 @@ def google_callback():
             name=name,
             role='student',
             email_verified=True,
+            password_hash=None,  # OAuth users don't have passwords
         )
         db.session.add(user)
         

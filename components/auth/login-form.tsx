@@ -49,8 +49,8 @@ export function LoginForm() {
         alert("Login failed. Please try again.");
         setIsLoading(false);
       }
-    } else if (provider = "google") {
-      window.location.href = `${process.env.BACKEND_URL}/api/auth/google`;
+    } else if (provider === "google") {
+      window.location.href = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5173'}/api/auth/google`;
     } else {
       // Handle OAuth providers (Google, Apple, etc.)
       console.log(`OAuth login with ${provider} - Not implemented yet`);

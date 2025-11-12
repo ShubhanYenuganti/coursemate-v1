@@ -519,11 +519,11 @@ def update_goal(goal_id):
             all_tasks_completed = True if all_task_ids else False
             for tid in all_task_ids:
                 task_rows = [g for g in goals if g.task_id == tid]
-                    if not all(g.task_completed for g in task_rows):
-                        all_tasks_completed = False
-                        break
-                for g in goals:
-                    g.goal_completed = all_tasks_completed
+                if not all(g.task_completed for g in task_rows):
+                    all_tasks_completed = False
+                    break
+            for g in goals:
+                g.goal_completed = all_tasks_completed
         
         db.session.commit()
         
@@ -647,8 +647,8 @@ def update_goal_tasks(goal_id):
         bypass = data.get('bypass')
         
         if not bypass:
-        for task_data in data['tasks']:
-            task_id = task_data.get('task_id')
+            for task_data in data['tasks']:
+                task_id = task_data.get('task_id')
                 task_rows = [g for g in goals if g.task_id == task_id]
                 task_due_date = None
 

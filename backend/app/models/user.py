@@ -11,7 +11,7 @@ class User(db.Model):
 
     id = db.Column(db.String, primary_key=True, default=lambda: str(uuid.uuid4()))
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(256), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=True)  # Nullable for OAuth users
     name = db.Column(db.String(100), nullable=True)
     role = db.Column(db.Enum('admin', 'student', name='role_enum'), default='student')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
