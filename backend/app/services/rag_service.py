@@ -96,8 +96,21 @@ Please respond to their message now:"""
                 "confidence": 0.0
             }
     
-    def generate_quiz(self, topic: str = None, num_questions: int = 5, question_type: str = "multiple_choice") -> Dict[str, Any]:
-        """Generate quiz questions from uploaded materials"""
+    def generate_quiz(self, topic: str = None, num_questions: int = 5, question_type: str = "multiple_choice", question_config:List[Dict] = None) -> Dict[str, Any]:
+        """Generate quiz questions from uploaded materials
+        
+        Args:
+            topic: Specific topic to focus on (optional)
+            num_questions: number of questions (used if question_config not provided)
+            question_type: default question type (used if question_config not provided)
+            question_config: List of question configurations, e.g.:
+            [
+                {"type": "multiple_choice", "allow_multiple": False},
+                {"type": "multiple_choice", "allow_multiple": True},
+                {"type": "true_false"},
+                {"type": "short_answer"}
+            ]
+        """
         try:
             # If no specific topic, get a sample of chunks for general quiz
             if topic:
@@ -125,64 +138,12 @@ Please respond to their message now:"""
             
             context = "\n\n".join(context_parts[:5])  # Limit context size
             
-            # Generate quiz based on question type
-            if question_type == "multiple_choice":
-                prompt = f"""Based on the following material, create {num_questions} multiple choice questions with 4 options each. Make sure the questions test understanding of key concepts.
-
-Material:
-{context}
-
-Format your response as JSON with this structure:
-{{
-  "questions": [
-    {{
-      "question": "Question text here?",
-      "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
-      "correct_answer": "A",
-      "explanation": "Why this answer is correct"
-    }}
-  ]
-}}
-
-Generate {num_questions} high-quality multiple choice questions."""
-
-            elif question_type == "true_false":
-                prompt = f"""Based on the following material, create {num_questions} true/false questions that test understanding of key concepts.
-
-Material:
-{context}
-
-Format your response as JSON with this structure:
-{{
-  "questions": [
-    {{
-      "question": "Statement to evaluate",
-      "correct_answer": true,
-      "explanation": "Why this answer is correct"
-    }}
-  ]
-}}
-
-Generate {num_questions} high-quality true/false questions."""
-
-            else:  # open_ended
-                prompt = f"""Based on the following material, create {num_questions} open-ended questions that test deep understanding of key concepts.
-
-Material:
-{context}
-
-Format your response as JSON with this structure:
-{{
-  "questions": [
-    {{
-      "question": "Open-ended question here?",
-      "sample_answer": "A good sample answer",
-      "key_points": ["Key point 1", "Key point 2", "Key point 3"]
-    }}
-  ]
-}}
-
-Generate {num_questions} thought-provoking open-ended questions."""
+            if question_config:
+                questions_to_generate = question_config
+            else:
+                questions_to_generate = [{"type": question_type, "allow_multiple": False}] * num_questions
+                
+            prompt = self._build_mixed_quiz_prompt(context, questions_to_generate, topic)
 
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -190,16 +151,14 @@ Generate {num_questions} thought-provoking open-ended questions."""
                     {"role": "system", "content": "You are an expert quiz generator. Always respond with valid JSON in the exact format requested."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=1000,
+                max_tokens=2000,
                 temperature=0.3
             )
-            
             import json
             quiz_data = json.loads(response.choices[0].message.content)
             
             return {
                 "questions": quiz_data["questions"],
-                "type": question_type,
                 "topic": topic or "General",
                 "generated_from": len(relevant_chunks)
             }
@@ -210,6 +169,82 @@ Generate {num_questions} thought-provoking open-ended questions."""
                 "questions": [],
                 "message": f"Error generating quiz: {str(e)}"
             }
+    
+    def _build_mixed_quiz_prompt(self, context: str, question_config: List[Dict], topic: str = None) -> str:
+        """Builds a prompt for generating a mixed quiz based on question configurations."""
+        
+        questions_spec = []
+        for i, config in enumerate(question_config, start=1):
+            q_type = config.get("type", "multiple_choice")
+            allow_multiple = config.get("allow_multiple", False)
+
+            if q_type == "multiple_choice":
+                if allow_multiple:
+                    questions_spec.append(f"Question {i}: Multiple choice with MULTIPLE correct answers (select all that apply)")
+                else:
+                    questions_spec.append(f"Question {i}: Multiple choice with a SINGLE correct answer")
+            elif q_type == "true_false":
+                questions_spec.append(f"Question {i}: True/False")
+            elif q_type == "short_answer":
+                questions_spec.append(f"Question {i}: Short answer (open-ended)")
+                
+        questions_spec_text = "\n".join(questions_spec)
+
+        prompt = f"""Based on the following material, create {len(question_config)} questions exactly as specified below.
+
+Material:
+{context}
+
+Question Specifications:
+{questions_spec_text}
+
+Format your response as JSON with this EXACT structure:
+{{
+  "questions": [
+    // For single-answer multiple choice:
+    {{
+      "type": "multiple_choice",
+      "question": "Question text here?",
+      "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+      "correct_answer": "A",
+      "allow_multiple": false,
+      "explanation": "Why this answer is correct"
+    }},
+    // For multiple-answer multiple choice:
+    {{
+      "type": "multiple_choice",
+      "question": "Question text here? (Select all that apply)",
+      "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+      "correct_answer": ["A", "C"],
+      "allow_multiple": true,
+      "explanation": "Why these answers are correct"
+    }},
+    // For true/false:
+    {{
+      "type": "true_false",
+      "question": "Statement to evaluate",
+      "correct_answer": true,
+      "explanation": "Why this answer is correct"
+    }},
+    // For short answer:
+    {{
+      "type": "short_answer",
+      "question": "Open-ended question here?",
+      "sample_answer": "A good sample answer",
+      "key_points": ["Key point 1", "Key point 2", "Key point 3"],
+      "explanation": "What makes a good answer"
+    }}
+  ]
+}}
+
+IMPORTANT: 
+- Generate exactly {len(question_config)} questions in the exact order and types specified
+- For multiple-answer questions, correct_answer should be an array of letters
+- For single-answer questions, correct_answer should be a single letter
+- Always include the "type" field for each question
+- For multiple choice questions, always include "allow_multiple" field"""
+
+        return prompt
     
     def generate_flashcards(self, topic: str = None, num_cards: int = 10) -> Dict[str, Any]:
         """Generate flashcards from uploaded materials"""
@@ -246,13 +281,13 @@ Material:
 
 Format your response as JSON with this structure:
 {{
-  "flashcards": [
-    {{
-      "front": "Question or term",
-      "back": "Answer or definition",
-      "category": "Topic category"
-    }}
-  ]
+"flashcards": [
+{{
+    "front": "Question or term",
+    "back": "Answer or definition",
+    "category": "Topic category"
+}}
+]
 }}
 
 Generate {num_cards} high-quality flashcards covering the most important concepts."""
@@ -315,9 +350,9 @@ Material:
 
 Format your response as JSON with this structure:
 {{
-  "summary": "A comprehensive summary of the material",
-  "key_points": ["Key point 1", "Key point 2", "Key point 3", "etc."],
-  "main_topics": ["Topic 1", "Topic 2", "Topic 3"]
+"summary": "A comprehensive summary of the material",
+"key_points": ["Key point 1", "Key point 2", "Key point 3", "etc."],
+"main_topics": ["Topic 1", "Topic 2", "Topic 3"]
 }}
 
 Provide a thorough but concise summary that captures the essential information."""

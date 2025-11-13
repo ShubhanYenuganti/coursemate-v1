@@ -897,6 +897,40 @@ def migrate_existing_materials_to_db(course_id):
     db.session.commit()
     return jsonify({'success': True, 'migrated': migrated, 'count': len(migrated)}), 200
 
+@courses_bp.route('/<course_id>/materials/generate-quiz', methods=['POST'])
+@jwt_required()
+def generate_course_quiz(course_id):
+    """Generate quiz from course materials with fine-grained control"""
+    current_user_id = get_jwt_identity()
+    combo_id = f"{course_id}+{current_user_id}"
+    
+    try:
+        data = request.get_json() or {}
+        
+        topic = data.get('topic')
+        num_questions = data.get('num_questions', 5)
+        question_type = data.get('type', 'multiple_choice')
+        question_config = data.get('question_config')  # Fine-grained configuration
+        
+        # Initialize course RAG service
+        from app.services.rag_service import RAGService
+        rag = RAGService()
+
+        result = rag.generate_quiz(
+            topic=topic,
+            num_questions=num_questions,
+            question_type=question_type,
+            question_config=question_config
+        )
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"Error generating course quiz: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to generate quiz: {str(e)}'}), 500
+
 @courses_bp.route('/<course_id>/materials/save-quiz', methods=['POST'])
 @jwt_required()
 def save_quiz_as_material(course_id):
