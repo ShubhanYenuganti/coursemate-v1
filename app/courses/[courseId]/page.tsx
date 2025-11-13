@@ -78,7 +78,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
   }, [activeTab]);
 
   // Tab order for animation direction
-  const tabOrder = ['overview', 'materials', 'ai', 'study', 'community', 'progress'];
+  const tabOrder = ['overview', 'materials', 'ai', 'study', 'community'];
 
   // Handle animated tab switching
   const handleTabChange = (newTab: string) => {
@@ -130,16 +130,31 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
 
   const tabContentMap: Record<string, React.ReactNode> = {
     overview: (
-      <div>
-        <CourseDetailHeader
-          course={course}
-          onCourseUpdate={handleCourseUpdate}
-        />
-        <PinnedResources course={course} />
-        <div className="mt-8" />
-        {course.badge === 'Creator' && (() => { console.log('ShareInviteFeature comboId:', course.comboId); return <ShareInviteFeature course={course} /> })()}
-        {course.badge === 'Creator' && <EnrolledUsersList courseId={course.dbId} isCreator />}
-        {course.badge === 'Enrolled' && <LeaveCourseButton courseId={course.dbId} />}
+      <div className="space-y-6 w-full">
+        <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl p-8">
+          <CourseDetailHeader
+            course={course}
+            onCourseUpdate={handleCourseUpdate}
+          />
+        </div>
+        <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl p-8">
+          <PinnedResources course={course} />
+        </div>
+        {course.badge === 'Creator' && (
+          <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl p-8">
+            {(() => { console.log('ShareInviteFeature comboId:', course.comboId); return <ShareInviteFeature course={course} /> })()}
+          </div>
+        )}
+        {course.badge === 'Creator' && (
+          <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl p-8">
+            <EnrolledUsersList courseId={course.dbId} isCreator />
+          </div>
+        )}
+        {course.badge === 'Enrolled' && (
+          <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl p-8">
+            <LeaveCourseButton courseId={course.dbId} />
+          </div>
+        )}
       </div>
     ),
     materials: (
@@ -150,7 +165,6 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     ai: <NewAIChatInterface courseId={course.comboId} materialsDbId={course.dbId} />,
     study: <StudyPlanTab courseId={course.dbId} />,
     community: <CommunityTab courseId={course.dbId} />,
-    progress: <div className="text-center text-gray-400">[Progress tab coming soon]</div>,
   };
   const tabContent = tabContentMap[activeTab];
 
@@ -160,18 +174,10 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     ai: 'AI Chat',
     study: 'Study Plan',
     community: 'Community',
-    progress: 'Progress',
   }[activeTab] || '';
 
   return (
     <div className={`${activeTab === 'ai' ? 'h-full flex flex-col' : 'h-full overflow-y-auto'} bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative`}>
-      {/* Banner Header as horizontal bar extending sidebar's top border */}
-      <div className="bg-white border-b border-gray-200 flex items-center px-8 py-4 sticky top-0 z-10 flex-shrink-0">
-        <h2 className="text-3xl font-bold text-gray-800 truncate mr-4">{course.title}</h2>
-        {tabLabel !== 'Study Plan' && (
-        <span className="text-xl text-gray-500 font-medium">- {tabLabel}</span>
-        )}
-      </div>
       <div className={`${activeTab === 'ai' ? 'flex-1 flex flex-col min-h-0' : 'mx-auto p-8 pb-24'} ${activeTab === 'ai' ? 'max-w-7xl mx-auto' : 'max-w-5xl'}`}>
         <div className={activeTab === 'ai' ? 'p-8 pb-4 flex-shrink-0' : ''}>
           <CourseDetailTabs activeTab={activeTab} setActiveTab={handleTabChange} />

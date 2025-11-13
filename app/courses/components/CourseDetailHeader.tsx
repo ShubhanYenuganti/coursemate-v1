@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Course } from "./CourseCard";
 import { courseService, CourseData } from "../../../lib/api/courseService";
-import { UploadCloud, Trash2 } from "lucide-react";
+import { UploadCloud, Trash2, Edit } from "lucide-react";
 import ImageCropModal from "./ImageCropModal";
 
 const defaultBanner =
@@ -124,34 +124,34 @@ const CourseDetailHeader = ({ course, onCourseUpdate }: { course: Course; onCour
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-8 mb-8 relative">
+    <div className="relative">
       {/* Top right edit button toggles all editing */}
       {course.badge === 'Creator' && !editing && (
         <button
           onClick={() => setEditing(true)}
-          className="absolute top-4 right-4 text-blue-600 hover:text-blue-800 font-semibold"
+          className="absolute top-0 right-0 p-2 bg-white/40 backdrop-blur-md border border-white/60 rounded-lg hover:bg-white/60 transition-all duration-200 hover:scale-105"
           title="Edit Course"
         >
-          ✏️ Edit
+          <Edit className="w-5 h-5 text-blue-600" />
         </button>
       )}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           {/* Title */}
           <div className="flex items-center gap-2">
             {editing ? (
               <input
-                className="text-4xl font-bold text-gray-900 mb-2 border rounded px-2 py-1"
+                className="text-3xl font-bold text-gray-900 mb-2 border rounded px-2 py-1"
                 value={fieldValues.title}
                 onChange={e => handleFieldChange("title", e.target.value)}
                 autoFocus
               />
             ) : (
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">{fieldValues.title}</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">{fieldValues.title}</h1>
             )}
           </div>
           {/* Subject, Semester, Badge, ID */}
-          <div className="text-lg text-gray-600 mb-3 flex flex-wrap gap-2 items-center">
+          <div className="text-base text-gray-600 mb-3 flex flex-wrap gap-2 items-center">
             {/* Subject */}
             {editing ? (
               <input
@@ -242,13 +242,10 @@ const CourseDetailHeader = ({ course, onCourseUpdate }: { course: Course; onCour
       </div>
       {/* Description */}
       <div>
-        <h2 className="text-2xl font-bold mb-2 flex items-center gap-4">
-          Course Description
-        </h2>
         {editing ? (
           <textarea value={fieldValues.description} onChange={e=>handleFieldChange("description", e.target.value)} className="w-full border rounded-lg p-2" rows={4}/>
         ): (
-          <p className="text-lg text-gray-800 whitespace-pre-line">{fieldValues.description}</p>
+          <p className="text-base text-gray-700 whitespace-pre-line">{fieldValues.description}</p>
         )}
       </div>
       {/* Save/Cancel controls at the bottom */}

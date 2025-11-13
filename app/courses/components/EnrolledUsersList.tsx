@@ -83,8 +83,8 @@ const EnrolledUsersList: React.FC<EnrolledUsersListProps> = ({ courseId, isCreat
   if (users.length === 0) return <div className="my-4 text-gray-400">No friends enrolled yet.</div>;
 
   return (
-    <div className="my-8">
-      <h4 className="font-semibold text-gray-800 mb-3">Enrolled Friends</h4>
+    <div>
+      <h2 className="text-2xl font-bold mb-6">Enrolled Friends</h2>
       <ul className="space-y-2">
         {users.map(user => (
           <li key={user.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">

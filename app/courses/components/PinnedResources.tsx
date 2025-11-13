@@ -40,8 +40,8 @@ const PinnedResources: React.FC<{ course: Course }> = ({ course }) => {
   };
 
   return (
-    <div className="my-8">
-      <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">Pinned Resources</h3>
+    <div>
+      <h2 className="text-2xl font-bold mb-6">Pinned Resources</h2>
       <div className="flex flex-wrap gap-4 mb-4">
         {resources.filter(r => !r.archived).map(resource => (
           <div key={resource.id} className="bg-gray-50 border border-gray-200 rounded-lg shadow-sm p-4 min-w-[220px] max-w-xs flex flex-col justify-between relative">

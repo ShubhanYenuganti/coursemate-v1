@@ -45,7 +45,8 @@ const LeaveCourseButton: React.FC<LeaveCourseButtonProps> = ({ courseId }) => {
   };
 
   return (
-    <div className="my-8 flex flex-col items-start">
+    <div className="flex flex-col items-start">
+      <h2 className="text-2xl font-bold mb-6">Course Actions</h2>
       <button
         className="px-4 py-2 text-sm rounded-md border border-red-300 text-red-600 bg-white hover:bg-red-50 transition-colors shadow-sm"
         onClick={() => setShowConfirm(true)}

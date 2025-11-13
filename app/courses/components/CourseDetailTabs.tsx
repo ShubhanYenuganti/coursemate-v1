@@ -6,7 +6,6 @@ const TABS = [
   { key: "ai", label: "AI Chat", icon: "🤖" },
   { key: "study", label: "Study Plan", icon: "📋" },
   { key: "community", label: "Community", icon: "👥" },
-  { key: "progress", label: "Progress", icon: "📈" },
 ];
 
 interface CourseDetailTabsProps {

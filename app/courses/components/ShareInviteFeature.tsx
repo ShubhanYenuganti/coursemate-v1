@@ -159,8 +159,8 @@ const ShareInviteFeature: React.FC<{ course: Course }> = ({ course }) => {
   };
 
   return (
-    <div className="my-8">
-      <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">Share / Invite</h3>
+    <div>
+      <h2 className="text-2xl font-bold mb-6">Share / Invite</h2>
       
       {/* Error and Success Messages */}
       {error && (
