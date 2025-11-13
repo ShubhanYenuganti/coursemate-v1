@@ -124,10 +124,14 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
   const courseOptions = subject && courseList[subject] ? courseList[subject] : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleBackdrop}>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-4 sm:p-6 relative animate-fade-in max-h-[90vh] overflow-y-auto">
-        <button className="absolute top-3 right-3 text-gray-400 hover:text-gray-700" onClick={onClose} aria-label="Close">&times;</button>
-        <h2 className="text-xl sm:text-2xl font-bold mb-4 text-center bg-gradient-to-r from-gray-900 via-indigo-900 to-purple-900 bg-clip-text text-transparent">Create New Course</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={handleBackdrop}>
+      <div className="bg-white rounded-xl shadow-lg max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto">
+        <button className="absolute top-3 right-3 text-gray-400 hover:text-gray-600" onClick={onClose} aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+        <h2 className="text-lg font-semibold mb-4 text-gray-900">Create New Course</h2>
         
         {/* Error Display */}
         {errors.submit && (
@@ -136,14 +140,14 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
           </div>
         )}
         
-        <form className="space-y-3 sm:space-y-4">
+        <form className="space-y-4">
           {/* Subject Dropdown */}
           <div>
-            <label className="block font-semibold mb-1">Course Subject <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Course Subject <span className="text-red-500">*</span></label>
             <input
               type="text"
               list="departments"
-              className={`w-full border rounded-lg px-3 py-1.5 ${errors.subject ? 'border-red-500' : 'border-gray-200'}`}
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all ${errors.subject ? 'border-red-500' : 'border-gray-300'}`}
               value={subject}
               onChange={e => setSubject(e.target.value)}
               placeholder="Start typing to search..."
@@ -152,14 +156,14 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
             <datalist id="departments">
               {departmentList.map(dep => <option key={dep} value={dep} />)}
             </datalist>
-            {errors.subject && <div className="text-red-500 text-xs mt-1">{errors.subject}</div>}
+            {errors.subject && <div className="text-red-500 text-xs mt-1.5">{errors.subject}</div>}
           </div>
           {/* Course Name Dropdown/Custom */}
           <div>
-            <label className="block font-semibold mb-1">Course Name <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Course Name <span className="text-red-500">*</span></label>
             {courseOptions.length > 0 && !customCourseName ? (
               <select
-                className={`w-full border rounded-lg px-3 py-1.5 ${errors.courseName ? 'border-red-500' : 'border-gray-200'}`}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all ${errors.courseName ? 'border-red-500' : 'border-gray-300'}`}
                 value={courseName}
                 onChange={e => {
                   setCourseName(e.target.value);
@@ -174,113 +178,22 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
             ) : (
               <input
                 type="text"
-                className={`w-full border rounded-lg px-3 py-1.5 ${errors.courseName ? 'border-red-500' : 'border-gray-200'}`}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all ${errors.courseName ? 'border-red-500' : 'border-gray-300'}`}
                 value={customCourseName}
                 onChange={e => setCustomCourseName(e.target.value)}
                 placeholder="Enter course name..."
               />
             )}
-            <button type="button" className="text-xs text-blue-600 mt-1" onClick={() => setCustomCourseName("")}>Choose from list</button>
-            {errors.courseName && <div className="text-red-500 text-xs mt-1">{errors.courseName}</div>}
-          </div>
-          {/* Semester Dropdown */}
-          <div>
-            <label className="block font-semibold mb-1">Semester <span className="text-red-500">*</span></label>
-            <select
-              className={`w-full border rounded-lg px-3 py-1.5 ${errors.semester ? 'border-red-500' : 'border-gray-200'}`}
-              value={semester}
-              onChange={e => setSemester(e.target.value)}
-            >
-              {semesterOptions.map(opt => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-            {errors.semester && <div className="text-red-500 text-xs mt-1">{errors.semester}</div>}
-          </div>
-          {/* Professor Name */}
-          <div>
-            <label className="block font-semibold mb-1">Professor Name</label>
-            <input
-              type="text"
-              className="w-full border border-gray-200 rounded-lg px-3 py-1.5"
-              value={professor}
-              onChange={e => setProfessor(e.target.value)}
-              placeholder="Search or enter manually..."
-            />
-          </div>
-          {/* Course Units */}
-          <div className="flex gap-2 items-center">
-            <label className="block font-semibold mb-1">Course Units</label>
-            <input
-              type="number"
-              min={1}
-              max={5}
-              className="w-20 border border-gray-200 rounded-lg px-2 py-1.5"
-              value={units}
-              onChange={e => setUnits(Number(e.target.value))}
-              disabled={variableUnits}
-            />
-            <label className="flex items-center gap-1 text-sm">
-              <input type="checkbox" checked={variableUnits} onChange={e => setVariableUnits(e.target.checked)} />
-              Variable Units
-            </label>
-          </div>
-          {/* Course Code */}
-          <div>
-            <label className="block font-semibold mb-1">Course Code</label>
-            <input
-              type="text"
-              className="w-full border border-gray-200 rounded-lg px-3 py-1.5"
-              value={courseCode}
-              onChange={e => setCourseCode(e.target.value)}
-              placeholder="Auto-filled or enter manually..."
-            />
-          </div>
-          {/* Course Tags */}
-          <div>
-            <label className="block font-semibold mb-1">Course Tags</label>
-            <div className="flex flex-wrap gap-2 mb-1">
-              {tags.map((tag: string) => (
-                <span key={tag} className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs flex items-center gap-1">
-                  {tag}
-                  <button type="button" onClick={() => removeTag(tag)} className="ml-1 text-blue-500 hover:text-red-500">&times;</button>
-                </span>
-              ))}
-              <input
-                type="text"
-                className="border border-gray-200 rounded px-2 py-1 text-xs"
-                value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
-                onKeyDown={e => (e.key === 'Enter' || e.key === ',') && (e.preventDefault(), addTag(tagInput))}
-                placeholder="Add tag..."
-                list="tag-suggestions"
-              />
-              <datalist id="tag-suggestions">
-                {tagSuggestions.map((tag: string) => <option key={tag} value={tag} />)}
-              </datalist>
-            </div>
-          </div>
-          {/* Upload Materials */}
-          <div>
-            <label className="block font-semibold mb-1">Upload Materials</label>
-            <input
-              type="file"
-              multiple
-              accept=".pdf,.mp4,.ppt,.pptx,.doc,.docx,.txt,.jpg,.png"
-              onChange={handleMaterialsUpload}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
-            <div className="flex flex-wrap gap-2 mt-1">
-              {materials.map((file: File, idx: number) => (
-                <span key={idx} className="bg-gray-100 px-2 py-1 rounded text-xs">{file.name}</span>
-              ))}
+            <div className="mt-1.5 flex flex-col gap-1">
+              <button type="button" className="text-xs text-blue-500 hover:text-blue-600 self-start" onClick={() => setCustomCourseName("")}>Choose from list</button>
+              {errors.courseName && <div className="text-red-500 text-xs">{errors.courseName}</div>}
             </div>
           </div>
           {/* Course Description */}
           <div>
-            <label className="block font-semibold mb-1">Course Description <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Course Description <span className="text-red-500">*</span></label>
             <textarea
-              className={`w-full border rounded-lg px-3 py-1.5 ${errors.description ? 'border-red-500' : 'border-gray-200'}`}
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 transition-all ${errors.description ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-blue-400'}`}
               value={description}
               onChange={e => setDescription(e.target.value)}
               placeholder="Short summary (280–500 characters)"
@@ -288,11 +201,120 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
               maxLength={500}
               rows={3}
             />
-            {errors.description && <div className="text-red-500 text-xs mt-1">{errors.description}</div>}
+            {errors.description && <div className="text-red-500 text-xs mt-1.5">{errors.description}</div>}
+          </div>
+          {/* Semester Dropdown */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Semester <span className="text-red-500">*</span></label>
+            <select
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all ${errors.semester ? 'border-red-500' : 'border-gray-300'}`}
+              value={semester}
+              onChange={e => setSemester(e.target.value)}
+            >
+              {semesterOptions.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+            {errors.semester && <div className="text-red-500 text-xs mt-1.5">{errors.semester}</div>}
+          </div>
+          {/* Professor Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Professor Name</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all"
+              value={professor}
+              onChange={e => setProfessor(e.target.value)}
+              placeholder="Search or enter manually..."
+            />
+          </div>
+          {/* Course Units */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Course Units</label>
+            <div className="flex gap-3 items-center">
+              <input
+                type="number"
+                min={1}
+                max={5}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all disabled:bg-gray-100"
+                value={units}
+                onChange={e => setUnits(Number(e.target.value))}
+                disabled={variableUnits}
+              />
+              <label className="flex items-center gap-1.5 text-sm text-gray-700 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={variableUnits}
+                  onChange={e => setVariableUnits(e.target.checked)}
+                  className="rounded text-blue-500 focus:ring-blue-400"
+                />
+                Variable Units
+              </label>
+            </div>
+          </div>
+          {/* Course Code */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Course Code</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all"
+              value={courseCode}
+              onChange={e => setCourseCode(e.target.value)}
+              placeholder="Auto-filled or enter manually..."
+            />
+          </div>
+          {/* Course Tags */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Course Tags</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all"
+              value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault();
+                  addTag(tagInput);
+                }
+              }}
+              placeholder="Add tag (press Enter or comma to add)..."
+              list="tag-suggestions"
+            />
+            <datalist id="tag-suggestions">
+              {tagSuggestions.map((tag: string) => <option key={tag} value={tag} />)}
+            </datalist>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {tags.map((tag: string) => (
+                  <span key={tag} className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 border border-blue-200">
+                    {tag}
+                    <button type="button" onClick={() => removeTag(tag)} className="text-blue-500 hover:text-red-500 text-sm">&times;</button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Upload Materials */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Upload Materials</label>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.mp4,.ppt,.pptx,.doc,.docx,.txt,.jpg,.png"
+              onChange={handleMaterialsUpload}
+              className="block w-full text-sm text-gray-700 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100"
+            />
+            {materials.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {materials.map((file: File, idx: number) => (
+                  <span key={`${file.name}-${idx}`} className="bg-gray-100 px-2.5 py-1 rounded-lg text-xs border border-gray-200">{file.name}</span>
+                ))}
+              </div>
+            )}
           </div>
           {/* Visibility Toggle */}
           <div>
-            <label className="block font-semibold mb-1">Visibility</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Visibility</label>
             <div className="flex gap-3 items-center">
               {['Public', 'Private', 'Only Me', 'Friends Only'].map(opt => {
                 const descriptions: { [key: string]: string } = {
@@ -302,13 +324,14 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
                   'Friends Only': 'Visible to your friends.'
                 };
                 return (
-                  <label key={opt} className="flex items-center gap-1 cursor-pointer relative">
+                  <label key={opt} className="flex items-center gap-1.5 cursor-pointer relative text-sm text-gray-700">
                     <input
                       type="radio"
                       name="visibility"
                       value={opt}
                       checked={visibility === opt}
                       onChange={() => setVisibility(opt)}
+                      className="text-blue-500 focus:ring-blue-400"
                     />
                     <span>{opt}</span>
                     <span className="text-gray-400 text-xs relative group/tooltip">
@@ -324,40 +347,47 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
           </div>
           {/* Co-author/Collaborators */}
           <div>
-            <label className="block font-semibold mb-1">Co-author(s) / Collaborators</label>
-            <div className="flex flex-wrap gap-2 mb-1">
-              {collaborators.map((collab: string) => (
-                <span key={collab} className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs flex items-center gap-1">
-                  {collab}
-                  <button type="button" onClick={() => removeCollaborator(collab)} className="ml-1 text-purple-500 hover:text-red-500">&times;</button>
-                </span>
-              ))}
-              <input
-                type="text"
-                className="border border-gray-200 rounded px-2 py-1 text-xs"
-                value={collabInput}
-                onChange={e => setCollabInput(e.target.value)}
-                onKeyDown={e => (e.key === 'Enter' || e.key === ',') && (e.preventDefault(), addCollaborator(collabInput))}
-                placeholder="Add by email or username..."
-              />
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Co-author(s) / Collaborators</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all"
+              value={collabInput}
+              onChange={e => setCollabInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault();
+                  addCollaborator(collabInput);
+                }
+              }}
+              placeholder="Add by email or username (press Enter or comma to add)..."
+            />
+            {collaborators.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {collaborators.map((collab: string) => (
+                  <span key={collab} className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 border border-blue-200">
+                    {collab}
+                    <button type="button" onClick={() => removeCollaborator(collab)} className="text-blue-500 hover:text-red-500 text-sm">&times;</button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           {/* Course Image */}
           <div>
-            <label className="block font-semibold mb-1">Course Image (Optional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Course Image (Optional)</label>
             <input
               type="file"
               accept="image/*"
               onChange={handleImageUpload}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+              className="block w-full text-sm text-gray-700 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100"
             />
-            {image && <span className="bg-gray-100 px-2 py-1 rounded text-xs mt-1 inline-block">{image.name}</span>}
+            {image && <span className="bg-gray-100 px-2.5 py-1 rounded-lg text-xs mt-1.5 inline-block border border-gray-200">{image.name}</span>}
           </div>
           {/* Save/Cancel Buttons */}
           <div className="flex justify-end gap-3 mt-6">
             <button 
               type="button" 
-              className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium disabled:opacity-50" 
+              className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium disabled:opacity-50 transition-colors" 
               onClick={onClose}
               disabled={isLoading}
             >
@@ -365,7 +395,7 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
             </button>
             <button 
               type="button" 
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium hover:from-indigo-700 hover:to-purple-700 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2" 
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors" 
               onClick={handleSave}
               disabled={isLoading}
             >
