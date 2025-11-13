@@ -55,26 +55,26 @@ const CourseFilters: React.FC<CourseFiltersProps> = ({
   const subjects = ['all', 'Programming', 'Science', 'Mathematics', 'History', 'Art', 'Music'];
 
   return (
-    <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-8 mb-8">
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Enhanced Search */}
+    <div className="bg-white/40 backdrop-blur-md rounded-xl shadow-sm border border-blue-100/50 p-4 mb-6">
+      <div className="flex flex-col lg:flex-row gap-3">
+        {/* Glassmorphism Search Bar */}
         <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-400 w-4 h-4" />
           <input
             type="text"
-            placeholder="Search your courses..."
+            placeholder="Search courses..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-6 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/80 backdrop-blur-sm text-lg placeholder-gray-400"
+            className="w-full pl-10 pr-4 py-2 border border-blue-200/50 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 bg-white/60 backdrop-blur-lg text-sm placeholder-gray-400 transition-all duration-200 hover:bg-white/80"
           />
         </div>
         
-        {/* Refined Filters */}
-        <div className="flex gap-4 flex-wrap">
+        {/* Compact Filters */}
+        <div className="flex gap-2 flex-wrap">
           <select
             value={selectedSemester}
             onChange={(e) => setSelectedSemester(e.target.value)}
-            className="px-6 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/80 backdrop-blur-sm text-base font-medium"
+            className="px-3 py-2 border border-blue-200/50 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 bg-white/60 backdrop-blur-lg text-sm font-medium hover:bg-white/80 transition-all duration-200"
           >
             {semesters.map(semester => (
               <option key={semester} value={semester}>
@@ -86,7 +86,7 @@ const CourseFilters: React.FC<CourseFiltersProps> = ({
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="px-6 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/80 backdrop-blur-sm text-base font-medium"
+            className="px-3 py-2 border border-blue-200/50 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 bg-white/60 backdrop-blur-lg text-sm font-medium hover:bg-white/80 transition-all duration-200"
           >
             <option value="lastAccessed">Recently Accessed</option>
             <option value="title">Alphabetical</option>
@@ -95,59 +95,59 @@ const CourseFilters: React.FC<CourseFiltersProps> = ({
           
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="px-6 py-4 border border-gray-200 rounded-xl hover:bg-white/80 backdrop-blur-sm flex items-center gap-3 text-base font-medium transition-all duration-200"
+            className="px-3 py-2 border border-blue-200/50 rounded-lg hover:bg-white/80 bg-white/60 backdrop-blur-lg flex items-center gap-2 text-sm font-medium transition-all duration-200 hover:border-blue-300"
           >
-            <Filter className="w-5 h-5" />
-            Advanced Filters
+            <Filter className="w-4 h-4" />
+            Filters
           </button>
           
-          {/* Enhanced View Toggle */}
-          <div className="flex rounded-xl border border-gray-200 bg-white/60 backdrop-blur-sm overflow-hidden">
+          {/* Compact View Toggle */}
+          <div className="flex rounded-lg border border-blue-200/50 bg-white/60 backdrop-blur-lg overflow-hidden">
             <button
               onClick={() => setViewMode('grid')}
-              className={`px-6 py-4 ${viewMode === 'grid' 
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' 
+              className={`px-3 py-2 ${viewMode === 'grid' 
+                ? 'bg-blue-500 text-white shadow-sm' 
                 : 'text-gray-600 hover:bg-white/80'
-              } transition-all duration-200 font-medium`}
+              } transition-all duration-200`}
             >
-              <Grid className="w-5 h-5" />
+              <Grid className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`px-6 py-4 ${viewMode === 'list' 
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' 
+              className={`px-3 py-2 ${viewMode === 'list' 
+                ? 'bg-blue-500 text-white shadow-sm' 
                 : 'text-gray-600 hover:bg-white/80'
-              } transition-all duration-200 font-medium`}
+              } transition-all duration-200`}
             >
-              <List className="w-5 h-5" />
+              <List className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
       
-      {/* Enhanced Filter Chips */}
+      {/* Filter Chips */}
       {filterChips.length > 0 && (
-        <div className="flex gap-3 flex-wrap mt-6">
+        <div className="flex gap-2 flex-wrap mt-3">
           {filterChips.map(chip => (
-            <div key={chip.id} className="bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-800 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 border border-indigo-200">
+            <div key={chip.id} className="bg-blue-50/80 backdrop-blur-sm text-blue-700 px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 border border-blue-200/50 hover:bg-blue-100/80 transition-colors">
               {chip.label}
-              <button onClick={() => onRemoveFilterChip(chip.id)} className="hover:bg-indigo-200 rounded-full p-0.5 transition-colors">
-                <X className="w-3.5 h-3.5" />
+              <button onClick={() => onRemoveFilterChip(chip.id)} className="hover:bg-blue-200/50 rounded-full p-0.5 transition-colors">
+                <X className="w-3 h-3" />
               </button>
             </div>
           ))}
         </div>
       )}
       
-      {/* Enhanced Advanced Filters */}
+      {/* Advanced Filters */}
       {showFilters && (
-        <div className="mt-8 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="mt-3 p-4 bg-blue-50/50 backdrop-blur-sm rounded-lg border border-blue-100/50">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-base font-semibold text-gray-700 mb-3">Subject Area</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Subject Area</label>
               <select
                 onChange={(e) => e.target.value !== 'all' && onAddFilterChip('Subject', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-base"
+                className="w-full px-3 py-2 border border-blue-200/50 rounded-lg bg-white/80 backdrop-blur-sm text-sm"
               >
                 {subjects.map(subject => (
                   <option key={subject} value={subject}>
@@ -158,10 +158,10 @@ const CourseFilters: React.FC<CourseFiltersProps> = ({
             </div>
             
             <div>
-              <label className="block text-base font-semibold text-gray-700 mb-3">Progress Level</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Progress Level</label>
               <select
                 onChange={(e) => e.target.value !== 'all' && onAddFilterChip('Progress', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-base"
+                className="w-full px-3 py-2 border border-blue-200/50 rounded-lg bg-white/80 backdrop-blur-sm text-sm"
               >
                 <option value="all">All Progress Levels</option>
                 <option value="100% Complete">Completed Courses</option>
@@ -173,13 +173,13 @@ const CourseFilters: React.FC<CourseFiltersProps> = ({
             <div className="flex items-end">
               <button
                 onClick={() => setShowArchived(!showArchived)}
-                className={`px-6 py-3 rounded-xl flex items-center gap-3 text-base font-semibold transition-all duration-200 ${
+                className={`px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all duration-200 ${
                   showArchived 
-                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' 
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                    ? 'bg-blue-500 text-white shadow-sm' 
+                    : 'bg-white/80 text-gray-700 border border-blue-200/50 hover:bg-white'
                 }`}
               >
-                {showArchived ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                {showArchived ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 {showArchived ? 'Hide Archived' : 'Show Archived'}
               </button>
             </div>

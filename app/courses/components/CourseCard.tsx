@@ -1,14 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
-  Star, 
-  StarOff, 
-  Clock, 
-  Play, 
-  Edit, 
-  CheckCircle2, 
-  Archive 
+  Clock,
+  Edit
 } from 'lucide-react';
-import Link from "next/link";
+import {
+  useRouter
+} from 'next/navigation';
 
 export interface Course {
   id: number;          // numeric id only for UI component keys
@@ -31,11 +28,14 @@ export interface Course {
 
 interface CourseCardProps {
   course: Course;
-  onTogglePin: (courseId: number) => void;
-  onToggleArchive: (courseId: number) => void;
+  onEditCourse?: (course: Course) => void;
 }
 
-const CourseCard: React.FC<CourseCardProps> = ({ course, onTogglePin, onToggleArchive }) => {
+const CourseCard: React.FC<CourseCardProps> = ({ course, onEditCourse }) => {
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  const router = useRouter();
+
   const IconComponent = course.icon;
   
   const getProgressColor = (dailyProgress: number) => {
@@ -50,101 +50,187 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onTogglePin, onToggleAr
     return lastAccessed === today;
   };
 
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowEditModal(true);
+  };
+
   return (
-    <div className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 border border-gray-200 ${course.isPinned ? 'ring-2 ring-blue-200' : ''} group relative overflow-hidden`}>
-      {course.isPinned && (
-        <div className="absolute top-2 left-2 z-10">
-          <Star className="w-4 h-4 text-yellow-500 fill-current" />
-        </div>
-      )}
-      
-      <div className="aspect-[16/9] bg-gradient-to-br from-blue-500 to-purple-600 relative flex items-center justify-center">
-        <IconComponent className="w-10 h-10 text-white opacity-80" />
-        {isActiveToday(course.lastAccessed) && (
-          <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-            Active Today
-          </div>
-        )}
-        <div className={`absolute bottom-2 left-2 px-2 py-1 rounded-full text-xs font-medium ${
-          course.badge === 'Creator' ? 'bg-purple-500 text-white' : 'bg-blue-500 text-white'
-        }`}>
-          {course.badge}
-        </div>
-      </div>
-      
-      <div className="p-6">
-        <div className="flex items-start justify-between mb-2">
-          <h3 className="font-semibold text-gray-900 text-sm leading-tight group-hover:text-blue-600 transition-colors" title={course.title}>
-            {course.title}
-          </h3>
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-            <button 
-              onClick={() => onTogglePin(course.id)}
-              className="p-1 text-gray-400 hover:text-yellow-500"
-            >
-              {course.isPinned ? <Star className="w-4 h-4 fill-current" /> : <StarOff className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-        
-        <p className="text-xs text-gray-600 mb-3 line-clamp-2">{course.description}</p>
-        
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-500">Progress</span>
-            <span className="font-medium">{course.dailyProgress}%</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(course.dailyProgress)}`}
-              style={{ width: `${course.dailyProgress}%` }}
-              title={`Daily: ${course.dailyProgress}%`}
-            ></div>
-          </div>
-        </div>
-        
-        <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-          <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            <span>{new Date(course.lastAccessed).toLocaleDateString()}</span>
-          </div>
-          <span className={`px-2 py-1 rounded-full text-xs ${
-            course.semester === 'Fall 2024' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-          }`}>
-            {course.semester}
-          </span>
-        </div>
-        
-        <div className="flex gap-2 mt-4">
-          <Link href={`/courses/${course.dbId}`} legacyBehavior>
-            <a className="flex-1 bg-blue-600 text-white py-2 px-3 rounded-md text-xs font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1">
-              <Play className="w-3 h-3" />
-              Enter Course
-            </a>
-          </Link>
-          <button className="flex-1 bg-gray-100 text-gray-700 py-2 px-3 rounded-md text-xs font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-1">
-            <Edit className="w-3 h-3" />
-            Edit Course
+    <>
+      <div className="relative group" style={{ minWidth: 220, maxWidth: 320 }}>
+        {/* Edit Button - Positioned absolutely outside the main button */}
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+          <button 
+            onClick={handleEditClick}
+            className="bg-white rounded-full shadow p-2 hover:bg-blue-50 border border-gray-200 flex items-center justify-center"
+            title="Edit course"
+            aria-label="Edit course"
+          >
+            <Edit className="w-4 h-4 text-gray-600" />
           </button>
         </div>
+      
+      <button 
+        className={`bg-white rounded-2xl shadow-md hover:shadow-lg transition-all duration-200 border border-gray-200 relative overflow-hidden flex flex-col cursor-pointer text-left w-full`}
+        onClick={() => router.push(`/courses/${course.dbId}`)}
+        aria-label={`Open ${course.title} course`}
+      >
         
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-4 right-4">
-          <div className="bg-white rounded-lg shadow-lg border border-gray-200 py-1">
-            <button className="w-full px-3 py-1 text-xs text-left hover:bg-gray-50 flex items-center gap-2">
-              <CheckCircle2 className="w-3 h-3" />
-              Mark Complete
-            </button>
-            <button 
-              onClick={() => onToggleArchive(course.id)}
-              className="w-full px-3 py-1 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
-            >
-              <Archive className="w-3 h-3" />
-              {course.isArchived ? 'Unarchive' : 'Archive'}
-            </button>
+        <div className="relative w-full aspect-[4/3] bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+          {course.course_image ? (
+            <img src={course.course_image} alt={course.title} className="object-cover w-full h-full" style={{ aspectRatio: '4/3' }} />
+          ) : (
+            <IconComponent className="w-10 h-10 text-white opacity-80" />
+          )}
+          
+          {/* Active Today Badge - Top Left */}
+          {isActiveToday(course.lastAccessed) && (
+            <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+              Active Today
+            </div>
+          )}
+          
+          {/* Badge - Bottom Left */}
+          <div className={`absolute bottom-2 left-2 px-2 py-1 rounded-full text-xs font-medium ${
+            course.badge === 'Creator' ? 'bg-purple-500 text-white' : 'bg-blue-500 text-white'
+          }`}>
+            {course.badge}
+          </div>
+        </div>
+      
+      <div className="p-4 flex-1 flex flex-col justify-between">
+        <div>
+          <h3 className="font-semibold text-gray-900 text-base leading-tight group-hover:text-blue-600 transition-colors mb-1" title={course.title}>
+            {course.title}
+          </h3>
+          <p className="text-xs text-gray-600 mb-3 line-clamp-2">{course.description}</p>
+        </div>
+        
+        <div>
+          <div className="space-y-2 mb-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">Progress</span>
+              <span className="font-medium">{course.dailyProgress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(course.dailyProgress)}`}
+                style={{ width: `${course.dailyProgress}%` }}
+                title={`Daily: ${course.dailyProgress}%`}
+              ></div>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between text-xs text-gray-400">
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              <span>{new Date(course.lastAccessed).toLocaleDateString()}</span>
+            </div>
+            <span className={`px-2 py-1 rounded-full text-xs ${
+              course.semester === 'Fall 2024' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {course.semester}
+            </span>
           </div>
         </div>
       </div>
-    </div>
+    </button>
+      </div>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowEditModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 m-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Edit Course</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Course Title
+                </label>
+                <input
+                  type="text"
+                  defaultValue={course.title}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  defaultValue={course.description}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subject
+                  </label>
+                  <input
+                    type="text"
+                    defaultValue={course.subject}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Semester
+                  </label>
+                  <input
+                    type="text"
+                    defaultValue={course.semester}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    // Handle save logic here
+                    if (onEditCourse) {
+                      onEditCourse(course);
+                    }
+                    setShowEditModal(false);
+                  }}
+                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

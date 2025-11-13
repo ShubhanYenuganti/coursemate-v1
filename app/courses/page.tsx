@@ -154,29 +154,11 @@ const CoursesPage = () => {
     }
   };
 
-  const toggleArchive = async (courseId: string) => {
-    try {
-      await courseService.toggleArchive(courseId);
-      setCourses(prev => prev.map(course => 
-        course.id === courseId ? { ...course, isArchived: !course.is_archived } : course
-      ));
-    } catch (error) {
-      console.error('Failed to toggle archive:', error);
-    }
-  };
-
   // Wrapper functions for component compatibility (number ID to string ID)
   const handleTogglePin = (courseId: number) => {
     const course = courses.find(c => parseInt(c.id || '0') === courseId);
     if (course?.id) {
       togglePin(course.id);
-    }
-  };
-
-  const handleToggleArchive = (courseId: number) => {
-    const course = courses.find(c => parseInt(c.id || '0') === courseId);
-    if (course?.id) {
-      toggleArchive(course.id);
     }
   };
 
@@ -253,7 +235,7 @@ const CoursesPage = () => {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="h-full overflow-y-auto bg-white">
       <div className="min-h-full p-8 relative">
         <div className="max-w-7xl mx-auto pb-32">{/* Added bottom padding for floating button */}
         <CourseHeader />
@@ -311,13 +293,11 @@ const CoursesPage = () => {
         {!isLoading && !error && (
           <div className="mb-6">
             {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-8">
               {filteredCourses.map(course => (
                 <CourseCard 
                   key={course.id} 
-                  course={convertToDisplayFormat(course)} 
-                  onTogglePin={handleTogglePin}
-                  onToggleArchive={handleToggleArchive}
+                  course={convertToDisplayFormat(course)}
                 />
               ))}
             </div>
@@ -341,36 +321,34 @@ const CoursesPage = () => {
         )}
         </div>
         
-        {/* Floating Add Button with Speed Dial - DEBUG VERSION */}
-        <div className="fixed bottom-8 right-8 z-[9999] flex flex-col items-end group">
-        {/* Speed dial options (hidden by default, shown on hover, animate upwards) */}
-        <div className="flex flex-col items-end space-y-2 mb-2">
-          <button
-            className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium hover:from-indigo-700 hover:to-purple-700 transform transition-all duration-300 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0"
-            style={{ transitionDelay: '100ms' }}
+        {/* Floating Add Button */}
+        <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end group">
+          {/* Speed dial options */}
+          <div className="flex flex-col items-end space-y-2 mb-2">
+            <button
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium hover:bg-blue-700 transform transition-all duration-300 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0"
+              style={{ transitionDelay: '100ms' }}
+              onClick={() => setCreateModalOpen(true)}
+            >
+              + Add Course
+            </button>
+            <Link href="/courses/discover" tabIndex={-1}>
+              <button
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium hover:bg-indigo-700 transform transition-all duration-300 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0"
+                style={{ transitionDelay: '200ms' }}
+              >
+                🔍 Discover Course
+              </button>
+            </Link>
+          </div>
+          {/* Main Add button */}
+          <button 
+            className="bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-300 hover:scale-110"
             onClick={() => setCreateModalOpen(true)}
           >
-            + Add Course
+            <Plus className="w-6 h-6" />
           </button>
-          <Link href="/courses/discover" tabIndex={-1} legacyBehavior>
-            <button
-              className="bg-gradient-to-r from-blue-400 to-purple-400 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium hover:from-blue-500 hover:to-purple-500 transform transition-all duration-300 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0"
-              style={{ transitionDelay: '200ms' }}
-            >
-              🔍 Discover Course
-            </button>
-          </Link>
         </div>
-        {/* Main Add button - MADE MORE VISIBLE FOR DEBUG */}
-        <button 
-          className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-110 hover:shadow-2xl transform relative border-4"
-          onClick={() => setCreateModalOpen(true)}
-          style={{ minWidth: '80px', minHeight: '80px' }}
-        >
-          <Plus className="w-8 h-8 transition-transform duration-300" />
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 hover:opacity-20 transition-opacity duration-300"></div>
-        </button>
-      </div>
         {isCreateModalOpen && (
           <CreateCourseModal 
             onClose={() => setCreateModalOpen(false)} 
