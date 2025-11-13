@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LogOutIcon } from 'lucide-react';
 import {
   AlertDialog,
@@ -25,6 +25,14 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const [userName, setUserName] = useState<string>('User');
+
+  useEffect(() => {
+    const name = localStorage.getItem('name');
+    if (name) {
+      setUserName(name);
+    }
+  }, []);
 
   const handleLogoutClick = () => {
     setIsLogoutDialogOpen(true);
@@ -121,10 +129,10 @@ export function Sidebar() {
         <div className="flex items-center justify-between">
         <div className="flex items-center">
           <div className="w-9 h-9 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold mr-3">
-            NS
+            {userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
           </div>
             <div>
-            <div className="font-medium text-gray-800">Nikhil Sharma</div>
+            <div className="font-medium text-gray-800">{userName}</div>
             <div className="text-xs text-gray-600 cursor-pointer hover:text-indigo-500">
               View Profile
             </div>

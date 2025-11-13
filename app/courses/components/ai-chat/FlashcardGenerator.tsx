@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Flashcard {
   front: string;
@@ -150,17 +149,15 @@ export default function FlashcardGenerator({ courseId }: FlashcardGeneratorProps
             </div>
             <div>
               <Label htmlFor="flashcard-count">Number of Cards</Label>
-              <Select value={flashcardCount.toString()} onValueChange={(value) => setFlashcardCount(parseInt(value))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="15">15</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                id="flashcard-count"
+                type="number"
+                min="1"
+                max="50"
+                value={flashcardCount}
+                onChange={(e) => setFlashcardCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                placeholder="e.g., 10"
+              />
             </div>
           </div>
           <Button 
@@ -221,15 +218,24 @@ export default function FlashcardGenerator({ courseId }: FlashcardGeneratorProps
                 {flashcards.map((card, index) => (
                   <div 
                     key={index} 
-                    className="relative h-32 cursor-pointer"
+                    className="relative h-40 cursor-pointer"
                     onClick={() => flipCard(index)}
+                    style={{ perspective: '1000px' }}
                   >
-                    <div className={`absolute inset-0 rounded-lg border transition-all duration-300 transform ${flippedCards[index] ? 'rotate-y-180' : ''}`}>
-                      <div className={`absolute inset-0 p-4 rounded-lg bg-blue-50 border-blue-200 ${flippedCards[index] ? 'opacity-0' : 'opacity-100'} transition-opacity duration-150`}>
-                        <p className="text-sm font-medium text-center">{card.front}</p>
+                    <div className={`absolute inset-0 rounded-lg border transition-all duration-300 transform ${flippedCards[index] ? 'rotate-y-180' : ''}`} style={{ transformStyle: 'preserve-3d' }}>
+                      <div className={`absolute inset-0 rounded-lg bg-blue-50 border-blue-200 ${flippedCards[index] ? 'opacity-0' : 'opacity-100'} transition-opacity duration-150`} style={{ backfaceVisibility: 'hidden' }}>
+                        <div className="h-full overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-blue-300 scrollbar-track-blue-100">
+                          <div className="flex items-center justify-center min-h-full">
+                            <p className="text-sm font-medium break-words text-center px-2 py-1">{card.front}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div className={`absolute inset-0 p-4 rounded-lg bg-green-50 border-green-200 ${flippedCards[index] ? 'opacity-100' : 'opacity-0'} transition-opacity duration-150`}>
-                        <p className="text-sm text-center">{card.back}</p>
+                      <div className={`absolute inset-0 rounded-lg bg-green-50 border-green-200 ${flippedCards[index] ? 'opacity-100' : 'opacity-0'} transition-opacity duration-150`} style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                        <div className="h-full overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-green-300 scrollbar-track-green-100">
+                          <div className="flex items-center justify-center min-h-full">
+                            <p className="text-sm break-words text-center px-2 py-1">{card.back}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -252,15 +258,24 @@ export default function FlashcardGenerator({ courseId }: FlashcardGeneratorProps
                 </div>
                 
                 <div 
-                  className="h-48 cursor-pointer"
+                  className="h-64 cursor-pointer"
                   onClick={() => flipCard(currentCardIndex)}
+                  style={{ perspective: '1000px' }}
                 >
-                  <div className={`relative h-full rounded-lg border transition-all duration-300 transform ${flippedCards[currentCardIndex] ? 'rotate-y-180' : ''}`}>
-                    <div className={`absolute inset-0 p-6 rounded-lg bg-blue-50 border-blue-200 flex items-center justify-center ${flippedCards[currentCardIndex] ? 'opacity-0' : 'opacity-100'} transition-opacity duration-150`}>
-                      <p className="text-center font-medium">{flashcards[currentCardIndex]?.front}</p>
+                  <div className={`relative h-full rounded-lg border transition-all duration-300 transform ${flippedCards[currentCardIndex] ? 'rotate-y-180' : ''}`} style={{ transformStyle: 'preserve-3d' }}>
+                    <div className={`absolute inset-0 rounded-lg bg-blue-50 border-blue-200 ${flippedCards[currentCardIndex] ? 'opacity-0' : 'opacity-100'} transition-opacity duration-150`} style={{ backfaceVisibility: 'hidden' }}>
+                      <div className="h-full overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-blue-300 scrollbar-track-blue-100">
+                        <div className="flex items-center justify-center min-h-full">
+                          <p className="font-medium break-words text-center px-3 py-2">{flashcards[currentCardIndex]?.front}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className={`absolute inset-0 p-6 rounded-lg bg-green-50 border-green-200 flex items-center justify-center ${flippedCards[currentCardIndex] ? 'opacity-100' : 'opacity-0'} transition-opacity duration-150`}>
-                      <p className="text-center">{flashcards[currentCardIndex]?.back}</p>
+                    <div className={`absolute inset-0 rounded-lg bg-green-50 border-green-200 ${flippedCards[currentCardIndex] ? 'opacity-100' : 'opacity-0'} transition-opacity duration-150`} style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                      <div className="h-full overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-green-300 scrollbar-track-green-100">
+                        <div className="flex items-center justify-center min-h-full">
+                          <p className="break-words text-center px-3 py-2">{flashcards[currentCardIndex]?.back}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
