@@ -143,25 +143,6 @@ const CoursesPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courses.length]);
 
-  const togglePin = async (courseId: string) => {
-    try {
-      await courseService.togglePin(courseId);
-      setCourses(prev => prev.map(course => 
-        course.id === courseId ? { ...course, isPinned: !course.is_pinned } : course
-      ));
-    } catch (error) {
-      console.error('Failed to toggle pin:', error);
-    }
-  };
-
-  // Wrapper functions for component compatibility (number ID to string ID)
-  const handleTogglePin = (courseId: number) => {
-    const course = courses.find(c => parseInt(c.id || '0') === courseId);
-    if (course?.id) {
-      togglePin(course.id);
-    }
-  };
-
   const addFilterChip = (type: string, value: string) => {
     const chipId = `${type}-${value}`;
     if (!filterChips.find(chip => chip.id === chipId)) {
@@ -171,6 +152,22 @@ const CoursesPage = () => {
 
   const removeFilterChip = (chipId: string) => {
     setFilterChips(prev => prev.filter(chip => chip.id !== chipId));
+  };
+
+  const handleEditCourse = (updatedCourse: Course) => {
+    setCourses(prevCourses => 
+      prevCourses.map(course => 
+        course.id === updatedCourse.dbId 
+          ? {
+              ...course,
+              title: updatedCourse.title,
+              subject: updatedCourse.subject,
+              description: updatedCourse.description,
+              semester: updatedCourse.semester,
+            }
+          : course
+      )
+    );
   };
 
   const clearAllFilters = () => {
@@ -298,6 +295,7 @@ const CoursesPage = () => {
                 <CourseCard 
                   key={course.id} 
                   course={convertToDisplayFormat(course)}
+                  onEditCourse={handleEditCourse}
                 />
               ))}
             </div>
@@ -306,8 +304,8 @@ const CoursesPage = () => {
               {filteredCourses.map(course => (
                 <CourseListItem 
                   key={course.id} 
-                  course={convertToDisplayFormat(course)} 
-                  onTogglePin={handleTogglePin}
+                  course={convertToDisplayFormat(course)}
+                  onEditCourse={handleEditCourse}
                 />
               ))}
             </div>

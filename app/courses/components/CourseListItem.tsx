@@ -1,21 +1,25 @@
 import React from 'react';
 import { 
-  Star, 
-  StarOff, 
   Clock, 
-  Play, 
   Edit 
 } from 'lucide-react';
 import { Course } from './CourseCard';
-import Link from "next/link";
+import { useRouter } from 'next/navigation';
 
 interface CourseListItemProps {
   course: Course;
-  onTogglePin: (courseId: number) => void;
+  onEditCourse?: (course: Course) => void;
 }
 
-const CourseListItem: React.FC<CourseListItemProps> = ({ course, onTogglePin }) => {
+const CourseListItem: React.FC<CourseListItemProps> = ({ course, onEditCourse }) => {
   const IconComponent = course.icon;
+  const router = useRouter();
+  const [showEditModal, setShowEditModal] = React.useState(false);
+  const [editedTitle, setEditedTitle] = React.useState(course.title);
+  const [editedDescription, setEditedDescription] = React.useState(course.description);
+  const [editedSubject, setEditedSubject] = React.useState(course.subject);
+  const [editedSemester, setEditedSemester] = React.useState(course.semester);
+  const [isSaving, setIsSaving] = React.useState(false);
   
   const getProgressColor = (dailyProgress: number) => {
     if (dailyProgress === 100) return 'bg-green-500';
@@ -29,14 +33,27 @@ const CourseListItem: React.FC<CourseListItemProps> = ({ course, onTogglePin }) 
     return lastAccessed === today;
   };
 
+  const handleRowClick = () => {
+    router.push(`/courses/${course.dbId}`);
+  };
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowEditModal(true);
+  };
+
   return (
-    <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md transition-all duration-200 ${course.isPinned ? 'ring-1 ring-blue-200' : ''} group`}>
+    <>
+    <div 
+      onClick={handleRowClick}
+      onKeyDown={(e) => e.key === 'Enter' && handleRowClick()}
+      role="button"
+      tabIndex={0}
+      className={`bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer group`}
+    >
       <div className="flex items-center gap-3">
         <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0 relative">
           <IconComponent className="w-7 h-7 text-white opacity-80" />
-          {course.isPinned && (
-            <Star className="w-3 h-3 text-yellow-500 fill-current absolute -top-1 -right-1" />
-          )}
         </div>
         
         <div className="flex-1 min-w-0">
@@ -80,28 +97,158 @@ const CourseListItem: React.FC<CourseListItemProps> = ({ course, onTogglePin }) 
             </div>
           </div>
           
-          <div className="flex gap-3">
-            <Link href={`/courses/${course.dbId}`} legacyBehavior>
-              <a className="bg-blue-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1">
-                <Play className="w-4 h-4" />
-                Enter
-              </a>
-            </Link>
-            <button className="bg-gray-100 text-gray-700 py-2 px-3 rounded-md text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-1">
-              <Edit className="w-4 h-4" />
-              Edit
-            </button>
-          </div>
-          
           <button 
-            onClick={() => onTogglePin(course.id)}
-            className="p-2 text-gray-400 hover:text-yellow-500 transition-colors"
+            onClick={handleEditClick}
+            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
           >
-            {course.isPinned ? <Star className="w-4 h-4 fill-current" /> : <StarOff className="w-4 h-4" />}
+            <Edit className="w-5 h-5" />
           </button>
         </div>
       </div>
     </div>
+
+    {/* Edit Modal */}
+      {showEditModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowEditModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 m-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Edit Course</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Course Title
+                </label>
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={editedDescription}
+                  onChange={(e) => setEditedDescription(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subject
+                  </label>
+                  <input
+                    type="text"
+                    value={editedSubject}
+                    onChange={(e) => setEditedSubject(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Semester
+                  </label>
+                  <input
+                    type="text"
+                    value={editedSemester}
+                    onChange={(e) => setEditedSemester(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={async () => {
+                    setIsSaving(true);
+                    try {
+                      const { courseService } = await import('../../../lib/api/courseService');
+                      await courseService.updateCourse(course.dbId, {
+                        title: editedTitle,
+                        description: editedDescription,
+                        subject: editedSubject,
+                        semester: editedSemester,
+                      });
+                      
+                      if (onEditCourse) {
+                        // Get the icon based on subject
+                        const mod = await import('lucide-react');
+                        const iconMap: { [key: string]: any } = {
+                          'Programming': mod.Code,
+                          'Computer Science': mod.Code,
+                          'Science': mod.Beaker,
+                          'Biology': mod.Beaker,
+                          'Mathematics': mod.Calculator,
+                          'History': mod.Globe,
+                          'Art': mod.Palette,
+                          'Music': mod.Music,
+                        };
+                        const newIcon = iconMap[editedSubject] || mod.Code;
+                        
+                        onEditCourse({
+                          ...course,
+                          title: editedTitle,
+                          description: editedDescription,
+                          subject: editedSubject,
+                          semester: editedSemester,
+                          icon: newIcon,
+                        });
+                      }
+                      setShowEditModal(false);
+                    } catch (error) {
+                      console.error('Failed to update course:', error);
+                      alert('Failed to update course. Please try again.');
+                    } finally {
+                      setIsSaving(false);
+                    }
+                  }}
+                  disabled={isSaving}
+                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  onClick={() => {
+                    setEditedTitle(course.title);
+                    setEditedDescription(course.description);
+                    setEditedSubject(course.subject);
+                    setEditedSemester(course.semester);
+                    setShowEditModal(false);
+                  }}
+                  disabled={isSaving}
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

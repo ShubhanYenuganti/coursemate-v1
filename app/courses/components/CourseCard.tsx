@@ -33,6 +33,11 @@ interface CourseCardProps {
 
 const CourseCard: React.FC<CourseCardProps> = ({ course, onEditCourse }) => {
   const [showEditModal, setShowEditModal] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(course.title);
+  const [editedDescription, setEditedDescription] = useState(course.description);
+  const [editedSubject, setEditedSubject] = useState(course.subject);
+  const [editedSemester, setEditedSemester] = useState(course.semester);
+  const [isSaving, setIsSaving] = useState(false);
 
   const router = useRouter();
 
@@ -166,7 +171,8 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEditCourse }) => {
                 </label>
                 <input
                   type="text"
-                  defaultValue={course.title}
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                 />
               </div>
@@ -176,7 +182,8 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEditCourse }) => {
                   Description
                 </label>
                 <textarea
-                  defaultValue={course.description}
+                  value={editedDescription}
+                  onChange={(e) => setEditedDescription(e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                 />
@@ -189,7 +196,8 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEditCourse }) => {
                   </label>
                   <input
                     type="text"
-                    defaultValue={course.subject}
+                    value={editedSubject}
+                    onChange={(e) => setEditedSubject(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                   />
                 </div>
@@ -200,7 +208,8 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEditCourse }) => {
                   </label>
                   <input
                     type="text"
-                    defaultValue={course.semester}
+                    value={editedSemester}
+                    onChange={(e) => setEditedSemester(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                   />
                 </div>
@@ -208,20 +217,66 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEditCourse }) => {
 
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => {
-                    // Handle save logic here
-                    if (onEditCourse) {
-                      onEditCourse(course);
+                  onClick={async () => {
+                    setIsSaving(true);
+                    try {
+                      const { courseService } = await import('../../../lib/api/courseService');
+                      await courseService.updateCourse(course.dbId, {
+                        title: editedTitle,
+                        description: editedDescription,
+                        subject: editedSubject,
+                        semester: editedSemester,
+                      });
+                      
+                      // Update local state immediately
+                      if (onEditCourse) {
+                        // Get the icon based on subject
+                        const mod = await import('lucide-react');
+                        const iconMap: { [key: string]: any } = {
+                          'Programming': mod.Code,
+                          'Computer Science': mod.Code,
+                          'Science': mod.Beaker,
+                          'Biology': mod.Beaker,
+                          'Mathematics': mod.Calculator,
+                          'History': mod.Globe,
+                          'Art': mod.Palette,
+                          'Music': mod.Music,
+                        };
+                        const newIcon = iconMap[editedSubject] || mod.Code;
+                        
+                        onEditCourse({
+                          ...course,
+                          title: editedTitle,
+                          description: editedDescription,
+                          subject: editedSubject,
+                          semester: editedSemester,
+                          icon: newIcon,
+                        });
+                      }
+                      
+                      setShowEditModal(false);
+                    } catch (error) {
+                      console.error('Failed to update course:', error);
+                      alert('Failed to update course. Please try again.');
+                    } finally {
+                      setIsSaving(false);
                     }
-                    setShowEditModal(false);
                   }}
-                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  disabled={isSaving}
+                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Save Changes
+                  {isSaving ? 'Saving...' : 'Save Changes'}
                 </button>
                 <button
-                  onClick={() => setShowEditModal(false)}
-                  className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  onClick={() => {
+                    setEditedTitle(course.title);
+                    setEditedDescription(course.description);
+                    setEditedSubject(course.subject);
+                    setEditedSemester(course.semester);
+                    setShowEditModal(false);
+                  }}
+                  disabled={isSaving}
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
                 >
                   Cancel
                 </button>
