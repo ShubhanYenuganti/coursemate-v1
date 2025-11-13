@@ -73,7 +73,7 @@ export default function ConversationChatInterface({ courseId }: ConversationChat
   };
 
   return (
-    <div className="flex h-[600px] bg-white rounded-lg shadow-sm border overflow-hidden">
+    <div className="flex h-full bg-white rounded-lg shadow-sm border overflow-hidden">
       <ConversationSidebar
         courseId={courseId}
         activeConversationId={activeConversationId}

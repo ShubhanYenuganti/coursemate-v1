@@ -150,7 +150,7 @@ export default function RAGChatCourse({
   };
 
   return (
-    <div className="flex flex-col h-[600px] bg-white rounded-lg shadow-sm border">
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border">
       {/* Chat Header */}
       <div className="p-4 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -289,7 +289,7 @@ export default function RAGChatCourse({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask a question about your course materials..."
+              placeholder="Ask a question about your course materials ..."
               className="resize-none min-h-[40px] max-h-[120px]"
               disabled={isLoading}
             />

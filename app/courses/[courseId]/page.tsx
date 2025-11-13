@@ -8,6 +8,7 @@ import { Code, Beaker, Calculator, Globe, Palette, Music } from 'lucide-react';
 import PinnedResources from "../components/PinnedResources";
 import ShareInviteFeature from "../components/ShareInviteFeature";
 import MaterialsManagerCourse from "../components/ai-chat/MaterialsManagerCourse";
+import MaterialGenerationCourse from "../components/ai-chat/MaterialGenerationCourse";
 import RecommendedResources from "../components/RecommendedResources";
 import NewAIChatInterface from "../components/ai-chat/NewAIChatInterface";
 import { StudyPlanTab } from "../components/studyplan";
@@ -78,7 +79,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
   }, [activeTab]);
 
   // Tab order for animation direction
-  const tabOrder = ['overview', 'materials', 'ai', 'study', 'community'];
+  const tabOrder = ['overview', 'materials', 'ai', 'generate', 'study', 'community'];
 
   // Handle animated tab switching
   const handleTabChange = (newTab: string) => {
@@ -163,6 +164,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
       </div>
     ),
     ai: <NewAIChatInterface courseId={course.comboId} materialsDbId={course.dbId} />,
+    generate: <MaterialGenerationCourse courseId={course.dbId} />,
     study: <StudyPlanTab courseId={course.dbId} />,
     community: <CommunityTab courseId={course.dbId} />,
   };

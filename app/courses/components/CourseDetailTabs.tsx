@@ -4,6 +4,7 @@ const TABS = [
   { key: "overview", label: "Overview", icon: "📊" },
   { key: "materials", label: "Materials", icon: "📚" },
   { key: "ai", label: "AI Chat", icon: "🤖" },
+  { key: "generate", label: "Generate", icon: "✨" },
   { key: "study", label: "Study Plan", icon: "📋" },
   { key: "community", label: "Community", icon: "👥" },
 ];

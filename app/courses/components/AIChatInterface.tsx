@@ -38,7 +38,7 @@ const AIChatInterface: React.FC<{ courseId: string }> = ({ courseId }) => {
       id: '1',
       type: 'ai',
       content: "Hello! I'm your AI assistant for this course. I can help you understand concepts, summarize materials, and answer questions based on your uploaded content. How can I help you today?",
-      timestamp: new Date(),
+      timestamp: new Date(Date.now()),
     }
   ]);
   const [inputMessage, setInputMessage] = useState('');
@@ -270,7 +270,11 @@ const AIChatInterface: React.FC<{ courseId: string }> = ({ courseId }) => {
                     <p className={`text-xs mt-1 ${
                       message.type === 'user' ? 'text-blue-100' : 'text-gray-500'
                     }`}>
-                      {message.timestamp.toLocaleTimeString()}
+                      {new Date(message.timestamp).toLocaleTimeString(undefined, {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
                     </p>
                   </div>
                 </div>
