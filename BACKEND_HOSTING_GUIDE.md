@@ -250,19 +250,37 @@ The `render-start.sh` script automatically tries to enable pgvector before runni
    "
    ```
 
-**Option C: Direct SQL (if Python method fails)**
-1. Go to your PostgreSQL database dashboard in Render
-2. Click **"Connect"** → **"psql"** (or use External Connection)
-3. Connect to your database
-4. Run:
-   ```sql
-   CREATE EXTENSION IF NOT EXISTS vector;
-   ```
+**Option C: Direct SQL via Render PostgreSQL Dashboard (RECOMMENDED)**
+1. Go to your **PostgreSQL database** dashboard in Render (not the web service)
+2. Click on your database service
+3. Go to **"Info"** tab
+4. Find **"Internal Database URL"** or **"External Connection"**
+5. **Option 1 - Using Render's built-in connection:**
+   - Click **"Connect"** button
+   - If available, use the **"psql"** option
+   - Run: `CREATE EXTENSION IF NOT EXISTS vector;`
+6. **Option 2 - Using external connection:**
+   - Copy the **External Connection** string
+   - Connect using `psql` from your local machine:
+     ```bash
+     psql "postgresql://user:password@host:port/database"
+     ```
+   - Then run: `CREATE EXTENSION IF NOT EXISTS vector;`
+7. **Option 3 - Using Render Shell with direct psql:**
+   - Go to your **PostgreSQL database** dashboard
+   - Click **"Shell"** tab (if available)
+   - Run: `CREATE EXTENSION IF NOT EXISTS vector;`
 
 **Verify it's enabled:**
 ```sql
 SELECT * FROM pg_extension WHERE extname = 'vector';
 ```
+
+**Important Notes:**
+- Render PostgreSQL **does support pgvector**, but you may need to enable it manually
+- The database user might not have superuser privileges to create extensions via Python
+- Enabling via direct SQL connection usually works better
+- Once enabled, the extension persists and you won't need to enable it again
 
 ### Step 8: Verify Database Migrations
 
