@@ -43,3 +43,6 @@ boto3
 eventlet
 werkzeug>=2.3.7
 flask_socketio>=5.3.6
+
+# Production Server
+gunicorn>=21.2.0

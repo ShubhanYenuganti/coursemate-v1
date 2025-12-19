@@ -67,5 +67,7 @@ def google_callback():
         expires_delta=timedelta(days=30)
     )
 
-    redirect_url = f"http://localhost:3001/token-handler?access_token={access_token}&refresh_token={refresh_token}"
+    # Use FRONTEND_URL from config instead of hardcoded localhost
+    frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:3001')
+    redirect_url = f"{frontend_url}/token-handler?access_token={access_token}&refresh_token={refresh_token}"
     return redirect(redirect_url)

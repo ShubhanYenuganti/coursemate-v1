@@ -37,7 +37,6 @@ class User(db.Model):
     token_expiry = db.Column(db.DateTime(timezone=True), nullable=True)
     google_sync_tokens = db.Column(db.JSON, default=dict)
     # Relationships
-    goals = db.relationship("Goal", back_populates="user", lazy=True)
     document_embeddings = db.relationship("DocumentEmbedding", back_populates="user")
     
     # In app/models/user.py
