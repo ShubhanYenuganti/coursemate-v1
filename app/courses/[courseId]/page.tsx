@@ -11,10 +11,8 @@ import MaterialsManagerCourse from "../components/ai-chat/MaterialsManagerCourse
 import MaterialGenerationCourse from "../components/ai-chat/MaterialGenerationCourse";
 import RecommendedResources from "../components/RecommendedResources";
 import NewAIChatInterface from "../components/ai-chat/NewAIChatInterface";
-import { StudyPlanTab } from "../components/studyplan";
 import EnrolledUsersList from '../components/EnrolledUsersList';
 import LeaveCourseButton from '../components/LeaveCourseButton';
-import CommunityTab from '../components/community/CommunityTab';
 
 // helper to map subject to icon
 const getSubjectIcon = (subject: string) => {
@@ -79,7 +77,7 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
   }, [activeTab]);
 
   // Tab order for animation direction
-  const tabOrder = ['overview', 'materials', 'ai', 'generate', 'study', 'community'];
+  const tabOrder = ['overview', 'materials', 'ai', 'generate'];
 
   // Handle animated tab switching
   const handleTabChange = (newTab: string) => {
@@ -165,8 +163,6 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     ),
     ai: <NewAIChatInterface courseId={course.comboId} materialsDbId={course.dbId} />,
     generate: <MaterialGenerationCourse courseId={course.dbId} />,
-    study: <StudyPlanTab courseId={course.dbId} />,
-    community: <CommunityTab courseId={course.dbId} />,
   };
   const tabContent = tabContentMap[activeTab];
 
@@ -174,8 +170,6 @@ const CourseDetailPage: React.FC<Props> = ({ params }) => {
     overview: 'Overview',
     materials: 'Materials',
     ai: 'AI Chat',
-    study: 'Study Plan',
-    community: 'Community',
   }[activeTab] || '';
 
   return (

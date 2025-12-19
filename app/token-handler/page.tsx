@@ -15,7 +15,7 @@ export default function TokenHandlerPage() {
         if (accessToken) {
             localStorage.setItem("token", accessToken)
             if (refreshToken) localStorage.setItem("refresh_token", refreshToken)
-            router.replace("/dashboard")
+            router.replace("/courses")
         } else {
             router.replace("/login")
         }

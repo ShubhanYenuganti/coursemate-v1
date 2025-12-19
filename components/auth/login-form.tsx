@@ -42,8 +42,8 @@ export function LoginForm() {
           localStorage.setItem("token", data.access_token);
         }
 
-        // Redirect to dashboard after successful login
-        router.push("/dashboard");
+        // Redirect to courses after successful login
+        router.push("/courses");
       } catch (error) {
         console.error("Login error:", error);
         alert("Login failed. Please try again.");

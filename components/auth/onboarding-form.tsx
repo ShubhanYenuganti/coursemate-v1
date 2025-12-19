@@ -88,7 +88,7 @@ export function OnboardingForm() {
         title: "Success",
         description: "Profile updated successfully!",
       });
-      router.push("/dashboard");
+      router.push("/courses");
     } catch (error: any) {
       console.error("Error updating profile:", error);
       toast({

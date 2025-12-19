@@ -17,24 +17,23 @@ export function middleware(request: NextRequest) {
 
   // For demo purposes, consider user authenticated if they're accessing any protected route directly
   // or coming from auth flow, or navigating between protected routes
-  const isAccessingProtectedRoute = url.pathname.startsWith("/dashboard") || url.pathname.startsWith("/courses")
-  const isComingFromProtectedRoute = referer && (referer.includes("/dashboard") || referer.includes("/courses"))
+  const isAccessingProtectedRoute = url.pathname.startsWith("/courses")
+  const isComingFromProtectedRoute = referer && referer.includes("/courses")
   const isAuthenticated = isComingFromAuth || isAccessingProtectedRoute || isComingFromProtectedRoute
 
   // If the user is not authenticated and trying to access protected routes
-  if (!isAuthenticated && (url.pathname.startsWith("/dashboard") || url.pathname.startsWith("/courses"))) {
+  if (!isAuthenticated && url.pathname.startsWith("/courses")) {
     url.pathname = "/login"
     return NextResponse.redirect(url)
   }
 
-  // If the user is authenticated and trying to access auth pages, redirect to dashboard
+  // If the user is authenticated and trying to access auth pages, redirect to courses
   if (
     isAuthenticated &&
     (url.pathname === "/login" || url.pathname === "/signup") &&
-    !referer?.includes("/dashboard") &&
     !referer?.includes("/courses")
   ) {
-    url.pathname = "/dashboard"
+    url.pathname = "/courses"
     return NextResponse.redirect(url)
   }
 
@@ -42,5 +41,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/signup", "/dashboard/:path*", "/courses/:path*"],
+  matcher: ["/", "/login", "/signup", "/courses/:path*"],
 }
