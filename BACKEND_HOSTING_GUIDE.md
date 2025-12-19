@@ -226,7 +226,45 @@ Run this command twice to generate two different keys for `SECRET_KEY` and `JWT_
 - Watch the logs to catch any errors early
 - The URL format is: `https://<service-name>.onrender.com`
 
-### Step 7: Verify Database Migrations
+### Step 7: Enable pgvector Extension (Required)
+
+**Important:** Your application uses the `vector` type for AI embeddings, which requires the `pgvector` extension. The startup script tries to enable it automatically, but if it fails, you need to enable it manually.
+
+**Option A: Automatic (via startup script)**
+The `render-start.sh` script automatically tries to enable pgvector before running migrations. Check the logs to see if it succeeded.
+
+**Option B: Manual (if automatic fails)**
+1. Go to your web service dashboard
+2. Click **"Shell"** tab
+3. Run:
+   ```bash
+   python3 -c "
+   from app import create_app
+   from app.extensions import db
+   from sqlalchemy import text
+   app = create_app()
+   with app.app_context():
+       db.session.execute(text('CREATE EXTENSION IF NOT EXISTS vector;'))
+       db.session.commit()
+       print('pgvector extension enabled')
+   "
+   ```
+
+**Option C: Direct SQL (if Python method fails)**
+1. Go to your PostgreSQL database dashboard in Render
+2. Click **"Connect"** → **"psql"** (or use External Connection)
+3. Connect to your database
+4. Run:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
+
+**Verify it's enabled:**
+```sql
+SELECT * FROM pg_extension WHERE extname = 'vector';
+```
+
+### Step 8: Verify Database Migrations
 
 The `render-start.sh` script automatically runs migrations, but you can verify:
 
@@ -256,7 +294,7 @@ The `render-start.sh` script automatically runs migrations, but you can verify:
 - If migrations fail, check the logs for errors
 - You can also run migrations manually via the Shell
 
-### Step 8: Test Your Deployment
+### Step 9: Test Your Deployment
 
 1. **Health Check:**
    ```bash
@@ -277,7 +315,7 @@ The `render-start.sh` script automatically runs migrations, but you can verify:
      -d '{"email":"test@example.com","password":"test123"}'
    ```
 
-### Step 9: Free Tier Limitations
+### Step 10: Free Tier Limitations
 
 **Important Notes About Render Free Tier:**
 - **Spin-down:** Services spin down after 15 minutes of inactivity
@@ -428,6 +466,46 @@ CORS(app,
      from app.init import create_app
      app = create_app()
      ```
+
+### Issue: pgvector Extension Error
+
+**Symptoms:** `psycopg2.errors.UndefinedObject: type "vector" does not exist`
+
+**Solutions:**
+1. **Enable pgvector extension manually:**
+   - Go to your Render web service → **Shell** tab
+   - Run:
+     ```bash
+     python3 -c "
+     from app import create_app
+     from app.extensions import db
+     from sqlalchemy import text
+     app = create_app()
+     with app.app_context():
+         db.session.execute(text('CREATE EXTENSION IF NOT EXISTS vector;'))
+         db.session.commit()
+     "
+     ```
+
+2. **Or use Render PostgreSQL dashboard:**
+   - Go to your PostgreSQL database dashboard
+   - Click **"Connect"** → Use external connection
+   - Connect via psql and run:
+     ```sql
+     CREATE EXTENSION IF NOT EXISTS vector;
+     ```
+
+3. **Verify it's enabled:**
+   ```sql
+   SELECT * FROM pg_extension WHERE extname = 'vector';
+   ```
+
+4. **Then rerun migrations:**
+   ```bash
+   flask db upgrade
+   ```
+
+**Note:** The startup script tries to enable it automatically, but if it fails due to permissions, you'll need to enable it manually first.
 
 ### Issue: Database Connection Errors
 
