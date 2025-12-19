@@ -28,10 +28,18 @@ export function Sidebar() {
   const [userName, setUserName] = useState<string>('User');
 
   useEffect(() => {
-    const name = localStorage.getItem('name');
-    if (name) {
-      setUserName(name);
-    }
+    const fetchUser = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch("/api/users/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const user = await res.json();
+      const fullName = user.name || "User";
+      setUserName(fullName);
+    };
+    fetchUser();
   }, []);
 
   const handleLogoutClick = () => {
