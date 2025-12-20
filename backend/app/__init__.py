@@ -34,6 +34,7 @@ def create_app(config_class=Config):
     cors_origins = list(dict.fromkeys(cors_origins))
     print(f"✅ CORS origins configured: {cors_origins}", flush=True)
     
+    # Configure CORS for both API and Socket.IO endpoints
     CORS(app,
          resources={
              r"/api/*": {
@@ -41,6 +42,13 @@ def create_app(config_class=Config):
                  "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                  "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
                  "expose_headers": ["Content-Type", "X-Total-Count"],
+                 "supports_credentials": True,
+                 "max_age": 3600
+             },
+             r"/socket.io/*": {
+                 "origins": cors_origins,
+                 "methods": ["GET", "POST", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
                  "supports_credentials": True,
                  "max_age": 3600
              }
@@ -69,17 +77,16 @@ def create_app(config_class=Config):
                     response.headers['Access-Control-Max-Age'] = '3600'
                 return response
     
+    # Initialize Socket.IO - CORS is handled by Flask-CORS above
     socketio.init_app(
         app, 
-        cors_allowed_origins=socketio_cors_origins,  # Use same origins as Flask CORS
         logger=True, 
         engineio_logger=True,
         async_mode='eventlet',
         ping_timeout=60,
         ping_interval=25,
         allow_upgrades=True,
-        transports=['polling', 'websocket'],
-        cors_credentials=True  # Allow credentials (cookies, auth headers)
+        transports=['polling', 'websocket']
     )
     print(f"✅ Socket.IO initialized with CORS origins: {socketio_cors_origins}", flush=True)
     print("✅ Socket.IO async_mode: eventlet", flush=True)

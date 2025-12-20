@@ -11,4 +11,5 @@ jwt = JWTManager()
 mail = Mail()
 # Initialize Socket.IO with eventlet for production (works with Gunicorn + eventlet)
 # For development, threading mode is fine, but eventlet is required for production WebSocket support
-socketio = SocketIO(cors_allowed_origins="*", async_mode='eventlet', logger=True, engineio_logger=True)
+# NOTE: CORS is handled by Flask-CORS, not by Socket.IO directly
+socketio = SocketIO(async_mode='eventlet', logger=True, engineio_logger=True)
