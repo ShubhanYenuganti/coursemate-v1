@@ -35,6 +35,7 @@ def create_app(config_class=Config):
     print(f"✅ CORS origins configured: {cors_origins}", flush=True)
     
     # Configure CORS for both API and Socket.IO endpoints
+    # IMPORTANT: Socket.IO needs wildcard (*) for polling to work with Render
     CORS(app,
          resources={
              r"/api/*": {
@@ -46,19 +47,18 @@ def create_app(config_class=Config):
                  "max_age": 3600
              },
              r"/socket.io/*": {
-                 "origins": cors_origins,
+                 "origins": "*",  # Allow all origins for Socket.IO (required for Render)
                  "methods": ["GET", "POST", "OPTIONS"],
                  "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-                 "supports_credentials": True,
+                 "supports_credentials": False,  # Cannot be true with wildcard origin
                  "max_age": 3600
              }
          },
          supports_credentials=True)
 
-    # Configure Socket.IO CORS - MUST match Flask CORS origins
-    # Socket.IO needs explicit CORS configuration for polling transport
-    # IMPORTANT: This must be AFTER cors_origins is defined
-    socketio_cors_origins = cors_origins.copy() if cors_origins else ["*"]
+    # Configure Socket.IO CORS - Use wildcard for Render compatibility
+    # Socket.IO polling transport has issues with specific origins on Render
+    socketio_cors_origins = "*"  # Allow all origins for Socket.IO
     
     # Add a before_request handler to handle OPTIONS (CORS preflight) for Socket.IO
     @app.before_request
@@ -77,9 +77,10 @@ def create_app(config_class=Config):
                     response.headers['Access-Control-Max-Age'] = '3600'
                 return response
     
-    # Initialize Socket.IO - CORS is handled by Flask-CORS above
+    # Initialize Socket.IO - Use wildcard CORS for Render compatibility
     socketio.init_app(
         app, 
+        cors_allowed_origins="*",  # Allow all origins (required for Render)
         logger=True, 
         engineio_logger=True,
         async_mode='eventlet',
@@ -88,7 +89,7 @@ def create_app(config_class=Config):
         allow_upgrades=True,
         transports=['polling', 'websocket']
     )
-    print(f"✅ Socket.IO initialized with CORS origins: {socketio_cors_origins}", flush=True)
+    print("✅ Socket.IO initialized with CORS origins: * (all origins)", flush=True)
     print("✅ Socket.IO async_mode: eventlet", flush=True)
     print("✅ Socket.IO transports: polling, websocket", flush=True)
     print("✅ Socket.IO CORS credentials: enabled", flush=True)
