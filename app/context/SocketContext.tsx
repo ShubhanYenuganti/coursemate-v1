@@ -30,89 +30,57 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     // Only try to connect if the user is logged in and socketUrl is available
+    // NOTE: Socket.IO is optional - AI chat uses HTTP requests and works without it
     if (user && user.id && socketUrl) {
-      console.log(`[SocketContext] User is authenticated (${user.id}), creating socket to ${socketUrl}...`);
-      console.log(`[SocketContext] Socket.IO client version:`, io.version || 'unknown');
+      // Silently attempt connection for real-time features (notifications, messages)
+      // If it fails, the app still works - only real-time updates are affected
       
       const newSocket = io(socketUrl, { 
-        transports: ["polling"], // Use polling only - more reliable on Render
-        upgrade: false, // Don't try to upgrade to websocket
+        transports: ["polling"], // Use polling only
+        upgrade: false,
         reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 1000,
+        reconnectionAttempts: 3, // Reduced attempts to fail faster
+        reconnectionDelay: 2000,
         reconnectionDelayMax: 5000,
-        timeout: 20000,
+        timeout: 10000, // Shorter timeout
         forceNew: false,
         path: '/socket.io/',
-        // Add auth if needed (JWT token)
         auth: {
           token: typeof window !== 'undefined' ? localStorage.getItem('token') : null
         }
       });
       
-      console.log(`[SocketContext] Socket created, connecting...`);
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
-        console.log('[SocketContext] ✅ Socket connected successfully!');
-        console.log('[SocketContext] Socket ID:', newSocket.id);
-        console.log('[SocketContext] Transport:', newSocket.io.engine.transport.name);
+        // Socket connected - real-time features now available
         setIsConnected(true);
-        // Join the user's room
-        console.log(`[SocketContext] Joining room for user: ${user.id}`);
         newSocket.emit("join", { user_id: user.id });
       });
 
-      newSocket.on('connect_error', (error: Error) => {
-        console.error('[SocketContext] ❌ Socket connection error:', error);
-        console.error('[SocketContext] Error details:', {
-          message: error.message,
-          // @ts-ignore - Socket.IO error may have additional properties
-          description: error.description,
-          // @ts-ignore
-          context: error.context,
-          // @ts-ignore
-          type: error.type,
-        });
-        console.error('[SocketContext] Connection URL:', socketUrl);
-        console.error('[SocketContext] User ID:', user.id);
+      newSocket.on('connect_error', () => {
+        // Connection failed - silently fall back to polling/HTTP
+        // Real-time features won't work, but core functionality (AI chat, etc.) still works
         setIsConnected(false);
       });
 
-      // Additional event listeners for debugging
-      newSocket.on('disconnect', (reason: string) => {
-        console.log('[SocketContext] Socket disconnected. Reason:', reason);
+      newSocket.on('disconnect', () => {
         setIsConnected(false);
       });
 
-      newSocket.on('reconnect', (attemptNumber: number) => {
-        console.log(`[SocketContext] Socket reconnected after ${attemptNumber} attempts`);
+      newSocket.on('reconnect', () => {
         setIsConnected(true);
       });
 
-      newSocket.on('reconnect_attempt', (attemptNumber: number) => {
-        console.log(`[SocketContext] Reconnection attempt ${attemptNumber}...`);
-      });
-
-      newSocket.on('reconnect_error', (error: Error) => {
-        console.error('[SocketContext] Reconnection error:', error);
-      });
-
       newSocket.on('reconnect_failed', () => {
-        console.error('[SocketContext] ❌ Reconnection failed after all attempts');
+        // Final connection failure - app will continue without real-time features
+        setIsConnected(false);
       });
 
       // Listen for join confirmation
-      newSocket.on('joined', (data: { user_id: string; status: string }) => {
-        console.log('[SocketContext] ✅ Successfully joined room:', data);
+      newSocket.on('joined', () => {
+        // Successfully joined room for real-time updates
       });
-
-      // Log all events for debugging (can be disabled in production)
-      if (process.env.NODE_ENV === 'development') {
-        newSocket.onAny((event: string, ...args: any[]) => {
-          console.log(`[SocketContext] Event: ${event}`, args);
-        });
-      }
 
       // Cleanup on unmount or when user changes
       return () => {
