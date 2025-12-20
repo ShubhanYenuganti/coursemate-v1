@@ -33,10 +33,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (user && user.id && socketUrl) {
       console.log(`[SocketContext] User is authenticated (${user.id}), creating socket to ${socketUrl}...`);
       const newSocket = io(socketUrl, { 
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"], // Try polling first, then upgrade to websocket
+        upgrade: true, // Allow upgrade from polling to websocket
         reconnection: true,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 10,
         reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+        forceNew: false,
       });
       setSocket(newSocket);
 
@@ -54,7 +58,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       newSocket.on('connect_error', (error) => {
         console.error('[SocketContext] Socket connection error:', error);
+        console.error('[SocketContext] Error details:', {
+          message: error.message,
+          description: error.description,
+          context: error.context,
+          type: error.type,
+        });
         setIsConnected(false);
+      });
+
+      // Log all events for debugging
+      newSocket.onAny((event, ...args) => {
+        console.log(`[SocketContext] Event: ${event}`, args);
       });
 
       // Cleanup on unmount or when user changes

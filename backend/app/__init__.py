@@ -15,8 +15,18 @@ def create_app(config_class=Config):
     mail.init_app(app)
 
     # Configure Socket.IO CORS - allow frontend URL and localhost for development
-    socketio_cors_origins = cors_origins.copy()  # Use same origins as Flask CORS
-    socketio.init_app(app, cors_allowed_origins=socketio_cors_origins, logger=True, engineio_logger=True)
+    # For production, use specific origins; for development, allow all
+    socketio_cors_origins = cors_origins.copy() if cors_origins else "*"
+    socketio.init_app(
+        app, 
+        cors_allowed_origins=socketio_cors_origins, 
+        logger=True, 
+        engineio_logger=True,
+        async_mode='eventlet',
+        ping_timeout=60,
+        ping_interval=25
+    )
+    print(f"✅ Socket.IO initialized with CORS origins: {socketio_cors_origins}", flush=True)
     
     # Import models to ensure they're registered with SQLAlchemy
     from . import models    
