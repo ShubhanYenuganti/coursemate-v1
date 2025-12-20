@@ -13,29 +13,11 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
     jwt.init_app(app)
     mail.init_app(app)
-
-    # Configure Socket.IO CORS - allow frontend URL and localhost for development
-    # For production, use specific origins; for development, allow all
-    socketio_cors_origins = cors_origins.copy() if cors_origins else "*"
-    socketio.init_app(
-        app, 
-        cors_allowed_origins="*",  # Allow all for now to debug
-        logger=True, 
-        engineio_logger=True,
-        async_mode='eventlet',
-        ping_timeout=60,
-        ping_interval=25,
-        allow_upgrades=True,
-        transports=['polling', 'websocket']
-    )
-    print("✅ Socket.IO initialized with CORS: * (all origins)", flush=True)
-    print("✅ Socket.IO async_mode: eventlet", flush=True)
-    print("✅ Socket.IO transports: polling, websocket", flush=True)
     
     # Import models to ensure they're registered with SQLAlchemy
     from . import models    
         
-    # Configure CORS with specific origins
+    # Configure CORS with specific origins FIRST (before Socket.IO)
     # Dynamically include FRONTEND_URL from config, plus localhost for local development
     frontend_url = app.config.get('FRONTEND_URL', 'http://localhost:3000')
     cors_origins = [
@@ -43,11 +25,14 @@ def create_app(config_class=Config):
         "http://192.168.1.198:3001",  # Local network IPs for development
         "http://172.31.215.88:3001",
         "http://192.168.86.41:3001", 
-        "http://localhost:3001",
-        "http://localhost:3000"
+        "http://localhost:3001",  # Common Next.js dev port
+        "http://localhost:3000",  # Common Next.js dev port
+        "http://127.0.0.1:3001",  # Alternative localhost format
+        "http://127.0.0.1:3000",  # Alternative localhost format
     ]
     # Remove duplicates while preserving order
     cors_origins = list(dict.fromkeys(cors_origins))
+    print(f"✅ CORS origins configured: {cors_origins}", flush=True)
     
     CORS(app,
          resources={
@@ -61,6 +46,27 @@ def create_app(config_class=Config):
              }
          },
          supports_credentials=True)
+
+    # Configure Socket.IO CORS - MUST match Flask CORS origins
+    # Socket.IO needs explicit CORS configuration for polling transport
+    # IMPORTANT: This must be AFTER cors_origins is defined
+    socketio_cors_origins = cors_origins.copy() if cors_origins else ["*"]
+    socketio.init_app(
+        app, 
+        cors_allowed_origins=socketio_cors_origins,  # Use same origins as Flask CORS
+        logger=True, 
+        engineio_logger=True,
+        async_mode='eventlet',
+        ping_timeout=60,
+        ping_interval=25,
+        allow_upgrades=True,
+        transports=['polling', 'websocket'],
+        cors_credentials=True  # Allow credentials (cookies, auth headers)
+    )
+    print(f"✅ Socket.IO initialized with CORS origins: {socketio_cors_origins}", flush=True)
+    print("✅ Socket.IO async_mode: eventlet", flush=True)
+    print("✅ Socket.IO transports: polling, websocket", flush=True)
+    print("✅ Socket.IO CORS credentials: enabled", flush=True)
 
     # JWT Error Handler for debugging
     @jwt.invalid_token_loader
