@@ -32,15 +32,19 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Only try to connect if the user is logged in and socketUrl is available
     if (user && user.id && socketUrl) {
       console.log(`[SocketContext] User is authenticated (${user.id}), creating socket to ${socketUrl}...`);
+      // TEMPORARY: Force polling only to test if WebSocket is the issue
+      // Render free tier may not support WebSockets properly
       const newSocket = io(socketUrl, { 
-        transports: ["polling", "websocket"], // Try polling first, then upgrade to websocket
-        upgrade: true, // Allow upgrade from polling to websocket
+        transports: ["polling"], // Use polling only - more reliable on Render
+        upgrade: false, // Don't try to upgrade to websocket
         reconnection: true,
         reconnectionAttempts: 10,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
         timeout: 20000,
         forceNew: false,
+        // Add path if Socket.IO is mounted at a different path
+        path: '/socket.io/',
       });
       setSocket(newSocket);
 
@@ -56,19 +60,22 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setIsConnected(false);
       });
 
-      newSocket.on('connect_error', (error) => {
+      newSocket.on('connect_error', (error: Error) => {
         console.error('[SocketContext] Socket connection error:', error);
         console.error('[SocketContext] Error details:', {
           message: error.message,
+          // @ts-ignore - Socket.IO error may have additional properties
           description: error.description,
+          // @ts-ignore
           context: error.context,
+          // @ts-ignore
           type: error.type,
         });
         setIsConnected(false);
       });
 
       // Log all events for debugging
-      newSocket.onAny((event, ...args) => {
+      newSocket.onAny((event: string, ...args: any[]) => {
         console.log(`[SocketContext] Event: ${event}`, args);
       });
 

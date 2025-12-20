@@ -19,14 +19,18 @@ def create_app(config_class=Config):
     socketio_cors_origins = cors_origins.copy() if cors_origins else "*"
     socketio.init_app(
         app, 
-        cors_allowed_origins=socketio_cors_origins, 
+        cors_allowed_origins="*",  # Allow all for now to debug
         logger=True, 
         engineio_logger=True,
         async_mode='eventlet',
         ping_timeout=60,
-        ping_interval=25
+        ping_interval=25,
+        allow_upgrades=True,
+        transports=['polling', 'websocket']
     )
-    print(f"✅ Socket.IO initialized with CORS origins: {socketio_cors_origins}", flush=True)
+    print("✅ Socket.IO initialized with CORS: * (all origins)", flush=True)
+    print("✅ Socket.IO async_mode: eventlet", flush=True)
+    print("✅ Socket.IO transports: polling, websocket", flush=True)
     
     # Import models to ensure they're registered with SQLAlchemy
     from . import models    
