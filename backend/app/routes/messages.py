@@ -310,4 +310,9 @@ def delete_conversation(other_user_id):
 def on_join(data):
     user_id = data.get('user_id')
     if user_id:
-        join_room(user_id) 
+        join_room(user_id)
+        print(f"[SocketIO] User {user_id} joined their room", flush=True)
+        # Send confirmation back to client
+        socketio.emit('joined', {'user_id': user_id, 'status': 'success'}, room=user_id)
+    else:
+        print(f"[SocketIO] Join event received without user_id: {data}", flush=True) 

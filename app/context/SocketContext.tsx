@@ -32,8 +32,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Only try to connect if the user is logged in and socketUrl is available
     if (user && user.id && socketUrl) {
       console.log(`[SocketContext] User is authenticated (${user.id}), creating socket to ${socketUrl}...`);
-      // TEMPORARY: Force polling only to test if WebSocket is the issue
-      // Render free tier may not support WebSockets properly
+      console.log(`[SocketContext] Socket.IO client version:`, io.version || 'unknown');
+      
       const newSocket = io(socketUrl, { 
         transports: ["polling"], // Use polling only - more reliable on Render
         upgrade: false, // Don't try to upgrade to websocket
@@ -43,25 +43,28 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         reconnectionDelayMax: 5000,
         timeout: 20000,
         forceNew: false,
-        // Add path if Socket.IO is mounted at a different path
         path: '/socket.io/',
+        // Add auth if needed (JWT token)
+        auth: {
+          token: typeof window !== 'undefined' ? localStorage.getItem('token') : null
+        }
       });
+      
+      console.log(`[SocketContext] Socket created, connecting...`);
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
-        console.log('[SocketContext] Socket connected:', newSocket.id);
+        console.log('[SocketContext] ✅ Socket connected successfully!');
+        console.log('[SocketContext] Socket ID:', newSocket.id);
+        console.log('[SocketContext] Transport:', newSocket.io.engine.transport.name);
         setIsConnected(true);
         // Join the user's room
+        console.log(`[SocketContext] Joining room for user: ${user.id}`);
         newSocket.emit("join", { user_id: user.id });
       });
 
-      newSocket.on('disconnect', () => {
-        console.log('[SocketContext] Socket disconnected');
-        setIsConnected(false);
-      });
-
       newSocket.on('connect_error', (error: Error) => {
-        console.error('[SocketContext] Socket connection error:', error);
+        console.error('[SocketContext] ❌ Socket connection error:', error);
         console.error('[SocketContext] Error details:', {
           message: error.message,
           // @ts-ignore - Socket.IO error may have additional properties
@@ -71,13 +74,45 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           // @ts-ignore
           type: error.type,
         });
+        console.error('[SocketContext] Connection URL:', socketUrl);
+        console.error('[SocketContext] User ID:', user.id);
         setIsConnected(false);
       });
 
-      // Log all events for debugging
-      newSocket.onAny((event: string, ...args: any[]) => {
-        console.log(`[SocketContext] Event: ${event}`, args);
+      // Additional event listeners for debugging
+      newSocket.on('disconnect', (reason: string) => {
+        console.log('[SocketContext] Socket disconnected. Reason:', reason);
+        setIsConnected(false);
       });
+
+      newSocket.on('reconnect', (attemptNumber: number) => {
+        console.log(`[SocketContext] Socket reconnected after ${attemptNumber} attempts`);
+        setIsConnected(true);
+      });
+
+      newSocket.on('reconnect_attempt', (attemptNumber: number) => {
+        console.log(`[SocketContext] Reconnection attempt ${attemptNumber}...`);
+      });
+
+      newSocket.on('reconnect_error', (error: Error) => {
+        console.error('[SocketContext] Reconnection error:', error);
+      });
+
+      newSocket.on('reconnect_failed', () => {
+        console.error('[SocketContext] ❌ Reconnection failed after all attempts');
+      });
+
+      // Listen for join confirmation
+      newSocket.on('joined', (data: { user_id: string; status: string }) => {
+        console.log('[SocketContext] ✅ Successfully joined room:', data);
+      });
+
+      // Log all events for debugging (can be disabled in production)
+      if (process.env.NODE_ENV === 'development') {
+        newSocket.onAny((event: string, ...args: any[]) => {
+          console.log(`[SocketContext] Event: ${event}`, args);
+        });
+      }
 
       // Cleanup on unmount or when user changes
       return () => {
