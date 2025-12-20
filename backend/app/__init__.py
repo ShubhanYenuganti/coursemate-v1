@@ -61,11 +61,12 @@ def create_app(config_class=Config):
     socketio_cors_origins = "*"  # Allow all origins for Socket.IO
     
     # Add a before_request handler to handle OPTIONS (CORS preflight)
+    # This MUST run before JWT checks to allow preflight through
     @app.before_request
     def handle_preflight():
         from flask import request, make_response
         if request.method == 'OPTIONS':
-            response = make_response()
+            response = make_response('', 200)  # Return 200 OK instead of empty response
             origin = request.headers.get('Origin')
             # Allow if origin is in our list or if we allow all
             if origin and (origin in cors_origins or not cors_origins):
@@ -74,6 +75,7 @@ def create_app(config_class=Config):
                 response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
                 response.headers['Access-Control-Allow-Credentials'] = 'true'
                 response.headers['Access-Control-Max-Age'] = '3600'
+            print(f"[CORS Preflight] Origin: {origin}, Path: {request.path}", flush=True)
             return response
     
     # Initialize Socket.IO - Use wildcard CORS for Render compatibility
@@ -93,32 +95,20 @@ def create_app(config_class=Config):
     print("✅ Socket.IO transports: polling, websocket", flush=True)
     print("✅ Socket.IO CORS credentials: enabled", flush=True)
 
-    # JWT configuration - Exempt OPTIONS requests from JWT checks
-    @jwt.request_loader
-    def load_user_from_request(request):
-        # Allow OPTIONS requests without JWT (for CORS preflight)
-        if request.method == 'OPTIONS':
-            return None
-        return None
-    
     # JWT Error Handler for debugging
     @jwt.invalid_token_loader
     def invalid_token_callback(error_string):
-        print(f"JWT INVALID TOKEN ERROR: {error_string}")
+        print(f"JWT INVALID TOKEN ERROR: {error_string}", flush=True)
         return {"error": "Invalid token"}, 422
 
     @jwt.unauthorized_loader
     def unauthorized_callback(error_string):
-        # Allow OPTIONS requests through even without auth
-        from flask import request
-        if request.method == 'OPTIONS':
-            return None
-        print(f"JWT UNAUTHORIZED ERROR: {error_string}")
+        print(f"JWT UNAUTHORIZED ERROR: {error_string}", flush=True)
         return {"error": "Missing token"}, 401
 
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
-        print(f"JWT EXPIRED TOKEN ERROR: {jwt_payload}")
+        print(f"JWT EXPIRED TOKEN ERROR: {jwt_payload}", flush=True)
         return {"error": "Token has expired"}, 401
 
     # Ensure the instance folder exists

@@ -10,11 +10,15 @@ import logging
 conversations_bp = Blueprint('conversations', __name__, url_prefix='/api/conversations')
 
 @conversations_bp.route('/<course_id>/conversations', methods=['GET', 'OPTIONS'])
-@jwt_required(optional=False)
 def list_conversations(course_id):
-    # Handle OPTIONS for CORS preflight
+    # OPTIONS requests are handled by before_request, but just in case
     if request.method == 'OPTIONS':
-        return '', 204
+        return '', 200
+    
+    # Apply JWT only for non-OPTIONS requests
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
+    
     """Get all conversations for a course and user (max 10, most recent first)"""
     current_user_id = get_jwt_identity()
     
@@ -42,11 +46,15 @@ def list_conversations(course_id):
         return jsonify({'error': 'Failed to load conversations'}), 500
 
 @conversations_bp.route('/<course_id>/conversations', methods=['POST', 'OPTIONS'])
-@jwt_required(optional=False)
 def create_conversation(course_id):
-    # Handle OPTIONS for CORS preflight
+    # OPTIONS requests are handled by before_request, but just in case
     if request.method == 'OPTIONS':
-        return '', 204
+        return '', 200
+    
+    # Apply JWT only for non-OPTIONS requests
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
+    
     """Create a new conversation for a course"""
     current_user_id = get_jwt_identity()
     data = request.get_json()
@@ -80,11 +88,15 @@ def create_conversation(course_id):
         return jsonify({'error': 'Failed to create conversation'}), 500
 
 @conversations_bp.route('/<conversation_id>', methods=['GET', 'OPTIONS'])
-@jwt_required(optional=False)
 def get_conversation(conversation_id):
-    # Handle OPTIONS for CORS preflight
+    # OPTIONS requests are handled by before_request, but just in case
     if request.method == 'OPTIONS':
-        return '', 204
+        return '', 200
+    
+    # Apply JWT only for non-OPTIONS requests
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
+    
     """Get a conversation with all its messages"""
     current_user_id = get_jwt_identity()
     
@@ -116,11 +128,15 @@ def get_conversation(conversation_id):
         return jsonify({'error': 'Failed to load conversation'}), 500
 
 @conversations_bp.route('/<conversation_id>', methods=['PUT', 'OPTIONS'])
-@jwt_required(optional=False)
 def update_conversation(conversation_id):
-    # Handle OPTIONS for CORS preflight
+    # OPTIONS requests are handled by before_request, but just in case
     if request.method == 'OPTIONS':
-        return '', 204
+        return '', 200
+    
+    # Apply JWT only for non-OPTIONS requests
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
+    
     """Update conversation title or archive status"""
     current_user_id = get_jwt_identity()
     data = request.get_json()
@@ -154,11 +170,15 @@ def update_conversation(conversation_id):
         return jsonify({'error': 'Failed to update conversation'}), 500
 
 @conversations_bp.route('/<conversation_id>', methods=['DELETE', 'OPTIONS'])
-@jwt_required(optional=False)
 def delete_conversation(conversation_id):
-    # Handle OPTIONS for CORS preflight
+    # OPTIONS requests are handled by before_request, but just in case
     if request.method == 'OPTIONS':
-        return '', 204
+        return '', 200
+    
+    # Apply JWT only for non-OPTIONS requests
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
+    
     """Delete a conversation and all its messages"""
     current_user_id = get_jwt_identity()
     
@@ -186,11 +206,15 @@ def delete_conversation(conversation_id):
         return jsonify({'error': 'Failed to delete conversation'}), 500
 
 @conversations_bp.route('/<conversation_id>/messages', methods=['POST', 'OPTIONS'])
-@jwt_required(optional=False)
 def send_message_to_conversation(conversation_id):
-    # Handle OPTIONS for CORS preflight
+    # OPTIONS requests are handled by before_request, but just in case
     if request.method == 'OPTIONS':
-        return '', 204
+        return '', 200
+    
+    # Apply JWT only for non-OPTIONS requests
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
+    
     """Send a message to a specific conversation"""
     current_user_id = get_jwt_identity()
     data = request.get_json()

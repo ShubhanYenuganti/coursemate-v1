@@ -11,8 +11,8 @@ import {
 } from './types';
 
 class ConversationService {
-  // Use environment variable for backend URL, fallback to /api for Next.js proxy
-  private baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.BACKEND_URL || '/api';
+  // Use environment variable for backend URL, fallback to empty string (paths include /api)
+  private baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.BACKEND_URL || '';
 
   private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = localStorage.getItem('token');
@@ -36,7 +36,7 @@ class ConversationService {
 
   async getConversations(courseId: string): Promise<Conversation[]> {
     const response = await this.makeRequest<ConversationListResponse>(
-      `/conversations/${courseId}/conversations`
+      `/api/conversations/${courseId}/conversations`
     );
     
     if (!response.success) {
@@ -48,7 +48,7 @@ class ConversationService {
 
   async getConversation(conversationId: string): Promise<ConversationWithMessages> {
     const response = await this.makeRequest<ConversationDetailResponse>(
-      `/conversations/${conversationId}`
+      `/api/conversations/${conversationId}`
     );
     
     if (!response.success || !response.conversation) {
@@ -60,7 +60,7 @@ class ConversationService {
 
   async createConversation(data: CreateConversationRequest): Promise<Conversation> {
     const response = await this.makeRequest<{ success: boolean; conversation?: Conversation; error?: string }>(
-      `/conversations/${data.course_id}/conversations`,
+      `/api/conversations/${data.course_id}/conversations`,
       {
         method: 'POST',
         body: JSON.stringify({ title: data.title }),
@@ -76,7 +76,7 @@ class ConversationService {
 
   async updateConversation(conversationId: string, title: string): Promise<Conversation> {
     const response = await this.makeRequest<{ success: boolean; conversation?: Conversation; error?: string }>(
-      `/conversations/${conversationId}`,
+      `/api/conversations/${conversationId}`,
       {
         method: 'PUT',
         body: JSON.stringify({ title }),
@@ -92,7 +92,7 @@ class ConversationService {
 
   async deleteConversation(conversationId: string): Promise<void> {
     const response = await this.makeRequest<{ success: boolean; error?: string }>(
-      `/conversations/${conversationId}`,
+      `/api/conversations/${conversationId}`,
       {
         method: 'DELETE',
       }
@@ -105,7 +105,7 @@ class ConversationService {
 
   async sendMessage(data: SendMessageRequest): Promise<SendMessageResponse> {
     const response = await this.makeRequest<SendMessageResponse>(
-      `/conversations/${data.conversation_id}/messages`,
+      `/api/conversations/${data.conversation_id}/messages`,
       {
         method: 'POST',
         body: JSON.stringify({
