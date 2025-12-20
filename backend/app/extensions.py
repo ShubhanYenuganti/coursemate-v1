@@ -9,5 +9,6 @@ db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
 mail = Mail()
-#socketio = SocketIO(cors_allowed_origins="*")
-socketio = SocketIO(cors_allowed_origins="*", async_mode='threading')
+# Initialize Socket.IO with eventlet for production (works with Gunicorn + eventlet)
+# For development, threading mode is fine, but eventlet is required for production WebSocket support
+socketio = SocketIO(cors_allowed_origins="*", async_mode='eventlet', logger=True, engineio_logger=True)

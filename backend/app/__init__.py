@@ -14,8 +14,9 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     mail.init_app(app)
 
-    # Allow CORS for all origins on Socket.IO
-    socketio.init_app(app, cors_allowed_origins="*")
+    # Configure Socket.IO CORS - allow frontend URL and localhost for development
+    socketio_cors_origins = cors_origins.copy()  # Use same origins as Flask CORS
+    socketio.init_app(app, cors_allowed_origins=socketio_cors_origins, logger=True, engineio_logger=True)
     
     # Import models to ensure they're registered with SQLAlchemy
     from . import models    

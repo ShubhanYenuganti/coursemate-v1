@@ -11,7 +11,8 @@ import {
 } from './types';
 
 class ConversationService {
-  private baseUrl = '/api'; // Uses Next.js proxy to backend
+  // Use environment variable for backend URL, fallback to /api for Next.js proxy
+  private baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.BACKEND_URL || '/api';
 
   private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = localStorage.getItem('token');

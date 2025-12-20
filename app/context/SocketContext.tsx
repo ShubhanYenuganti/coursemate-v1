@@ -5,7 +5,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext'; // Import the useAuth hook
 
-const socketUrl = process.env.BACKEND_URL;
+// Use environment variable for backend URL, with fallback
+const socketUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL;
 
 interface ISocketContext {
   socket: Socket | null;
@@ -28,10 +29,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const { user } = useAuth(); // Get the current user from AuthContext
 
   useEffect(() => {
-    // Only try to connect if the user is logged in
-    if (user && user.id) {
-      console.log(`[SocketContext] User is authenticated (${user.id}), creating socket...`);
-      const newSocket = io(socketUrl, { transports: ["websocket"] });
+    // Only try to connect if the user is logged in and socketUrl is available
+    if (user && user.id && socketUrl) {
+      console.log(`[SocketContext] User is authenticated (${user.id}), creating socket to ${socketUrl}...`);
+      const newSocket = io(socketUrl, { 
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+      });
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
@@ -43,6 +49,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       newSocket.on('disconnect', () => {
         console.log('[SocketContext] Socket disconnected');
+        setIsConnected(false);
+      });
+
+      newSocket.on('connect_error', (error) => {
+        console.error('[SocketContext] Socket connection error:', error);
         setIsConnected(false);
       });
 

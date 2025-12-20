@@ -1,25 +1,6 @@
 import React, { useState } from "react";
 import { courseService, CreateCourseRequest } from "../../../lib/api/courseService";
 
-const departmentList = [
-  "Computer Science",
-  "Biology",
-  "Mathematics",
-  "History",
-  "Art",
-  "Music",
-  // ...add more as needed
-];
-const courseList: { [key: string]: { code: string; name: string }[] } = {
-  "Computer Science": [
-    { code: "CS61A", name: "Structure and Interpretation of Computer Programs" },
-    { code: "CS61B", name: "Data Structures" },
-  ],
-  Biology: [
-    { code: "BIO1A", name: "General Biology" },
-  ],
-  // ...add more as needed
-};
 const semesterOptions = [
   "Fall 2024",
   "Spring 2024",
@@ -31,7 +12,6 @@ const tagSuggestions = ["AI", "GenEd", "Lab-heavy", "Project", "Elective"];
 const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; onCourseCreated?: () => void }) => {
   const [subject, setSubject] = useState("");
   const [courseName, setCourseName] = useState("");
-  const [customCourseName, setCustomCourseName] = useState("");
   const [semester, setSemester] = useState(semesterOptions[0]);
   const [professor, setProfessor] = useState("");
   const [units, setUnits] = useState(3);
@@ -51,8 +31,8 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
   // Validation
   const validate = () => {
     const newErrors: { [key: string]: string } = {};
-    if (!subject) newErrors.subject = "Subject is required.";
-    if (!courseName && !customCourseName) newErrors.courseName = "Course name is required.";
+    if (!subject.trim()) newErrors.subject = "Subject is required.";
+    if (!courseName.trim()) newErrors.courseName = "Course name is required.";
     if (!semester) newErrors.semester = "Semester is required.";
     if (!description || description.length < 20) newErrors.description = "Description must be at least 20 characters.";
     setErrors(newErrors);
@@ -83,12 +63,10 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
     
     setIsLoading(true);
     try {
-      const courseTitle = customCourseName || courseName;
       const courseData: CreateCourseRequest = {
         subject,
-        courseName: courseName || undefined,
-        customCourseName: customCourseName || undefined,
-        title: courseTitle,
+        courseName: courseName,
+        title: courseName,
         courseCode,
         semester,
         professor: professor || undefined,
@@ -120,9 +98,6 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
     if (e.target === e.currentTarget) onClose();
   };
 
-  // Dynamic course options
-  const courseOptions = subject && courseList[subject] ? courseList[subject] : [];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={handleBackdrop}>
       <div className="bg-white rounded-xl shadow-lg max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto">
@@ -141,53 +116,30 @@ const CreateCourseModal = ({ onClose, onCourseCreated }: { onClose: () => void; 
         )}
         
         <form className="space-y-4">
-          {/* Subject Dropdown */}
+          {/* Subject Input */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Course Subject <span className="text-red-500">*</span></label>
             <input
               type="text"
-              list="departments"
               className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all ${errors.subject ? 'border-red-500' : 'border-gray-300'}`}
               value={subject}
               onChange={e => setSubject(e.target.value)}
-              placeholder="Start typing to search..."
+              placeholder="Enter course subject (e.g., Computer Science, Biology, Mathematics)..."
               autoComplete="off"
             />
-            <datalist id="departments">
-              {departmentList.map(dep => <option key={dep} value={dep} />)}
-            </datalist>
             {errors.subject && <div className="text-red-500 text-xs mt-1.5">{errors.subject}</div>}
           </div>
-          {/* Course Name Dropdown/Custom */}
+          {/* Course Name Input */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Course Name <span className="text-red-500">*</span></label>
-            {courseOptions.length > 0 && !customCourseName ? (
-              <select
-                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all ${errors.courseName ? 'border-red-500' : 'border-gray-300'}`}
-                value={courseName}
-                onChange={e => {
-                  setCourseName(e.target.value);
-                  setCourseCode(courseOptions.find(c => c.name === e.target.value)?.code || "");
-                }}
-              >
-                <option value="">Select a course...</option>
-                {courseOptions.map((opt: { code: string; name: string }) => (
-                  <option key={opt.code} value={opt.name}>{opt.code}: {opt.name}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all ${errors.courseName ? 'border-red-500' : 'border-gray-300'}`}
-                value={customCourseName}
-                onChange={e => setCustomCourseName(e.target.value)}
-                placeholder="Enter course name..."
-              />
-            )}
-            <div className="mt-1.5 flex flex-col gap-1">
-              <button type="button" className="text-xs text-blue-500 hover:text-blue-600 self-start" onClick={() => setCustomCourseName("")}>Choose from list</button>
-              {errors.courseName && <div className="text-red-500 text-xs">{errors.courseName}</div>}
-            </div>
+            <input
+              type="text"
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all ${errors.courseName ? 'border-red-500' : 'border-gray-300'}`}
+              value={courseName}
+              onChange={e => setCourseName(e.target.value)}
+              placeholder="Enter course name (e.g., Data Structures, General Biology)..."
+            />
+            {errors.courseName && <div className="text-red-500 text-xs mt-1.5">{errors.courseName}</div>}
           </div>
           {/* Course Description */}
           <div>
