@@ -51,6 +51,24 @@ def create_app(config_class=Config):
     # Socket.IO needs explicit CORS configuration for polling transport
     # IMPORTANT: This must be AFTER cors_origins is defined
     socketio_cors_origins = cors_origins.copy() if cors_origins else ["*"]
+    
+    # Add a before_request handler to handle OPTIONS (CORS preflight) for Socket.IO
+    @app.before_request
+    def handle_socketio_cors_preflight():
+        from flask import request, make_response
+        if request.path.startswith('/socket.io/'):
+            if request.method == 'OPTIONS':
+                response = make_response()
+                origin = request.headers.get('Origin')
+                # Allow if origin is in our list or if we allow all
+                if origin in cors_origins or '*' in cors_origins or not cors_origins:
+                    response.headers['Access-Control-Allow-Origin'] = origin if origin and origin in cors_origins else (origin if origin else '*')
+                    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+                    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+                    response.headers['Access-Control-Allow-Credentials'] = 'true'
+                    response.headers['Access-Control-Max-Age'] = '3600'
+                return response
+    
     socketio.init_app(
         app, 
         cors_allowed_origins=socketio_cors_origins,  # Use same origins as Flask CORS
@@ -123,14 +141,39 @@ def create_app(config_class=Config):
     # but let's make sure our friends blueprint is imported where socketio can see it)
     from .routes import friends
     
+    # Add after_request handler to add CORS headers to all responses (including Socket.IO)
+    @app.after_request
+    def after_request(response):
+        from flask import request
+        # Add CORS headers for Socket.IO endpoints
+        if request.path.startswith('/socket.io/'):
+            origin = request.headers.get('Origin')
+            # Always add CORS headers for Socket.IO if origin matches or we allow all
+            if origin:
+                if origin in cors_origins or '*' in cors_origins:
+                    response.headers['Access-Control-Allow-Origin'] = origin
+                    response.headers['Access-Control-Allow-Credentials'] = 'true'
+                    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+                    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+            else:
+                # No origin header, allow all (for same-origin requests)
+                response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+    
     # Global error handler to return JSON errors with CORS headers
     @app.errorhandler(Exception)
     def handle_exception(e):
         import traceback
         print(traceback.format_exc())
-        from flask import jsonify
+        from flask import jsonify, request
         response = jsonify(message=str(e))
         response.status_code = 500
+        # Add CORS headers even for errors
+        if request.path.startswith('/socket.io/'):
+            origin = request.headers.get('Origin')
+            if origin in cors_origins or '*' in cors_origins:
+                response.headers['Access-Control-Allow-Origin'] = origin if origin else '*'
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response
 
     @app.route("/")
