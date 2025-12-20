@@ -93,6 +93,14 @@ def create_app(config_class=Config):
     print("✅ Socket.IO transports: polling, websocket", flush=True)
     print("✅ Socket.IO CORS credentials: enabled", flush=True)
 
+    # JWT configuration - Exempt OPTIONS requests from JWT checks
+    @jwt.request_loader
+    def load_user_from_request(request):
+        # Allow OPTIONS requests without JWT (for CORS preflight)
+        if request.method == 'OPTIONS':
+            return None
+        return None
+    
     # JWT Error Handler for debugging
     @jwt.invalid_token_loader
     def invalid_token_callback(error_string):
@@ -101,6 +109,10 @@ def create_app(config_class=Config):
 
     @jwt.unauthorized_loader
     def unauthorized_callback(error_string):
+        # Allow OPTIONS requests through even without auth
+        from flask import request
+        if request.method == 'OPTIONS':
+            return None
         print(f"JWT UNAUTHORIZED ERROR: {error_string}")
         return {"error": "Missing token"}, 401
 
